@@ -184,10 +184,9 @@ class MarkdownPreferenceStore:
                 history = _private(self.path.parent / "history")
                 history.mkdir(parents=True, exist_ok=True)
                 version = re.sub(r"[^A-Za-z0-9_-]", "_", current.version)[:60]
-                backup = _private(
-                    history
-                    / (f"{self.path.stem}.{version}.{hashlib.sha256(old).hexdigest()[:16]}.md")
-                )
+                # Version IDs are unique and short; a same-named backup must hold the same
+                # bytes, so the name needs no content hash (deep Windows paths stay < 260).
+                backup = _private(history / f"{version}.md")
                 try:
                     with backup.open("xb") as file:
                         file.write(old)

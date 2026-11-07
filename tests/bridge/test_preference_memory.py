@@ -102,6 +102,8 @@ def test_version_guard_and_backup_preserve_previous_memory(tmp_path, monkeypatch
     store.save(updated, expected_version="PMEM_ONE")
     backups = list((path.parent / "history").glob("*.md"))
     assert len(backups) == 1 and "PMEM_ONE" in backups[0].read_text(encoding="utf-8")
+    # Short names keep deep Windows paths under the 260-character limit.
+    assert backups[0].name == "PMEM_ONE.md"
     assert store.load().version == "PMEM_TWO"
 
 
@@ -272,12 +274,11 @@ def test_refresh_consumes_each_event_once_and_leaves_noevent_version_unchanged(
 
         def generate(self, *, prompt_id, context, output_type):
             self.calls += 1
-            assert prompt_id == "preference.memory.summarize.v1"
+            assert prompt_id == "preference.memory.summarize.v2"
             assert [item["event_id"] for item in context["events"]] == [event.event_id]
             return output_type(
                 input_digest=context["input_digest"],
-                rules=[
-                    PreferenceRule(
+                edits=[{"op": "add", "rule": PreferenceRule(
                         rule_id="RULE_ONE",
                         category="greetings",
                         scope="job",
@@ -286,8 +287,7 @@ def test_refresh_consumes_each_event_once_and_leaves_noevent_version_unchanged(
                         text="Emphasize evaluation work.",
                         source_event_ids=[event.event_id],
                         updated_at=NOW,
-                    )
-                ],
+                    )}],
             )
 
     provider = Summarizer()

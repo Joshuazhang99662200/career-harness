@@ -11,6 +11,7 @@ from jobagent.errors import (
 from jobagent.outreach.preference_memory import PreferenceLearner, memory_digest
 from jobagent.schemas.preference_memory import PreferenceMemory
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
+from tests.memory_edits import as_edits
 
 NOW = datetime(2026, 10, 26, tzinfo=UTC)
 
@@ -38,14 +39,14 @@ class Provider:
         if "summarize" in prompt_id:
             return output_type.model_validate({
                 "input_digest": context["input_digest"],
-                "rules": [{
+                "edits": [{"op": "add", "rule": {
                     "rule_id": "RULE_ONE", "category": "greetings",
                     "scope": "general" if self.globalize else "job",
                     "condition": "Model evaluation role", "job_id": None if self.globalize
                     else "JOB_ONE", "text": "Lead with evaluation work.",
                     "source_event_ids": ["EVENT_FOREIGN" if self.foreign else "EVENT_ONE"],
                     "updated_at": NOW.isoformat(),
-                }],
+                }}],
             })
         return output_type.model_validate({
             "input_digest": context["input_digest"], "selected_rule_ids": ["RULE_ONE"],
@@ -187,8 +188,8 @@ def test_unexplained_rejection_cannot_become_role_wide_preference():
     class Overgeneralizing(Provider):
         def generate(self, **kwargs):
             result = super().generate(**kwargs)
-            if hasattr(result, "rules"):
-                result.rules[0] = result.rules[0].model_copy(update={
+            if hasattr(result, "edits"):
+                result.edits[0].rule = result.edits[0].rule.model_copy(update={
                     "category": "jobs", "scope": "role", "job_id": None,
                 })
             return result
@@ -213,7 +214,8 @@ def test_replayed_old_source_cannot_support_new_or_changed_rules(change):
             assert [e["event_id"] for e in context["events"]] == ["EVENT_TWO"]
             return output_type(
                 input_digest=context["input_digest"],
-                rules=[memory.rules[0].model_copy(update=change)],
+                edits=as_edits(context["memory"]["rules"],
+                               [memory.rules[0].model_copy(update=change)], ["EVENT_TWO"]),
             )
 
     saved = memory.model_dump(mode="json")
@@ -236,7 +238,8 @@ def test_replayed_history_does_not_prevent_unchanged_rules_and_supported_new_rul
     class Preserver:
         def generate(self, *, prompt_id, context, output_type):
             return output_type(input_digest=context["input_digest"],
-                               rules=[memory.rules[0], new_rule])
+                               edits=as_edits(context["memory"]["rules"],
+                                              [memory.rules[0], new_rule], ["EVENT_TWO"]))
 
     updated = PreferenceLearner(Preserver()).update(memory, [old_event, fresh], now=NOW)
     assert updated.rules == [memory.rules[0], new_rule]
@@ -257,7 +260,8 @@ def test_new_feedback_can_support_a_real_change_to_an_existing_rule():
 
     class SupportedRewriter:
         def generate(self, *, prompt_id, context, output_type):
-            return output_type(input_digest=context["input_digest"], rules=[changed])
+            return output_type(input_digest=context["input_digest"],
+                               edits=as_edits(context["memory"]["rules"], [changed], ["EVENT_TWO"]))
 
     updated = PreferenceLearner(SupportedRewriter()).update(memory, [old_event, fresh], now=NOW)
     assert updated.rules == [changed]

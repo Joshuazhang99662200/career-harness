@@ -9,7 +9,12 @@ from jobagent.cli.jobs import jobs_app
 from jobagent.digest import canonical_digest
 from jobagent.errors import UserInterventionRequiredError
 from jobagent.schemas.greeting import GreetingRequest
-from jobagent.schemas.preference_memory import PreferenceMemory, PreferenceRule, PreferenceSelection
+from jobagent.schemas.preference_memory import (
+    DirectionDecision,
+    PreferenceMemory,
+    PreferenceRule,
+    PreferenceSelection,
+)
 from jobagent.storage.database import Database
 
 NOW = datetime(2026, 10, 26, tzinfo=UTC)
@@ -32,7 +37,9 @@ def memory():
 
 
 def request(job_id=None):
-    raw = "Build financial agents." if job_id == "JOB_FIN" else "Build document agents."
+    raw = {"JOB_FIN": "Build financial agents.", "JOB_SKIP": "SKIP_ME presales quota role."}.get(
+        job_id or "", "Build document agents."
+    )
     job = {"job_id": job_id or "JOB_DOC", "title": "Product Manager",
            "company": "Synthetic Labs", "platform": "manual",
            "url": "https://jobs.example.test/role", "jd_raw": raw}
@@ -75,6 +82,16 @@ def fixture(tmp_path, monkeypatch, *, enabled=True):
         def __init__(self, provider):
             pass
 
+        def direction(self, current, *, job_id, context):
+            events.append(("direction", job_id))
+            skip = "SKIP_ME" in context
+            return DirectionDecision(
+                memory_version=current.version,
+                decision="suggest_skip" if skip else "draft",
+                rules=[r for r in current.rules if r.category == "jobs"] if skip else [],
+                reason="Synthetic direction reason." if skip else "",
+            )
+
         def select(self, current, *, task, job_id, context):
             events.append(("select", task, job_id, context))
             if task == "search":
@@ -106,6 +123,10 @@ def fixture(tmp_path, monkeypatch, *, enabled=True):
                             "reason": "Supported synthetic fact"}],
                 "full_text_supported": True, "no_missing_claims": True,
                 "target_relevant": True, "style_ok": True, "conflicts_resolved": True,
+                "rule_checks": [
+                    {"rule_id": r["rule_id"], "verdict": "followed", "excerpt": ""}
+                    for r in (context["request"].get("preference_memory") or {}).get("rules", [])
+                ],
             })
 
     for module in ["jobagent.cli.greetings", "jobagent.cli.jobs"]:
@@ -121,9 +142,9 @@ def fixture(tmp_path, monkeypatch, *, enabled=True):
     return config, db, filters, events
 
 
-def greet(config, db, output, job_id=None):
+def greet(config, db, output, job_id=None, *extra):
     args = ["--candidate", "CAND_TEST", "--settings", str(config),
-            "--database", str(db), "--output", str(output)]
+            "--database", str(db), "--output", str(output), *extra]
     if job_id:
         args += ["--job", job_id]
     return CliRunner().invoke(greetings_app, args)
@@ -145,12 +166,13 @@ def test_greeting_refresh_and_selection_happen_before_generation_and_share_snaps
     result = greet(config, db, output, "JOB_FIN")
     assert result.exit_code == 0, result.stdout
     assert [event[0] for event in events] == [
-        "runner", "refresh", "select", "greeting.ai.draft.v1", "greeting.ai.review.v1",
+        "runner", "refresh", "direction", "select", "greeting.ai.draft.v1",
+        "greeting.ai.review.v1",
     ]
-    selected = events[3][1]["request"]["preference_memory"]
-    assert selected == events[4][1]["request"]["preference_memory"]
+    selected = events[4][1]["request"]["preference_memory"]
+    assert selected == events[5][1]["request"]["preference_memory"]
     assert [rule["rule_id"] for rule in selected["rules"]] == ["FINANCE"]
-    assert "Build financial agents." in events[2][3]
+    assert "Build financial agents." in events[3][3]
     snapshot = json.loads((output / "request.json").read_text(encoding="utf-8"))
     assert snapshot["preference_memory"] == selected
     assert json.loads(result.stdout)["memory_version"] == "PMEM_TEST"
@@ -274,3 +296,23 @@ def test_search_preserves_base_queries_when_memory_selects_no_replacement(tmp_pa
     data = json.loads(result.stdout)
     assert data["plans"]["liepin"]["chosen"][0]["term"] == "Base Agent PM"
     assert data["selections"]["liepin"]["search_queries"] == []
+
+
+
+def test_a_jobs_rule_suggesting_a_skip_stops_before_any_draft(tmp_path, monkeypatch):
+    config, db, _, events = fixture(tmp_path, monkeypatch)
+    output = config.parent / "skipped"
+    result = greet(config, db, output, "JOB_SKIP")
+    assert result.exit_code == 0, result.stdout
+    data = json.loads(result.stdout)
+    assert data["status"] == "skip_suggested" and data["direction_rules"] == ["JOBS"]
+    assert data["approval_granted"] is False and not output.exists()
+    assert not any(str(event[0]).startswith("greeting.ai") for event in events)
+
+
+def test_ignore_direction_drafts_anyway(tmp_path, monkeypatch):
+    config, db, _, events = fixture(tmp_path, monkeypatch)
+    result = greet(config, db, config.parent / "forced", "JOB_SKIP", "--ignore-direction")
+    assert result.exit_code == 0, result.stdout
+    assert "direction" not in [event[0] for event in events]
+    assert json.loads(result.stdout)["status"] == "passed"

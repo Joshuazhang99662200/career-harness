@@ -37,6 +37,16 @@ Gemini 能学到偏好的唯一途径，就是本人每轮留下的决定、改�
 
 agy 每次调用实测要 1 到 3 分钟，一轮要调用多次；超时设到 300 秒时曾有一次调用超时，所以示例用上限 600 秒。超时也按失败处理，不重试。
 
+可选配置（不写即关闭）：
+
+| 键 | 作用 |
+|---|---|
+| `repair_retries` | 设为 `1` 时，只对三类机械失败各重试一次：JSON 语法错误、超出输出 token 上限、流中断；重试提示要求输出更短。契约不符和工具活动仍直接失败，不重试 |
+| `json_schema_flag` | 例如 `"--json-schema"`：把输出 schema 写到工作目录之外的文件，作为该参数的值传给 CLI，让 CLI 强制结构化输出。agy 是否支持、参数名是否如此需实测 |
+| `steps` | 按输出契约名覆盖 argv 或超时，例如 `{"PreferenceEditSet": {"argv": [...低档模型...], "timeout_seconds": 300}, "PreferenceApplication": {"timeout_seconds": 120}}`；契约名还有 `GreetingDraft`、`GreetingReview` |
+
+每次调用都追加一行到 `.jobagent/roleplay/calls.jsonl`：步骤、第几次尝试、状态或失败类别、耗时、模型耗时、token 用量与回复长度，不记录提示词和回复原文。
+
 Gemini CLI 指定模型时在 argv 里加 `"-m", "<模型名>"`；agy 用 `agy models` 里的模型编号。不要在配置里放密钥，也不要加 `--dangerously-skip-permissions`、`--yolo` 这类自动批准工具的参数，配置会直接拒绝。
 
 两种 CLI 都可能读取用户级的全局上下文（如 `~/.gemini/GEMINI.md`）。里面若有写作或求职偏好，会和记忆规则一起影响 Gemini，测出来的就不只是记忆链路；运行前先确认，必要时在报告里注明。

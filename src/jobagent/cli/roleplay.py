@@ -67,7 +67,9 @@ def round_(
     try:
         paths = RoleplayPaths.here()
         config = read_model(gemini_config, GeminiCliConfig)
-        runner = GeminiTextRunner(config, paths.root / "runtime")
+        runner = GeminiTextRunner(
+            config, paths.root / "runtime", call_log=paths.root / "calls.jsonl"
+        )
         typer.echo(run_round(paths, runner, now=datetime.now(UTC)).model_dump_json(indent=2))
     except JobAgentError as error:
         fail(error)

@@ -27,12 +27,27 @@ class GeminiCliConfig(ContractModel):
     argv: list[NonEmptyString] = Field(min_length=1, max_length=20)
     timeout_seconds: Annotated[float, Field(gt=0, le=600)]
     protocol: Literal["gemini_json", "agy_stream_json"] = "gemini_json"
+    # Per output contract (for example "PreferenceEditSet"), a different argv or timeout,
+    # such as a lower thinking tier for the memory steps.
+    steps: dict[NonEmptyString, "GeminiStepOverride"] = Field(default_factory=dict)
+    # When set, the output JSON Schema is written to a file outside the working
+    # directory and passed as this flag's value, so the CLI can enforce it.
+    json_schema_flag: NonEmptyString | None = None
+    # One more attempt after invalid JSON, an output-token limit or an interrupted
+    # stream. Contract violations and tool activity are never retried.
+    repair_retries: Literal[0, 1] = 0
 
     @model_validator(mode="after")
     def no_auto_approval(self) -> "GeminiCliConfig":
-        if AUTO_APPROVE_FLAGS.intersection(self.argv):
+        argvs = [self.argv, *(step.argv for step in self.steps.values() if step.argv)]
+        if any(AUTO_APPROVE_FLAGS.intersection(argv) for argv in argvs):
             raise ValueError("The argv must not auto-approve tool use.")
         return self
+
+
+class GeminiStepOverride(ContractModel):
+    argv: list[NonEmptyString] | None = Field(default=None, min_length=1, max_length=20)
+    timeout_seconds: Annotated[float, Field(gt=0, le=600)] | None = None
 
 
 class RoleplayEvidence(ContractModel):
@@ -144,3 +159,6 @@ class RoleplayReport(ContractModel):
     memory_version: NonEmptyString
     memory_rules: list[str]
     synthetic_only: Literal[True] = True
+
+
+GeminiCliConfig.model_rebuild()

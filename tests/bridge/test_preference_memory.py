@@ -272,12 +272,11 @@ def test_refresh_consumes_each_event_once_and_leaves_noevent_version_unchanged(
 
         def generate(self, *, prompt_id, context, output_type):
             self.calls += 1
-            assert prompt_id == "preference.memory.summarize.v1"
+            assert prompt_id == "preference.memory.summarize.v2"
             assert [item["event_id"] for item in context["events"]] == [event.event_id]
             return output_type(
                 input_digest=context["input_digest"],
-                rules=[
-                    PreferenceRule(
+                edits=[{"op": "add", "rule": PreferenceRule(
                         rule_id="RULE_ONE",
                         category="greetings",
                         scope="job",
@@ -286,8 +285,7 @@ def test_refresh_consumes_each_event_once_and_leaves_noevent_version_unchanged(
                         text="Emphasize evaluation work.",
                         source_event_ids=[event.event_id],
                         updated_at=NOW,
-                    )
-                ],
+                    )}],
             )
 
     provider = Summarizer()

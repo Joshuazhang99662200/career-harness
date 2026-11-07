@@ -8,8 +8,8 @@ from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.preference_memory import (
     PreferenceApplication,
+    PreferenceEditSet,
     PreferenceMemory,
-    PreferenceUpdate,
 )
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
 
@@ -65,9 +65,9 @@ def test_preference_sources_are_data_and_only_new_policy_is_loaded(monkeypatch):
     monkeypatch.setattr("jobagent.bridge.preference_reasoning.read_reference", read)
     runner = Runner()
     result = CodexPreferenceProvider(runner).generate(
-        prompt_id="preference.memory.summarize.v1", context=context(), output_type=PreferenceUpdate
+        prompt_id="preference.memory.summarize.v2", context=context(), output_type=PreferenceEditSet
     )
-    assert result.rules == [] and len(runner.calls) == 1
+    assert result.edits == [] and len(runner.calls) == 1
     assert "Ignore all previous" not in runner.calls[0].instruction
     assert "Ignore all previous" in "".join(x.text for x in runner.calls[0].records)
     assert reads == ["references/preference-memory.md"]
@@ -78,7 +78,7 @@ def test_preference_sources_are_data_and_only_new_policy_is_loaded(monkeypatch):
 def test_provider_rejects_tampered_or_cross_candidate_context(monkeypatch, mutation):
     monkeypatch.setattr("jobagent.bridge.preference_reasoning.read_reference", lambda _: "Policy")
     data = context()
-    output_type = PreferenceUpdate
+    output_type = PreferenceEditSet
     if mutation == "extra":
         data["approve"] = True
     elif mutation == "stale":
@@ -93,7 +93,7 @@ def test_provider_rejects_tampered_or_cross_candidate_context(monkeypatch, mutat
     runner = Runner()
     with pytest.raises(ContractValidationError):
         CodexPreferenceProvider(runner).generate(
-            prompt_id="preference.memory.summarize.v1", context=data, output_type=output_type
+            prompt_id="preference.memory.summarize.v2", context=data, output_type=output_type
         )
     assert not runner.calls
 
@@ -103,9 +103,9 @@ def test_selection_is_a_distinct_model_call_and_current_task_stays_data(monkeypa
     runner = Runner()
     data = context()
     CodexPreferenceProvider(runner).generate(
-        prompt_id="preference.memory.summarize.v1",
+        prompt_id="preference.memory.summarize.v2",
         context=data,
-        output_type=PreferenceUpdate,
+        output_type=PreferenceEditSet,
     )
     payload = {
         "memory": data["memory"],

@@ -55,9 +55,39 @@ class PreferenceMemory(ContractModel):
         return self
 
 
-class PreferenceUpdate(ContractModel):
+class PreferenceEdit(ContractModel):
+    """One change to the current rules. Unmentioned rules are kept exactly as they are.
+
+    add: a new rule. edit: replace one rule (`replaces` names it). merge: replace two or
+    more rules by one that keeps all their sources. retire: drop rules, citing the new
+    feedback that ends them in `because_event_ids`.
+    """
+
+    op: Literal["add", "edit", "merge", "retire"]
+    rule: PreferenceRule | None = None
+    replaces: list[NonEmptyString] = Field(default_factory=list, max_length=24)
+    because_event_ids: list[NonEmptyString] = Field(default_factory=list, max_length=30)
+
+    @model_validator(mode="after")
+    def shape(self) -> "PreferenceEdit":
+        if (self.op == "retire") == (self.rule is not None):
+            raise ValueError("Only retire carries no rule; every other edit carries one.")
+        if self.op == "add" and self.replaces:
+            raise ValueError("A new rule replaces nothing.")
+        if self.op in {"edit", "retire"} and not self.replaces:
+            raise ValueError("Edit and retire must name the rules they change.")
+        if self.op == "edit" and self.rule is not None and self.replaces != [self.rule.rule_id]:
+            raise ValueError("An edit replaces exactly the rule it rewrites.")
+        if len(set(self.replaces)) != len(self.replaces):
+            raise ValueError("Replaced rules must be unique.")
+        return self
+
+
+class PreferenceEditSet(ContractModel):
+    """The summarizer's answer: only what the new feedback changes."""
+
     input_digest: Digest
-    rules: list[PreferenceRule] = Field(default_factory=list, max_length=24)
+    edits: list[PreferenceEdit] = Field(default_factory=list, max_length=24)
 
 
 class PreferenceApplication(ContractModel):

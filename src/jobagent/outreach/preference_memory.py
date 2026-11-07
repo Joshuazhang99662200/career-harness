@@ -10,13 +10,14 @@ from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError, InvalidProviderOutputError
 from jobagent.schemas.preference_memory import (
     PreferenceApplication,
+    PreferenceEditSet,
     PreferenceMemory,
+    PreferenceRule,
     PreferenceSelection,
-    PreferenceUpdate,
 )
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
 
-SUMMARIZE_PROMPT = "preference.memory.summarize.v1"
+SUMMARIZE_PROMPT = "preference.memory.summarize.v2"
 SELECT_PROMPT = "preference.memory.select.v1"
 
 
@@ -80,14 +81,15 @@ class PreferenceLearner:
                    "events": [event.model_dump(mode="json") for event in fresh]}
         identity = canonical_digest(context)
         proposal = self._generate(
-            SUMMARIZE_PROMPT, {**context, "input_digest": identity}, PreferenceUpdate,
+            SUMMARIZE_PROMPT, {**context, "input_digest": identity}, PreferenceEditSet,
         )
         if proposal.input_digest != identity:
             raise InvalidProviderOutputError("Preference summary has a stale input digest.")
         known = set(memory.consumed_event_ids) | set(unique)
         fresh_ids = {event.event_id for event in fresh}
         old_rules = {rule.rule_id: rule for rule in memory.rules}
-        for rule in proposal.rules:
+        rules = _apply_edits(memory.rules, proposal, fresh_ids)
+        for rule in rules:
             if not set(rule.source_event_ids) <= known:
                 raise InvalidProviderOutputError("Preference rule refers to an unknown source.")
             sources = [unique[eid] for eid in rule.source_event_ids if eid in unique]
@@ -125,7 +127,7 @@ class PreferenceLearner:
                     **memory.consumed_event_digests,
                     **{event.event_id: digests[event.event_id] for event in fresh},
                 },
-                rules=proposal.rules, updated_at=now,
+                rules=rules, updated_at=now,
             )
         except ValidationError:
             raise InvalidProviderOutputError(
@@ -162,3 +164,59 @@ class PreferenceLearner:
         selection.rules = [by_id[key] for key in applied.selected_rule_ids]
         selection.search_queries = applied.search_queries
         return selection
+
+
+def _apply_edits(
+    current: list[PreferenceRule], proposal: PreferenceEditSet, fresh_ids: set[str]
+) -> list[PreferenceRule]:
+    """Apply edits in order; every rule an edit does not name stays exactly as it was."""
+    rules = list(current)
+    touched: set[str] = set()
+
+    def position(rule_id: str) -> int:
+        for index, rule in enumerate(rules):
+            if rule.rule_id == rule_id:
+                return index
+        raise InvalidProviderOutputError(
+            "A preference edit names an unknown rule.", details={"rule_id": rule_id}
+        )
+
+    for edit in proposal.edits:
+        names = set(edit.replaces) | ({edit.rule.rule_id} if edit.rule else set())
+        if names & touched:
+            raise InvalidProviderOutputError("One summary changes the same rule twice.")
+        touched |= names
+        if edit.op == "add":
+            assert edit.rule is not None
+            if any(rule.rule_id == edit.rule.rule_id for rule in rules):
+                raise InvalidProviderOutputError("A new preference reuses an existing rule ID.")
+            rules.append(edit.rule)
+        elif edit.op == "edit":
+            assert edit.rule is not None
+            rules[position(edit.rule.rule_id)] = edit.rule
+        elif edit.op == "merge":
+            assert edit.rule is not None
+            if len(edit.replaces) < 2:
+                raise InvalidProviderOutputError("A merge combines at least two rules.")
+            indexes = [position(rule_id) for rule_id in edit.replaces]
+            merged_sources = {
+                source for index in indexes for source in rules[index].source_event_ids
+            }
+            if not merged_sources <= set(edit.rule.source_event_ids):
+                raise InvalidProviderOutputError(
+                    "A merged preference must keep all sources of the rules it replaces."
+                )
+            if (edit.rule.rule_id not in edit.replaces
+                    and any(rule.rule_id == edit.rule.rule_id for rule in rules)):
+                raise InvalidProviderOutputError("A merged preference reuses another rule ID.")
+            first = min(indexes)
+            rules = [rule for index, rule in enumerate(rules) if index not in indexes]
+            rules.insert(first, edit.rule)
+        else:
+            if not set(edit.because_event_ids) & fresh_ids:
+                raise InvalidProviderOutputError(
+                    "Retiring a preference needs fresh owner feedback as its reason."
+                )
+            for rule_id in edit.replaces:
+                rules.pop(position(rule_id))
+    return rules

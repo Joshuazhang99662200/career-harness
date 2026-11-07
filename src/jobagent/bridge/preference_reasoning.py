@@ -13,8 +13,8 @@ from jobagent.outreach.preference_memory import SELECT_PROMPT, SUMMARIZE_PROMPT
 from jobagent.schemas.coordinator import CodexTextRecord, CodexTextRequest
 from jobagent.schemas.preference_memory import (
     PreferenceApplication,
+    PreferenceEditSet,
     PreferenceMemory,
-    PreferenceUpdate,
 )
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
 from jobagent.skill_resources import read_reference
@@ -31,7 +31,7 @@ class CodexPreferenceProvider:
         context: Mapping[str, Any],
         output_type: type[ReasoningOutputT],
     ) -> ReasoningOutputT:
-        contracts = {SUMMARIZE_PROMPT: PreferenceUpdate, SELECT_PROMPT: PreferenceApplication}
+        contracts = {SUMMARIZE_PROMPT: PreferenceEditSet, SELECT_PROMPT: PreferenceApplication}
         keys = (
             {"memory", "events", "input_digest"}
             if prompt_id == SUMMARIZE_PROMPT
@@ -56,10 +56,18 @@ class CodexPreferenceProvider:
                 ) or len({event.event_id for event in events}) != len(events):
                     raise ValueError("foreign or previously consumed events")
                 task = (
-                    "Summarize the new owner feedback into a complete set of at most 24 short "
-                    "source-bound preference rules. Return PreferenceUpdate and copy input_digest. "
-                    "Preserve unaffected existing rules, scope local feedback conservatively and "
-                    "do not invent candidate facts, permissions or fixed message sentences."
+                    "Turn the new owner feedback into the smallest set of edits to the current "
+                    "rules. Return PreferenceEditSet and copy input_digest. Do not repeat rules "
+                    "that do not change: they are kept as they are. Use add for a new "
+                    "preference, edit to refine one rule, merge when two or more rules say the "
+                    "same thing (the merged rule keeps all their source_event_ids), and retire "
+                    "only when new feedback contradicts a rule (cite it in because_event_ids). "
+                    "Generalize first: when the same preference appears in feedback on two or "
+                    "more different jobs, merge it into one general rule. Use role only for a "
+                    "category or feature of jobs, never a job title or company name; use job "
+                    "only when the feedback points at this posting. Keep each rule short; at "
+                    "most 24 rules in total. Do not invent candidate facts, permissions or "
+                    "fixed message sentences."
                 )
             else:
                 if (

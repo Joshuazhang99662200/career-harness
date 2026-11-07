@@ -33,14 +33,17 @@ class Model:
 
     def generate(self, *, prompt_id, context, output_type):
         self.prompts.append(prompt_id)
-        if prompt_id == "preference.memory.summarize.v1":
+        if prompt_id == "preference.memory.summarize.v2":
             assert [e["event_id"] for e in context["events"]] == [self.event_id]
-            return output_type(input_digest=context["input_digest"], rules=[PreferenceRule(
+            learned = PreferenceRule(
                 rule_id="RULE_EVAL_FIRST", category="greetings", scope="job",
                 condition="This JD", job_id=self.job_id,
                 text="Lead with evaluation of grounded answers.",
                 source_event_ids=[self.event_id], updated_at=NOW,
-            )])
+            )
+            return output_type(
+                input_digest=context["input_digest"], edits=[{"op": "add", "rule": learned}]
+            )
         if prompt_id == "preference.memory.select.v1":
             return output_type(
                 input_digest=context["input_digest"], selected_rule_ids=["RULE_EVAL_FIRST"]

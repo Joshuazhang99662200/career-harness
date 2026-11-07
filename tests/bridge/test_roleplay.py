@@ -19,7 +19,7 @@ from jobagent.cli.app import app
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.coordinator import CodexTextRequest
 from jobagent.schemas.greeting import GreetingDraft, GreetingReview
-from jobagent.schemas.preference_memory import PreferenceApplication, PreferenceUpdate
+from jobagent.schemas.preference_memory import PreferenceApplication, PreferenceEditSet
 from jobagent.schemas.roleplay import RoleplayDecision
 from jobagent.storage.database import Database
 from jobagent.storage.outreach_repository import SqliteOutreachRepository
@@ -37,8 +37,8 @@ class StandInModel:
         body = "".join(record.text for record in request.records)
         self.seen.append(request.instruction + body)
         context = json.loads(body)
-        if output_contract is PreferenceUpdate:
-            rules = list(context["memory"]["rules"])
+        if output_contract is PreferenceEditSet:
+            rules = []
             for event in context["events"]:
                 if event["reason_category"] == "direction":
                     category, text = "jobs", "不考虑售前和销售类岗位。"
@@ -51,7 +51,10 @@ class StandInModel:
                     "scope": "general", "condition": "任何岗位", "text": text,
                     "source_event_ids": [event["event_id"]], "updated_at": event["occurred_at"],
                 })
-            return PreferenceUpdate(input_digest=context["input_digest"], rules=rules)
+            return PreferenceEditSet(
+                input_digest=context["input_digest"],
+                edits=[{"op": "add", "rule": rule} for rule in rules],
+            )
         if output_contract is PreferenceApplication:
             return PreferenceApplication(
                 input_digest=context["input_digest"],
@@ -172,8 +175,8 @@ schema_text, task_text = prompt.split("\nTask JSON follows:\n", 1)
 title = json.loads(schema_text.split("nothing else:\n", 1)[1])["title"]
 task = json.loads(task_text)
 context = json.loads("".join(r["text"] for r in task["records"]))
-if title == "PreferenceUpdate":
-    rules = list(context["memory"]["rules"])
+if title == "PreferenceEditSet":
+    rules = []
     for event in context["events"]:
         if event["action"] == "revise":
             rules.append({"rule_id": "RULE_" + event["event_id"][-8:], "category": "greetings",
@@ -181,7 +184,8 @@ if title == "PreferenceUpdate":
                           "text": "Open with evaluation work; no pleasantries.",
                           "source_event_ids": [event["event_id"]],
                           "updated_at": event["occurred_at"]})
-    out = {"input_digest": context["input_digest"], "rules": rules}
+    out = {"input_digest": context["input_digest"],
+           "edits": [{"op": "add", "rule": rule} for rule in rules]}
 elif title == "PreferenceApplication":
     out = {"input_digest": context["input_digest"],
            "selected_rule_ids": [r["rule_id"] for r in context["memory"]["rules"]],

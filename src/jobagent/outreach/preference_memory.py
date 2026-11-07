@@ -93,6 +93,18 @@ class PreferenceLearner:
             if not set(rule.source_event_ids) <= known:
                 raise InvalidProviderOutputError("Preference rule refers to an unknown source.")
             sources = [unique[eid] for eid in rule.source_event_ids if eid in unique]
+            if rule.scope == "role" and old_rules.get(rule.rule_id) != rule:
+                condition = " ".join(rule.condition.split()).casefold()
+                labels = {
+                    " ".join(value.split()).casefold()
+                    for event in sources for value in (event.job_title, event.company) if value
+                }
+                if condition in labels:
+                    raise InvalidProviderOutputError(
+                        "A role preference names a job title or company instead of a kind of "
+                        "job; describe the category, or scope it to the job.",
+                        details={"rule_id": rule.rule_id},
+                    )
             if (not set(rule.source_event_ids) & fresh_ids
                     and old_rules.get(rule.rule_id) != rule):
                 raise InvalidProviderOutputError("Changed preferences need a fresh owner source.")
@@ -145,8 +157,12 @@ class PreferenceLearner:
         eligible = [rule for rule in memory.rules if rule.category == category
                     and (rule.scope != "job" or rule.job_id == job_id)
                     and (job_id is not None or task == "search" or rule.scope == "general")]
+        # General rules apply to every task of their category by definition, so they are
+        # always used; the model only judges which scoped rules fit this task.
+        general = [rule for rule in eligible if rule.scope == "general"]
+        eligible = [rule for rule in eligible if rule.scope != "general"]
         selection = PreferenceSelection(memory_version=memory.version,
-                                        memory_digest=memory_digest(memory))
+                                        memory_digest=memory_digest(memory), rules=general)
         if not eligible:
             return selection
         # The model may only choose IDs from host-filtered applicable categories.
@@ -161,7 +177,7 @@ class PreferenceLearner:
                 or len(set(applied.selected_rule_ids)) != len(applied.selected_rule_ids)
                 or (task != "search" and applied.search_queries)):
             raise InvalidProviderOutputError("Preference selection is stale or outside its scope.")
-        selection.rules = [by_id[key] for key in applied.selected_rule_ids]
+        selection.rules = [*general, *(by_id[key] for key in applied.selected_rule_ids)]
         selection.search_queries = applied.search_queries
         return selection
 

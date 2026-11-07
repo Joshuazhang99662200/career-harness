@@ -110,3 +110,57 @@ def test_the_model_sees_the_current_rules_and_only_the_new_events():
     assert [r["rule_id"] for r in context["memory"]["rules"]] == ["RULE_A"]
     assert [e["event_id"] for e in context["events"]] == ["EVENT_2"]
     assert Provider  # the shared fixture module stays importable
+
+
+def test_general_rules_always_apply_and_the_model_only_picks_scoped_ones():
+    from jobagent.schemas.preference_memory import PreferenceMemory, PreferenceRule
+
+    rules = [
+        PreferenceRule.model_validate(rule("RULE_GENERAL", ["EVENT_1", "EVENT_2"], scope="general")),
+        PreferenceRule.model_validate(rule("RULE_ROLE", ["EVENT_3"], scope="role")),
+        PreferenceRule.model_validate(rule("RULE_JOB", ["EVENT_4"], job="JOB_FOUR")),
+    ]
+    memory = PreferenceMemory(
+        candidate_id="CAND_TEST", consumed_event_ids=[f"EVENT_{n}" for n in range(1, 5)],
+        rules=rules, updated_at=NOW,
+    )
+
+    class Picker:
+        def __init__(self, picks):
+            self.picks, self.offered = picks, None
+
+        def generate(self, *, prompt_id, context, output_type):
+            self.offered = [r["rule_id"] for r in context["memory"]["rules"]]
+            return output_type(input_digest=context["input_digest"], selected_rule_ids=self.picks)
+
+    none = Picker([])
+    chosen = PreferenceLearner(none).select(memory, task="greeting", job_id="JOB_FOUR", context="JD")
+    assert none.offered == ["RULE_ROLE", "RULE_JOB"]
+    assert [r.rule_id for r in chosen.rules] == ["RULE_GENERAL"]
+
+    some = Picker(["RULE_JOB"])
+    chosen = PreferenceLearner(some).select(memory, task="greeting", job_id="JOB_FOUR", context="JD")
+    assert [r.rule_id for r in chosen.rules] == ["RULE_GENERAL", "RULE_JOB"]
+
+    never = Picker(["RULE_GENERAL"])
+    with pytest.raises(InvalidProviderOutputError):
+        PreferenceLearner(never).select(memory, task="greeting", job_id="JOB_FOUR", context="JD")
+
+    class NoCall:
+        def generate(self, **_):
+            raise AssertionError("nothing scoped to choose, so no model call")
+
+    only_general = memory.model_copy(update={"rules": rules[:1]})
+    chosen = PreferenceLearner(NoCall()).select(
+        only_general, task="greeting", job_id="JOB_OTHER", context="JD"
+    )
+    assert [r.rule_id for r in chosen.rules] == ["RULE_GENERAL"]
+
+
+@pytest.mark.parametrize("condition", ["Evaluation PM", "  evaluation pm ", "Synthetic"])
+def test_a_role_rule_cannot_be_pinned_to_a_job_title_or_company(condition):
+    memory = base()
+    pinned = rule("RULE_ROLE", ["EVENT_2"], scope="role") | {"condition": condition}
+    learner = PreferenceLearner(Edits([{"op": "add", "rule": pinned}]))
+    with pytest.raises(InvalidProviderOutputError, match="title"):
+        learner.update(memory, [event(1, "JOB_ONE"), event(2, "JOB_TWO")], now=NOW)

@@ -116,7 +116,9 @@ def test_general_rules_always_apply_and_the_model_only_picks_scoped_ones():
     from jobagent.schemas.preference_memory import PreferenceMemory, PreferenceRule
 
     rules = [
-        PreferenceRule.model_validate(rule("RULE_GENERAL", ["EVENT_1", "EVENT_2"], scope="general")),
+        PreferenceRule.model_validate(
+            rule("RULE_GENERAL", ["EVENT_1", "EVENT_2"], scope="general")
+        ),
         PreferenceRule.model_validate(rule("RULE_ROLE", ["EVENT_3"], scope="role")),
         PreferenceRule.model_validate(rule("RULE_JOB", ["EVENT_4"], job="JOB_FOUR")),
     ]
@@ -134,12 +136,16 @@ def test_general_rules_always_apply_and_the_model_only_picks_scoped_ones():
             return output_type(input_digest=context["input_digest"], selected_rule_ids=self.picks)
 
     none = Picker([])
-    chosen = PreferenceLearner(none).select(memory, task="greeting", job_id="JOB_FOUR", context="JD")
+    chosen = PreferenceLearner(none).select(
+        memory, task="greeting", job_id="JOB_FOUR", context="JD"
+    )
     assert none.offered == ["RULE_ROLE", "RULE_JOB"]
     assert [r.rule_id for r in chosen.rules] == ["RULE_GENERAL"]
 
     some = Picker(["RULE_JOB"])
-    chosen = PreferenceLearner(some).select(memory, task="greeting", job_id="JOB_FOUR", context="JD")
+    chosen = PreferenceLearner(some).select(
+        memory, task="greeting", job_id="JOB_FOUR", context="JD"
+    )
     assert [r.rule_id for r in chosen.rules] == ["RULE_GENERAL", "RULE_JOB"]
 
     never = Picker(["RULE_GENERAL"])

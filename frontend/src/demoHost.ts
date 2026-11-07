@@ -269,8 +269,9 @@ export async function createDemoSource(
     kind: string,
     detail: string,
     material: HostMaterial | null,
+    answer: { todo_id: string; option_id: string } | null = null,
   ): HostEvent {
-    const event = {
+    const event: HostEvent = {
       event_id: crypto.randomUUID(),
       operation_key: key,
       job_id: job.job_id,
@@ -279,6 +280,8 @@ export async function createDemoSource(
       detail,
       material: copy(material),
       occurred_at: clock(),
+      todo_id: answer?.todo_id ?? null,
+      option_id: answer?.option_id ?? null,
     };
     job.events.push(event);
     return event;
@@ -446,6 +449,9 @@ export async function createDemoSource(
           input.kind,
           input.note || "本人保存了材料决定",
           eventMaterial,
+          input.kind === "answer_todo" && input.todo_id && input.option_id
+            ? { todo_id: input.todo_id, option_id: input.option_id }
+            : null,
         );
         return commit(
           next,

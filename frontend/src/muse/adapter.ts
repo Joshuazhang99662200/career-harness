@@ -1,6 +1,7 @@
 import { checkSnapshot, type ConsoleDataSource } from "../dataSource";
 import type { JobView, Snapshot } from "../contracts";
 import type {
+  HostEvent,
   HostJob,
   HostMaterial,
   HostDecisionRequest,
@@ -219,16 +220,16 @@ export function createMuseActions(
       historyCount: job.history.length + (entry?.events.length ?? 0),
     };
   }
-  const decisionKind = (kind: string, job: JobView) =>
+  const decisionKind = (event: HostEvent, job: JobView) =>
     (
       ({
         approve_material: channelOf(job).greetings
           ? "accept_original"
           : "deliver",
         save_draft: "accept_revise",
-        answer_todo: "skip",
+        answer_todo: event.option_id === "revise" ? "accept_revise" : "skip",
       }) as Record<string, string>
-    )[kind] ?? kind;
+    )[event.kind] ?? event.kind;
   async function record(
     rank: number,
     kind: HostDecisionRequest["kind"],
@@ -462,7 +463,7 @@ export function createMuseActions(
             : null,
         decisions: (entry?.events ?? []).map((e, index) => ({
           id: index + 1,
-          kind: decisionKind(e.kind, job),
+          kind: decisionKind(e, job),
           note: e.detail || null,
           greetingText: e.material?.body ?? null,
           status: "recorded",
@@ -523,7 +524,7 @@ export function createMuseActions(
         greetingVersions: (entry?.materials ?? []).map(item),
         feedback: displayHistory(entry?.events ?? []).map((e, index) => ({
           id: index + 1,
-          title: decisionKind(e.kind, job),
+          title: decisionKind(e, job),
           body: e.detail,
           occurredAt: e.occurred_at,
           source: null,

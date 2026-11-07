@@ -112,9 +112,16 @@ def _scenario(paths: RoleplayPaths) -> RoleplayScenario:
     return RoleplayScenario.model_validate_json(paths.scenario.read_text(encoding="utf-8"))
 
 
+MemoryMode = Literal["full", "notes_only", "off"]
+
+
 def init_workspace(
-    paths: RoleplayPaths, scenario: RoleplayScenario, *, now: datetime
+    paths: RoleplayPaths, scenario: RoleplayScenario, *, now: datetime,
+    memory_mode: MemoryMode = "full", strict_owner: bool = False,
 ) -> dict[str, object]:
+    """memory_mode: full uses preference memory and recent feedback notes; notes_only
+    gives the generator only the notes (no learned rules); off gives it neither. The
+    two baselines show how much each channel contributes."""
     if paths.root.exists():
         raise ContractValidationError("Use a fresh directory; this role-play workspace exists.")
     paths.rounds.mkdir(parents=True)
@@ -145,9 +152,15 @@ def init_workspace(
         }))
         jobs.save_job(job)
         job_ids.append(job.id)
-    state = {"scenario_id": scenario.scenario_id, "job_ids": job_ids, "rounds": []}
+    state = {
+        "scenario_id": scenario.scenario_id, "job_ids": job_ids, "rounds": [],
+        "memory_mode": memory_mode, "strict_owner": strict_owner,
+    }
     _write_state(paths, state)
-    return {"workspace": str(paths.root), "jobs": len(job_ids), "synthetic_only": True}
+    return {
+        "workspace": str(paths.root), "jobs": len(job_ids), "memory_mode": memory_mode,
+        "strict_owner": strict_owner, "synthetic_only": True,
+    }
 
 
 def _settings(scenario: RoleplayScenario, paths: RoleplayPaths) -> GreetingSettings:
@@ -175,27 +188,39 @@ def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> Rol
     else:
         job_id = override
     db = Database(paths.database)
+    mode = state.get("memory_mode", "full")
     preference = CodexPreferenceProvider(runner)
-    memory = refresh_preference_memory(
-        paths.database, paths.memory, scenario.candidate_id, preference, now=now
+    memory_store = MarkdownPreferenceStore(paths.memory, scenario.candidate_id)
+    memory = (
+        refresh_preference_memory(
+            paths.database, paths.memory, scenario.candidate_id, preference, now=now
+        )
+        if mode == "full" else memory_store.load()
     )
     events = load_preference_events(paths.database, scenario.candidate_id)
-    unconsumed = len({e.event_id for e in events} - set(memory.consumed_event_ids))
+    unconsumed = (
+        len({e.event_id for e in events} - set(memory.consumed_event_ids))
+        if mode == "full" else 0
+    )
     job = SqliteJobRepository(db).get_job(job_id)
     assert job is not None
-    if override is None:
+    if override is None and mode == "full":
         direction = PreferenceLearner(preference).direction(
             memory, job_id=job_id, context=job.jd_raw
         )
         if direction.decision == "suggest_skip":
             return _skip_round(paths, state, number, job, memory, unconsumed, direction, now)
-    selection = PreferenceLearner(preference).select(
-        memory, task="greeting", job_id=job_id, context=job.jd_raw
-    )
     request = load_greeting_request(paths.database, _settings(scenario, paths), job_id=job_id)
-    request = GreetingRequest.model_validate(
-        {**request.model_dump(), "preference_memory": selection.model_dump()}
-    )
+    selection = None
+    if mode == "full":
+        selection = PreferenceLearner(preference).select(
+            memory, task="greeting", job_id=job_id, context=job.jd_raw
+        )
+        request = GreetingRequest.model_validate(
+            {**request.model_dump(), "preference_memory": selection.model_dump()}
+        )
+    elif mode == "off":
+        request = GreetingRequest.model_validate({**request.model_dump(), "feedback": []})
     report = GreetingGenerator(CodexGreetingProvider(runner)).generate(request)
     (paths.rounds / f"R{number:04d}.report.json").write_text(
         report.model_dump_json(indent=2), encoding="utf-8"
@@ -204,8 +229,8 @@ def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> Rol
         round_number=number, job_id=job_id, title=job.title, company=job.company,
         jd_raw=job.jd_raw, generation_status=report.status, memory_version=memory.version,
         memory_rule_count=len(memory.rules),
-        selected_rules=[rule.rule_id for rule in selection.rules],
-        selected_rule_texts=[rule.text for rule in selection.rules],
+        selected_rules=[rule.rule_id for rule in selection.rules] if selection else [],
+        selected_rule_texts=[rule.text for rule in selection.rules] if selection else [],
         unconsumed_events_before_generation=unconsumed, started_at=now,
         direction_overridden=override is not None,
     )
@@ -248,6 +273,7 @@ def _skip_round(
         jd_raw=job.jd_raw, generation_status="skip_proposed", memory_version=memory.version,
         memory_rule_count=len(memory.rules), unconsumed_events_before_generation=unconsumed,
         started_at=now, direction_rule_ids=[rule.rule_id for rule in direction.rules],
+        direction_rule_texts=[rule.text for rule in direction.rules],
         direction_reason=direction.reason,
     )
     (paths.rounds / f"R{number:04d}.json").write_text(
@@ -292,6 +318,14 @@ def decide_round(
         raise ContractValidationError(
             "Unknown hidden preference.", details={"ids": sorted(unknown)}
         )
+    if state.get("strict_owner"):
+        spoken = decision.words + "\n" + decision.note
+        used = [term for term in scenario.owner_forbidden_terms if term in spoken]
+        if used:
+            raise ContractValidationError(
+                "A strict owner may not use a universal quantifier in feedback.",
+                details={"terms": used},
+            )
     db = Database(paths.database)
     store = SqliteOutreachRepository(db)
     batch, ask = store.get_batch(current["batch_id"]), store.get_ask(current["ask_id"])
@@ -329,6 +363,7 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
     events = load_preference_events(paths.database, scenario.candidate_id)
     event_ids = {event.event_id for event in events}
     rounds = state["rounds"]
+    mode = state.get("memory_mode", "full")
     decided = [r for r in rounds if r["decision"] in {"approve", "revise", "decline"}]
     views = [
         RoleplayRound.model_validate_json(
@@ -345,7 +380,8 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
         batch = store.get_batch(view.batch_id)
         binding = batch.items[0].source_binding if batch else None
         generation = binding.generation if binding else None
-        if (generation is None or generation.memory_version != view.memory_version
+        expected_version = view.memory_version if mode == "full" else None
+        if (generation is None or generation.memory_version != expected_version
                 or sorted(generation.preference_rule_ids) != sorted(view.selected_rules)):
             provenance_ok = False
     checks = [
@@ -356,8 +392,11 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
         ),
         RoleplayCheck(
             check_id="memory_consumed_feedback_before_each_generation",
-            passed=all(v.unconsumed_events_before_generation == 0 for v in views),
-            detail="unconsumed per round: "
+            passed=mode != "full" or all(
+                v.unconsumed_events_before_generation == 0 for v in views
+            ),
+            detail="not applicable: memory is off in this arm" if mode != "full"
+            else "unconsumed per round: "
             + ",".join(str(v.unconsumed_events_before_generation) for v in views),
         ),
         RoleplayCheck(
@@ -386,18 +425,35 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
         ),
     ]
     preferences = []
+    by_round = {view.round_number: view for view in views}
     for preference in scenario.hidden_preferences:
+        def matches(text: str, keywords: list[str] = preference.rule_keywords) -> bool:
+            return any(word.casefold() in text.casefold() for word in keywords)
+
         matching = [
             rule.text for rule in memory.rules
-            if rule.category == preference.category
-            and any(word.casefold() in rule.text.casefold() for word in preference.rule_keywords)
+            if rule.category == preference.category and matches(rule.text)
         ]
+        triggered = [r["round"] for r in rounds if preference.preference_id in r["triggered"]]
+        used = []
+        for r in rounds:
+            seen = by_round.get(r["round"])
+            if not triggered or r["round"] <= min(triggered) or seen is None:
+                continue
+            texts = (seen.selected_rule_texts if preference.category == "greetings"
+                     else seen.direction_rule_texts)
+            if any(matches(text) for text in texts):
+                used.append(r)
         preferences.append(PreferenceCapture(
             preference_id=preference.preference_id,
             triggered_rounds=[
                 r["round"] for r in rounds if preference.preference_id in r["triggered"]
             ],
             captured=bool(matching), matching_rules=matching,
+            rounds_selected_after_trigger=len(used),
+            approved_when_selected=sum(
+                r["decision"] in {"approve", "confirm_skip"} for r in used
+            ),
         ))
     half = len(decided) // 2
     actions: dict[str, int] = {}
@@ -407,7 +463,8 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
     actions["generation_rejected"] = sum(r["status"] == "rejected" for r in rounds)
     actions["skip_proposed"] = sum(r["status"] == "skip_proposed" for r in rounds)
     return RoleplayReport(
-        scenario_id=scenario.scenario_id, rounds=len(rounds), decided=len(decided),
+        scenario_id=scenario.scenario_id, memory_mode=mode, rounds=len(rounds),
+        decided=len(decided),
         actions=actions, first_half_acceptance=_rate(decided[:half]),
         second_half_acceptance=_rate(decided[half:]), checks=checks, preferences=preferences,
         memory_version=memory.version,

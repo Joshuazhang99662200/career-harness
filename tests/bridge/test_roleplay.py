@@ -310,3 +310,46 @@ def test_overriding_a_skip_drafts_the_same_job_without_the_gate(workspace):
     decide(workspace, 9, "decline", reason="direction", note="还是不做")
     after = run_round(workspace, model, now=NOW + timedelta(hours=9))
     assert after.title == "智能体平台产品经理"
+
+
+@pytest.mark.parametrize("mode", ["off", "notes_only"])
+def test_baseline_arms_generate_without_memory_rules(tmp_path, monkeypatch, mode):
+    monkeypatch.chdir(tmp_path)
+    paths = RoleplayPaths.here()
+    init_workspace(paths, load_scenario("evaluation_first_v1"), now=NOW, memory_mode=mode)
+    model = StandInModel()
+    run_round(paths, model, now=NOW)
+    decide(paths, 1, "revise", revised="您好，我先说评测经历。", reason="copy")
+    second = run_round(paths, model, now=NOW + timedelta(hours=1))
+    assert second.memory_rule_count == 0 and second.selected_rules == []
+    drafts = [p for p in model.seen if '"evidence"' in p and "preference_memory" in p]
+    last = drafts[-1]
+    assert ("第 1 轮的合成答复" in last or "合成理由" in last) == (mode == "notes_only")
+    report = build_report(paths)
+    assert report.memory_mode == mode
+    assert all(check.passed for check in report.checks), report.checks
+
+
+def test_strict_owner_rejects_universal_quantifiers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    paths = RoleplayPaths.here()
+    init_workspace(paths, load_scenario("evaluation_first_v1"), now=NOW, strict_owner=True)
+    run_round(paths, StandInModel(), now=NOW)
+    with pytest.raises(ContractValidationError, match="quantifier"):
+        decide(paths, 1, "revise", revised="您好，我先说评测经历。", note="所有岗位都这样写")
+    decide(paths, 1, "revise", revised="您好，我先说评测经历。", note="开头先讲评测")
+
+
+def test_report_judges_capture_by_selection_and_approval(workspace):
+    model = StandInModel()
+    run_round(workspace, model, now=NOW)
+    decide(workspace, 1, "revise", revised="您好，我先说评测经历。", reason="copy",
+           triggered=["P_EVAL_FIRST"])
+    for number in (2, 3):
+        run_round(workspace, model, now=NOW + timedelta(hours=number - 1))
+        decide(workspace, number, "approve")
+    capture = {p.preference_id: p for p in build_report(workspace).preferences}
+    eval_first = capture["P_EVAL_FIRST"]
+    assert eval_first.rounds_selected_after_trigger == 2
+    assert eval_first.approved_when_selected == 2
+    assert capture["P_NO_SALES"].rounds_selected_after_trigger == 0

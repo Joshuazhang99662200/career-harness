@@ -102,6 +102,8 @@ def test_version_guard_and_backup_preserve_previous_memory(tmp_path, monkeypatch
     store.save(updated, expected_version="PMEM_ONE")
     backups = list((path.parent / "history").glob("*.md"))
     assert len(backups) == 1 and "PMEM_ONE" in backups[0].read_text(encoding="utf-8")
+    # Short names keep deep Windows paths under the 260-character limit.
+    assert backups[0].name == "PMEM_ONE.md"
     assert store.load().version == "PMEM_TWO"
 
 

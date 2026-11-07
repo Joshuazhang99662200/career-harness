@@ -83,6 +83,11 @@ class RoleplayScenario(ContractModel):
     evidence: list[RoleplayEvidence] = Field(min_length=1)
     hidden_preferences: list[HiddenPreference] = Field(min_length=1)
     jobs: list[RoleplayJob] = Field(min_length=2)
+    # With a strict owner, feedback may not use these words: real people rarely say
+    # "for every job", so generalization must not depend on them.
+    owner_forbidden_terms: list[NonEmptyString] = Field(default_factory=lambda: [
+        "所有", "不管", "每封", "每一封", "任何岗位", "无论", "一律", "全部岗位",
+    ])
 
     @model_validator(mode="after")
     def unique_ids(self) -> "RoleplayScenario":
@@ -113,6 +118,7 @@ class RoleplayRound(ContractModel):
     unconsumed_events_before_generation: int = Field(ge=0)
     # A learned jobs rule proposed skipping this posting instead of drafting.
     direction_rule_ids: list[str] = Field(default_factory=list)
+    direction_rule_texts: list[str] = Field(default_factory=list)
     direction_reason: str = ""
     direction_overridden: bool = False
     started_at: AwareDatetime
@@ -148,12 +154,18 @@ class RoleplayCheck(ContractModel):
 class PreferenceCapture(ContractModel):
     preference_id: NonEmptyString
     triggered_rounds: list[int]
+    # Keyword presence in memory: a loose signal that the rule exists at all.
     captured: bool
     matching_rules: list[str]
+    # Behaviour after the first trigger: rounds where a matching rule was actually used
+    # (selected for a greeting, or cited by a skip proposal) and how many were approved.
+    rounds_selected_after_trigger: int = 0
+    approved_when_selected: int = 0
 
 
 class RoleplayReport(ContractModel):
     scenario_id: NonEmptyString
+    memory_mode: Literal["full", "notes_only", "off"] = "full"
     rounds: int = Field(ge=0)
     decided: int = Field(ge=0)
     actions: dict[str, int]

@@ -22,7 +22,7 @@ from jobagent.bridge.roleplay import (
     run_round,
 )
 from jobagent.cli.private_io import fail, read_model
-from jobagent.errors import JobAgentError
+from jobagent.errors import ContractValidationError, JobAgentError
 from jobagent.schemas.roleplay import GeminiCliConfig, RoleplayDecision, RoleplayScenario
 
 roleplay_app = typer.Typer(
@@ -36,10 +36,23 @@ def _echo(value: object) -> None:
 
 
 @roleplay_app.command("init")
-def init(scenario: Annotated[str, typer.Option("--scenario")]) -> None:
+def init(
+    scenario: Annotated[str, typer.Option("--scenario")],
+    memory_mode: Annotated[
+        str, typer.Option("--memory-mode", help="full, notes_only or off (baselines).")
+    ] = "full",
+    strict_owner: Annotated[
+        bool, typer.Option("--strict-owner", help="Refuse universal quantifiers in feedback.")
+    ] = False,
+) -> None:
     """Create the synthetic workspace under ./.jobagent/roleplay (must not exist)."""
     try:
-        _echo(init_workspace(RoleplayPaths.here(), load_scenario(scenario), now=datetime.now(UTC)))
+        if memory_mode not in {"full", "notes_only", "off"}:
+            raise ContractValidationError("memory mode must be full, notes_only or off.")
+        _echo(init_workspace(
+            RoleplayPaths.here(), load_scenario(scenario), now=datetime.now(UTC),
+            memory_mode=memory_mode, strict_owner=strict_owner,  # type: ignore[arg-type]
+        ))
     except JobAgentError as error:
         fail(error)
 

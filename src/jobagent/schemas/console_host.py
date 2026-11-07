@@ -55,6 +55,9 @@ class HostEvent(HostModel):
     occurred_at: AwareDatetime
     detail: str
     material: HostMaterial | None
+    # Set only when the event answers a personal todo (kind "answer_todo").
+    todo_id: str | None = None
+    option_id: str | None = None
 
 
 class HostOption(HostModel):

@@ -202,6 +202,36 @@ class SqliteFeedbackRepository:
         except sqlite3.Error as error:
             raise StorageError("Could not persist paged approval.") from error
 
+    def record_panel_answer(
+        self, state: PagedCardState, *, event_id: str, panel_event: HostEvent, now: datetime,
+    ) -> str:
+        """Store one answer to a personal todo; it decides nothing on the list.
+
+        The list's state is registered if needed but never changed, so the item stays
+        open, no approval or preference feedback is written, and the answer is only
+        readable as a panel operation.
+        """
+        try:
+            with self.database.transaction() as connection:
+                if connection.execute(
+                    "SELECT 1 FROM paged_card_events WHERE event_id = ?", (event_id,),
+                ).fetchone():
+                    return "duplicate"
+                connection.execute(
+                    "INSERT OR IGNORE INTO paged_card_states VALUES (?, ?, ?)",
+                    (state.message_id, state.revision, state.model_dump_json()),
+                )
+                connection.execute("INSERT INTO paged_card_events VALUES (?, ?, ?)",
+                                   (event_id, state.message_id, now.isoformat()))
+                connection.execute(
+                    "INSERT INTO panel_operations VALUES (?, ?, ?, ?, ?, ?)",
+                    (event_id, state.candidate_id, panel_event.operation_key,
+                     panel_event.contact_id, panel_event.model_dump_json(), now.isoformat()),
+                )
+            return "stored"
+        except sqlite3.Error as error:
+            raise StorageError("Could not persist the panel answer.") from error
+
     def decided_numbers(self, batch_id: str) -> set[int]:
         """Items of a list that some front end already decided one by one."""
         with self.database.connect() as connection:

@@ -30,7 +30,7 @@ def test_saved_decisions_are_readable_by_their_receipt_event_id(tmp_path):
     assert event.kind == "approve_material" and event.material is not None
     assert event.material.revision == item.item_digest and event.material.body == TEXT
     assert [r.event_id for r in after.receipts] == [receipt.event_id]
-    assert after.sync.status == "unavailable"  # todos, channels and batches come from the host
+    assert after.sync.status == "unknown"  # no platform sync check was made
 
 
 def test_operation_read_back_uses_the_stored_operation(tmp_path):

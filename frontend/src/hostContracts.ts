@@ -39,6 +39,8 @@ export interface HostEvent {
   occurred_at: string;
   detail: string;
   material: HostMaterial | null;
+  todo_id: string | null;
+  option_id: string | null;
 }
 export interface HostExcluded {
   job_id: string;

@@ -37,8 +37,18 @@ Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删�
 | `getMaterials` | `jobagent console materials --candidate <ID> --contact <PIPE_*>` | 仍待本人决定的首条招呼准确全文；`revision` 为条目摘要 |
 | `recordDecision` | `jobagent console decide <HostDecisionRequest.json> --actor <操作人>` | `approve_material`：仅原文，单条清单上走原审批门禁；`save_draft`：改写反馈，待重新生成复核；`decline`：回绝反馈。`approve_text` 只是文案意见，不构成批准，返回 rejected 且不保存；其他种类同样返回 rejected |
 | `getOperation` | `jobagent console operation <operation_key> --candidate <ID>` | 按操作键回读；无记录即未保存，可重新提交 |
+| `getHostState` | `jobagent console host-state --candidate <ID>` | 只读：每个联系的首条招呼材料、面板操作（`event_id` 与回执一致）和个人待办；渠道状态由宿主提供 |
 
 `approve_material` 与 `approve_text` 的含义和前端、演示宿主保持一致：只有前者是批准。宿主状态里当前材料的 `revision` 必须取 `console materials` 返回的值，否则决定会因材料已变化被拒绝。前端在改稿后先保存草稿再批准；接 CLI 时草稿保存为改写反馈、原文不变，前端据此提示需重新生成复核，不会批准改动后的文字。
+
+**个人待办。** 每条已提问、证据经本人确认的首条招呼对应一条待办，`todo_id` 由提问编号与条目号确定，`material_revision` 为条目摘要。待办在条目被批准、放弃、保存改写、整份清单批准或撤回，或被下面两种回答处理后变为 resolved，`result` 写明结果。没有提问记录的岗位不生成待办，也不推断“没有待办”；猎聘没有首条招呼，不生成待办。
+
+**回答待办（`answer_todo`）。** 只接受当前待办提供的两个选项，且正文和 `material_revision` 须与该条目一致：
+
+- `hold`（暂缓处理）：只登记暂缓。不批准、不发送、不写偏好反馈，条目保持可决定，之后仍可批准或放弃。
+- `revise`（招呼语要改）：登记“要求重写”，附本人备注。偏好记忆里的 `revise` 必须带改写全文，`decline` 表示不要这个岗位，两者都不适合“要改但没给新文字”，所以这一回答只作为面板操作保存，不进偏好记忆、不批准；宿主据此重新生成，本人再对新稿作为新条目决定。取舍：旧条目在重新生成前仍可被批准或放弃，不会被自动关闭，避免把“要改”误记成放弃。
+
+两种回答都按操作键保存，可用 `console operation` 与 `host-state` 回读；同一操作键提交不同回答会被拒绝，已处理的待办不能再回答。
 
 回执状态为 saved 时退出码为 0，rejected 为 1，JSON 回执始终输出。决定都不发送；已批准的条目仍由现有租约与 `outreach next` 节奏发送并回读。
 

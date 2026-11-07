@@ -1,16 +1,21 @@
 # ruff: noqa: RUF001  -- user-facing receipts are written in Chinese.
-"""Read-only HostState for the panel: greeting materials and the panel's own decisions.
+"""Read-only HostState for the panel: greeting materials, todos and the panel's decisions.
 
 The repository produces only what it owns: per contact, the exact first-greeting
-materials (revision = item digest, the same value `console materials` returns)
-and every saved panel decision with the event id its receipt carried. Todos,
-channels and execution batches belong to the host, so they are left empty and
-`sync` says so instead of implying there is nothing to do.
+materials (revision = item digest, the same value `console materials` returns),
+every saved panel operation with the event id its receipt carried, and one
+personal todo per asked first greeting. Channels belong to the host and are left
+empty; `sync` says no platform sync check was made rather than implying one was.
 """
 
 from pathlib import Path
 
-from jobagent.bridge.panel_decisions import open_items, owned_evidence, receipt_message
+from jobagent.bridge.panel_decisions import (
+    open_items,
+    owned_evidence,
+    panel_todos,
+    receipt_message,
+)
 from jobagent.schemas.console_host import (
     HostJob,
     HostMaterial,
@@ -57,16 +62,17 @@ def host_state(database: Path, candidate_id: str) -> HostState:
             blockers=[], progress=None, intake_at=job.entered_at,
         ))
     return HostState(
-        candidate_id=candidate_id, jobs=jobs, todos=[], channels=[], batches=[],
+        candidate_id=candidate_id, jobs=jobs, todos=panel_todos(db, candidate_id, events),
+        channels=[], batches=[],
         receipts=[
             HostReceipt(
                 operation_key=e.operation_key, status="saved", event_id=e.event_id,
-                message=receipt_message(e.kind),
+                message=receipt_message(e),
             )
             for e in events
         ],
         sync=HostSync(
-            status="unavailable", checked_at=None, differences=[],
-            message="仓库只导出首条招呼材料与面板决定；待办、渠道与执行批次由宿主提供。",
+            status="unknown", checked_at=None, differences=[],
+            message="没有做平台同步核对；待办只来自已保存的首条招呼提问与面板决定，渠道状态由宿主提供。",
         ),
     )

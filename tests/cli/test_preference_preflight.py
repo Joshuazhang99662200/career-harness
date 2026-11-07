@@ -106,6 +106,10 @@ def fixture(tmp_path, monkeypatch, *, enabled=True):
                             "reason": "Supported synthetic fact"}],
                 "full_text_supported": True, "no_missing_claims": True,
                 "target_relevant": True, "style_ok": True, "conflicts_resolved": True,
+                "rule_checks": [
+                    {"rule_id": r["rule_id"], "verdict": "followed", "excerpt": ""}
+                    for r in (context["request"].get("preference_memory") or {}).get("rules", [])
+                ],
             })
 
     for module in ["jobagent.cli.greetings", "jobagent.cli.jobs"]:

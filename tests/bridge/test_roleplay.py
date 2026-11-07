@@ -76,6 +76,10 @@ class StandInModel:
                     for c in context["draft"]["claims"]],
             full_text_supported=True, no_missing_claims=True, target_relevant=True,
             style_ok=True, conflicts_resolved=True,
+            rule_checks=[
+                {"rule_id": r["rule_id"], "verdict": "followed", "excerpt": ""}
+                for r in (context["request"].get("preference_memory") or {}).get("rules", [])
+            ],
         )
 
 
@@ -201,7 +205,10 @@ else:
            "claims": [{"text": c["text"], "verdict": "supported", "reason": "matches"}
                       for c in context["draft"]["claims"]],
            "full_text_supported": True, "no_missing_claims": True, "target_relevant": True,
-           "style_ok": True, "conflicts_resolved": True, "issues": []}
+           "style_ok": True, "conflicts_resolved": True, "issues": [],
+           "rule_checks": [{"rule_id": r["rule_id"], "verdict": "followed", "excerpt": ""}
+                           for r in (context["request"].get("preference_memory") or {})
+                           .get("rules", [])]}
 print(json.dumps({"response": "```json\n" + json.dumps(out, ensure_ascii=False) + "\n```",
                   "stats": {"tools": {"totalCalls": 0}}}))
 '''

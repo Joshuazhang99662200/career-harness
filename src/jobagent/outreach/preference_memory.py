@@ -9,6 +9,8 @@ from jobagent.capabilities import ReasoningOutputT, ReasoningProvider
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError, InvalidProviderOutputError
 from jobagent.schemas.preference_memory import (
+    DirectionCheck,
+    DirectionDecision,
     PreferenceApplication,
     PreferenceEditSet,
     PreferenceMemory,
@@ -19,6 +21,7 @@ from jobagent.schemas.sourcing_feedback import SourcingFeedback
 
 SUMMARIZE_PROMPT = "preference.memory.summarize.v2"
 SELECT_PROMPT = "preference.memory.select.v1"
+DIRECTION_PROMPT = "preference.direction.check.v1"
 
 
 def memory_digest(memory: PreferenceMemory) -> str:
@@ -181,6 +184,33 @@ class PreferenceLearner:
         selection.search_queries = applied.search_queries
         return selection
 
+
+    def direction(
+        self, memory: PreferenceMemory, *, job_id: str, context: str
+    ) -> DirectionDecision:
+        """Before drafting: do the person's jobs rules say to skip this posting?"""
+        memory = PreferenceMemory.model_validate(memory.model_dump())
+        eligible = [rule for rule in memory.rules if rule.category == "jobs"
+                    and (rule.scope != "job" or rule.job_id == job_id)]
+        if not eligible:
+            return DirectionDecision(memory_version=memory.version, decision="draft")
+        view = memory.model_copy(update={"rules": eligible}).model_dump(mode="json")
+        payload = {"memory": view, "job_id": job_id, "context": context}
+        identity = canonical_digest(payload)
+        check = self._generate(DIRECTION_PROMPT, {**payload, "input_digest": identity},
+                               DirectionCheck)
+        by_id = {rule.rule_id: rule for rule in eligible}
+        matched = check.matched_rule_ids
+        if (check.input_digest != identity or not set(matched) <= set(by_id)
+                or len(set(matched)) != len(matched)
+                or (check.decision == "suggest_skip") != bool(matched)):
+            raise InvalidProviderOutputError(
+                "A direction check must cite exactly the jobs rules it relies on."
+            )
+        return DirectionDecision(
+            memory_version=memory.version, decision=check.decision,
+            rules=[by_id[rule_id] for rule_id in matched], reason=check.reason,
+        )
 
 def _apply_edits(
     current: list[PreferenceRule], proposal: PreferenceEditSet, fresh_ids: set[str]

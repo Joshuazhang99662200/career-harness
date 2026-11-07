@@ -19,7 +19,11 @@ from jobagent.cli.app import app
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.coordinator import CodexTextRequest
 from jobagent.schemas.greeting import GreetingDraft, GreetingReview
-from jobagent.schemas.preference_memory import PreferenceApplication, PreferenceEditSet
+from jobagent.schemas.preference_memory import (
+    DirectionCheck,
+    PreferenceApplication,
+    PreferenceEditSet,
+)
 from jobagent.schemas.roleplay import RoleplayDecision
 from jobagent.storage.database import Database
 from jobagent.storage.outreach_repository import SqliteOutreachRepository
@@ -54,6 +58,15 @@ class StandInModel:
             return PreferenceEditSet(
                 input_digest=context["input_digest"],
                 edits=[{"op": "add", "rule": rule} for rule in rules],
+            )
+        if output_contract is DirectionCheck:
+            title = context["context"]
+            matched = [r["rule_id"] for r in context["memory"]["rules"]]
+            skip = any(word in title for word in ("售前", "销售")) and bool(matched)
+            return DirectionCheck(
+                input_digest=context["input_digest"],
+                decision="suggest_skip" if skip else "draft",
+                matched_rule_ids=matched if skip else [], reason="合成理由",
             )
         if output_contract is PreferenceApplication:
             return PreferenceApplication(
@@ -122,7 +135,9 @@ def test_four_rounds_learn_two_hidden_preferences_and_every_invariant_holds(work
         "P_EVAL_FIRST": True, "P_NO_PLEASANTRIES": True, "P_ONE_CONCRETE": False,
         "P_NO_SALES": True,
     }
-    assert report.actions == {"revise": 1, "decline": 1, "approve": 2, "generation_rejected": 0}
+    assert report.actions == {
+        "revise": 1, "decline": 1, "approve": 2, "generation_rejected": 0, "skip_proposed": 0,
+    }
     assert (report.first_half_acceptance, report.second_half_acceptance) == (0.0, 1.0)
     assert report.synthetic_only is True
 
@@ -190,6 +205,9 @@ if title == "PreferenceEditSet":
                           "updated_at": event["occurred_at"]})
     out = {"input_digest": context["input_digest"],
            "edits": [{"op": "add", "rule": rule} for rule in rules]}
+elif title == "DirectionCheck":
+    out = {"input_digest": context["input_digest"], "decision": "draft",
+           "matched_rule_ids": [], "reason": ""}
 elif title == "PreferenceApplication":
     out = {"input_digest": context["input_digest"],
            "selected_rule_ids": [r["rule_id"] for r in context["memory"]["rules"]],
@@ -249,3 +267,46 @@ def test_cli_rounds_through_the_real_gemini_runner_contract(tmp_path, monkeypatc
     report = json.loads(runner.invoke(app, ["roleplay", "report"]).stdout)
     failed = [c["check_id"] for c in report["checks"] if not c["passed"]]
     assert failed == [] and report["memory_rules"]
+
+
+
+def _to_round_eight(workspace, model):
+    """R1 revise, R2 decline a sales role (a jobs rule is learned), R3-R7 approve."""
+    run_round(workspace, model, now=NOW)
+    decide(workspace, 1, "revise", revised="您好，我先说评测经历。", reason="copy")
+    run_round(workspace, model, now=NOW + timedelta(hours=1))
+    decide(workspace, 2, "decline", reason="direction", note="不做售前")
+    for number in range(3, 8):
+        run_round(workspace, model, now=NOW + timedelta(hours=number - 1))
+        decide(workspace, number, "approve")
+    return run_round(workspace, model, now=NOW + timedelta(hours=7))
+
+
+def test_a_learned_jobs_rule_proposes_a_skip_instead_of_a_draft(workspace):
+    model = StandInModel()
+    eighth = _to_round_eight(workspace, model)
+    assert eighth.title == "解决方案售前(大模型)"
+    assert eighth.generation_status == "skip_proposed" and eighth.greeting is None
+    assert eighth.direction_rule_ids and eighth.direction_reason
+    with pytest.raises(ContractValidationError, match="Decide the open round"):
+        run_round(workspace, model, now=NOW + timedelta(hours=8))
+    with pytest.raises(ContractValidationError, match="skip"):
+        decide(workspace, 8, "approve")
+    assert decide(workspace, 8, "confirm_skip")["grants_send"] is False
+    ninth = run_round(workspace, model, now=NOW + timedelta(hours=8))
+    assert ninth.title == "智能体平台产品经理"
+    report = build_report(workspace)
+    assert report.actions["confirm_skip"] == 1
+    assert all(check.passed for check in report.checks), report.checks
+
+
+def test_overriding_a_skip_drafts_the_same_job_without_the_gate(workspace):
+    model = StandInModel()
+    _to_round_eight(workspace, model)
+    decide(workspace, 8, "override_skip")
+    again = run_round(workspace, model, now=NOW + timedelta(hours=8))
+    assert again.title == "解决方案售前(大模型)"
+    assert again.generation_status == "passed" and again.direction_overridden
+    decide(workspace, 9, "decline", reason="direction", note="还是不做")
+    after = run_round(workspace, model, now=NOW + timedelta(hours=9))
+    assert after.title == "智能体平台产品经理"

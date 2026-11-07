@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from jobagent.bridge.greeting_context import load_greeting_request
 from jobagent.bridge.greeting_generation import CodexGreetingProvider
@@ -56,6 +56,8 @@ from jobagent.storage.job_repository import SqliteJobRepository
 from jobagent.storage.outreach_repository import SqliteOutreachRepository
 
 OWNER = "ROLEPLAY_SIMULATED_OWNER"
+# Skip answers return before any feedback is written, so only these reach the writer.
+FeedbackAction = Literal["approve", "revise", "decline"]
 
 
 @dataclass(frozen=True)
@@ -159,12 +161,19 @@ def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> Rol
     state = _read_state(paths)
     scenario = _scenario(paths)
     rounds = state["rounds"]
-    if rounds and rounds[-1]["status"] == "passed" and rounds[-1]["decision"] is None:
+    if (rounds and rounds[-1]["status"] in {"passed", "skip_proposed"}
+            and rounds[-1]["decision"] is None):
         raise ContractValidationError(
             "Decide the open round first.", details={"round": rounds[-1]["round"]}
         )
     number = len(rounds) + 1
-    job_id = state["job_ids"][(number - 1) % len(state["job_ids"])]
+    override = state.pop("override_job_id", None)
+    if override is None:
+        cursor = state.get("cursor", len(rounds))
+        job_id = state["job_ids"][cursor % len(state["job_ids"])]
+        state["cursor"] = cursor + 1
+    else:
+        job_id = override
     db = Database(paths.database)
     preference = CodexPreferenceProvider(runner)
     memory = refresh_preference_memory(
@@ -174,6 +183,12 @@ def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> Rol
     unconsumed = len({e.event_id for e in events} - set(memory.consumed_event_ids))
     job = SqliteJobRepository(db).get_job(job_id)
     assert job is not None
+    if override is None:
+        direction = PreferenceLearner(preference).direction(
+            memory, job_id=job_id, context=job.jd_raw
+        )
+        if direction.decision == "suggest_skip":
+            return _skip_round(paths, state, number, job, memory, unconsumed, direction, now)
     selection = PreferenceLearner(preference).select(
         memory, task="greeting", job_id=job_id, context=job.jd_raw
     )
@@ -192,6 +207,7 @@ def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> Rol
         selected_rules=[rule.rule_id for rule in selection.rules],
         selected_rule_texts=[rule.text for rule in selection.rules],
         unconsumed_events_before_generation=unconsumed, started_at=now,
+        direction_overridden=override is not None,
     )
     if report.status == "passed" and report.outreach_draft is not None:
         service, store = OutreachService(), SqliteOutreachRepository(db)
@@ -222,6 +238,28 @@ def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> Rol
     return view
 
 
+def _skip_round(
+    paths: RoleplayPaths, state: dict[str, Any], number: int, job: Any, memory: Any,
+    unconsumed: int, direction: Any, now: datetime,
+) -> RoleplayRound:
+    """Record a skip proposal: nothing is drafted, the person confirms or overrides."""
+    view = RoleplayRound(
+        round_number=number, job_id=job.id, title=job.title, company=job.company,
+        jd_raw=job.jd_raw, generation_status="skip_proposed", memory_version=memory.version,
+        memory_rule_count=len(memory.rules), unconsumed_events_before_generation=unconsumed,
+        started_at=now, direction_rule_ids=[rule.rule_id for rule in direction.rules],
+        direction_reason=direction.reason,
+    )
+    (paths.rounds / f"R{number:04d}.json").write_text(
+        view.model_dump_json(indent=2), encoding="utf-8"
+    )
+    state["rounds"].append({
+        "round": number, "status": "skip_proposed", "decision": None, "triggered": [],
+        "batch_id": None, "ask_id": None, "job_id": job.id,
+    })
+    _write_state(paths, state)
+    return view
+
 def decide_round(
     paths: RoleplayPaths, number: int, decision: RoleplayDecision, *, now: datetime
 ) -> dict[str, object]:
@@ -231,8 +269,22 @@ def decide_round(
     if not rounds or rounds[-1]["round"] != number:
         raise ContractValidationError("Only the latest round can be decided.")
     current = rounds[-1]
-    if current["status"] != "passed" or current["decision"] is not None:
+    if current["decision"] is not None or current["status"] == "rejected":
         raise ContractValidationError("This round has no open greeting to decide.")
+    skip_answer = decision.action in {"confirm_skip", "override_skip"}
+    if (current["status"] == "skip_proposed") != skip_answer:
+        raise ContractValidationError(
+            "A skip proposal takes confirm_skip or override_skip; a greeting takes "
+            "approve, revise or decline."
+        )
+    if skip_answer:
+        # Not learned yet: feedback must bind to an asked list, and a skip has none.
+        current["decision"] = decision.action
+        current["triggered"] = decision.triggered_preferences
+        if decision.action == "override_skip":
+            state["override_job_id"] = current["job_id"]
+        _write_state(paths, state)
+        return {"round": number, "decision": decision.action, "grants_send": False}
     unknown = set(decision.triggered_preferences) - {
         p.preference_id for p in scenario.hidden_preferences
     }
@@ -253,7 +305,8 @@ def decide_round(
         actor_id=OWNER, attestation=decision.words, occurred_at=now,
         query_strategy_version=f"roleplay:{scenario.scenario_id}",
         items=[OutreachFeedbackItem(
-            number=1, action=decision.action, reason_category=decision.reason_category,
+            number=1, action=cast(FeedbackAction, decision.action),
+            reason_category=decision.reason_category,
             free_text=decision.note, revised_text=decision.revised_text,
         )],
     ))
@@ -276,7 +329,7 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
     events = load_preference_events(paths.database, scenario.candidate_id)
     event_ids = {event.event_id for event in events}
     rounds = state["rounds"]
-    decided = [r for r in rounds if r["decision"] is not None]
+    decided = [r for r in rounds if r["decision"] in {"approve", "revise", "decline"}]
     views = [
         RoleplayRound.model_validate_json(
             (paths.rounds / f"R{r['round']:04d}.json").read_text(encoding="utf-8")
@@ -348,9 +401,11 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
         ))
     half = len(decided) // 2
     actions: dict[str, int] = {}
-    for r in decided:
-        actions[r["decision"]] = actions.get(r["decision"], 0) + 1
+    for r in rounds:
+        if r["decision"] is not None:
+            actions[r["decision"]] = actions.get(r["decision"], 0) + 1
     actions["generation_rejected"] = sum(r["status"] == "rejected" for r in rounds)
+    actions["skip_proposed"] = sum(r["status"] == "skip_proposed" for r in rounds)
     return RoleplayReport(
         scenario_id=scenario.scenario_id, rounds=len(rounds), decided=len(decided),
         actions=actions, first_half_acceptance=_rate(decided[:half]),

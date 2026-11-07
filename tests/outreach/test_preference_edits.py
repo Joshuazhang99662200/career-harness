@@ -170,3 +170,62 @@ def test_a_role_rule_cannot_be_pinned_to_a_job_title_or_company(condition):
     learner = PreferenceLearner(Edits([{"op": "add", "rule": pinned}]))
     with pytest.raises(InvalidProviderOutputError, match="title"):
         learner.update(memory, [event(1, "JOB_ONE"), event(2, "JOB_TWO")], now=NOW)
+
+
+def _direction_memory():
+    from jobagent.schemas.preference_memory import PreferenceMemory, PreferenceRule
+
+    jobs_rule = PreferenceRule.model_validate(
+        rule("RULE_NO_SALES", ["EVENT_1", "EVENT_2"], scope="general")
+        | {"category": "jobs", "text": "Skip presales and sales quota roles."}
+    )
+    greeting_rule = PreferenceRule.model_validate(rule("RULE_GREET", ["EVENT_3"], scope="general"))
+    return PreferenceMemory(
+        candidate_id="CAND_TEST", consumed_event_ids=["EVENT_1", "EVENT_2", "EVENT_3"],
+        rules=[jobs_rule, greeting_rule], updated_at=NOW,
+    )
+
+
+class Direction:
+    def __init__(self, decision, matched):
+        self.decision, self.matched, self.offered = decision, matched, None
+
+    def generate(self, *, prompt_id, context, output_type):
+        assert prompt_id == "preference.direction.check.v1"
+        self.offered = [r["rule_id"] for r in context["memory"]["rules"]]
+        return output_type(
+            input_digest=context["input_digest"], decision=self.decision,
+            matched_rule_ids=self.matched, reason="Presales role with a sales quota.",
+        )
+
+
+def test_direction_check_proposes_a_skip_citing_jobs_rules_only():
+    model = Direction("suggest_skip", ["RULE_NO_SALES"])
+    result = PreferenceLearner(model).direction(
+        _direction_memory(), job_id="JOB_SALES", context="Presales solution manager JD"
+    )
+    assert model.offered == ["RULE_NO_SALES"]
+    assert result.decision == "suggest_skip"
+    assert [r.rule_id for r in result.rules] == ["RULE_NO_SALES"]
+
+
+@pytest.mark.parametrize(
+    ("decision", "matched"),
+    [("suggest_skip", []), ("suggest_skip", ["RULE_GREET"]), ("draft", ["RULE_NO_SALES"])],
+)
+def test_direction_check_must_cite_exactly_what_it_relies_on(decision, matched):
+    with pytest.raises(InvalidProviderOutputError):
+        PreferenceLearner(Direction(decision, matched)).direction(
+            _direction_memory(), job_id="JOB_X", context="JD"
+        )
+
+
+def test_without_jobs_rules_there_is_no_direction_call():
+    class NoCall:
+        def generate(self, **_):
+            raise AssertionError("no jobs rules, so no model call")
+
+    memory = _direction_memory()
+    memory = memory.model_copy(update={"rules": memory.rules[1:]})
+    result = PreferenceLearner(NoCall()).direction(memory, job_id="JOB_X", context="JD")
+    assert result.decision == "draft" and result.rules == []

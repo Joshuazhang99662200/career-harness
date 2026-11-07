@@ -102,7 +102,7 @@ class RoleplayRound(ContractModel):
     title: NonEmptyString
     company: NonEmptyString
     jd_raw: NonEmptyString
-    generation_status: Literal["passed", "rejected"]
+    generation_status: Literal["passed", "rejected", "skip_proposed"]
     greeting: str | None = None
     batch_id: str | None = None
     ask_id: str | None = None
@@ -111,13 +111,18 @@ class RoleplayRound(ContractModel):
     selected_rules: list[str] = Field(default_factory=list)
     selected_rule_texts: list[str] = Field(default_factory=list)
     unconsumed_events_before_generation: int = Field(ge=0)
+    # A learned jobs rule proposed skipping this posting instead of drafting.
+    direction_rule_ids: list[str] = Field(default_factory=list)
+    direction_reason: str = ""
+    direction_overridden: bool = False
     started_at: AwareDatetime
 
 
 class RoleplayDecision(ContractModel):
     """The simulated owner's answer, in their own (synthetic) words."""
 
-    action: Literal["approve", "revise", "decline"]
+    # confirm_skip and override_skip answer a skip proposal; the rest answer a greeting.
+    action: Literal["approve", "revise", "decline", "confirm_skip", "override_skip"]
     words: NonEmptyString
     reason_category: Literal[
         "job_dislike", "salary", "location", "direction", "level", "copy", "facts", "later",

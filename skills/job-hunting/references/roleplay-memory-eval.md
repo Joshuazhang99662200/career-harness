@@ -60,6 +60,7 @@ Gemini CLI 指定模型时在 argv 里加 `"-m", "<模型名>"`；agy 用 `agy m
    - `approve`：完全满足偏好；
    - `revise`：岗位可以但文字不行，`revised_text` 写本人改好的全文；
    - `decline`：岗位方向不要，`reason_category` 选 `direction`。
+   - 如果 `generation_status` 是 `skip_proposed`：说明已学到的岗位规则建议跳过这个岗位，没有起草。看 `direction_rule_ids` 和 `direction_reason`，按人设决定 `confirm_skip`（确认跳过）或 `override_skip`（仍要联系，下一轮会对同一岗位不经方向判断直接起草）。这两种决定目前不会学进 memory，只计入报告。
 3. 写决定文件 `.jobagent/roleplay/decisions/R<轮次>.json`（目录不存在时先创建），再执行 `jobagent roleplay decide <轮次> <文件>`：
 
 ```json

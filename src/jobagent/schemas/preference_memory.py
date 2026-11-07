@@ -105,3 +105,21 @@ class PreferenceSelection(ContractModel):
     search_queries: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
         default_factory=list, max_length=12,
     )
+
+
+class DirectionCheck(ContractModel):
+    """The model's answer to: do the person's jobs rules say to skip this posting?"""
+
+    input_digest: Digest
+    decision: Literal["draft", "suggest_skip"]
+    matched_rule_ids: list[NonEmptyString] = Field(default_factory=list, max_length=24)
+    reason: Annotated[str, Field(max_length=500)] = ""
+
+
+class DirectionDecision(ContractModel):
+    """A proposal only: skipping still needs the person; drafting needs no permission."""
+
+    memory_version: NonEmptyString
+    decision: Literal["draft", "suggest_skip"]
+    rules: list[PreferenceRule] = Field(default_factory=list)
+    reason: str = ""

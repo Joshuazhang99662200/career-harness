@@ -186,7 +186,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 
 | 能力 | 状态 | 入口 |
 |---|---|---|
-| 首条招呼全文 AI 生成 | 已落地（通用稿与两类历史完整 JD 的真实模型验收通过） | `jobagent greetings generate`：默认稿、完整 JD 定向稿及反馈重写；`GreetingRequest` → `GreetingDraft` → 独立 `GreetingReview` → `GreetingReport`，使用 [greeting-ai.md](greeting-ai.md)，不读取句库、不授予审批；通过的定向稿保留来源绑定，再进入既有首招门禁 |
+| 首条招呼全文 AI 生成 | 已落地（通用稿与两类历史完整 JD 的真实模型验收通过） | `jobagent greetings generate`：默认稿、完整 JD 定向稿及反馈重写；定向稿起草前先用已学到的岗位规则做方向判断，建议跳过时输出 `skip_suggested` 而不起草，`--ignore-direction` 可强制起草；`GreetingRequest` → `GreetingDraft` → 独立 `GreetingReview` → `GreetingReport`，使用 [greeting-ai.md](greeting-ai.md)，不读取句库、不授予审批；通过的定向稿保留来源绑定，再进入既有首招门禁 |
 | 其他消息自动生成编排 | 未开始 | 求职信与后续回复的统一自动生成仍无独立入口；策略见 [message-generation.md](message-generation.md) |
 | `prepare` / `preview` | 已落地 | `jobagent applications preview` · `ApplicationPreviewService.prepare`：非 mock CLI 须提供 `--artifact` 最终 PDF/Word，可选 `--header`；结构检查、文件字节与摘要绑定，不授予发送权 |
 | `ask` | 已落地 | `jobagent applications ask`(把决定摆给人,**本身不是审批**) · `ApplicationApprovalService.ask` |

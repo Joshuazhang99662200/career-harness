@@ -4,7 +4,7 @@
 
 默认页面合并自真实面板代码包（2026-11-06）的框架，批准与执行分开、只执行已批准材料等前提不变，见[合并记录](../docs/muse-space-template-2026-11-06.md)。详情、审阅、独立待办、执行清单及运行/沟通/说明页均可交互。
 
-来源、差异、接入限制及核验方法见 [源码还原记录](../docs/muse-source-template-2026-11-02.md)。默认入口 `?demo=1` 使用合成数据；`?demo=1&template=current` 查看上一版分享页还原；`?demo=1&template=zip` 查看 zip React 版本；`?legacy=1` 保留先前 Console 的兼容视图。真实来源失败不会自动进入演示。
+来源、差异、接入限制及核验方法见 [源码还原记录](../docs/muse-source-template-2026-11-02.md)。默认入口 `?demo=1` 使用合成数据；`?demo=1&template=current` 查看上一版分享页还原（待后续移除）；`?legacy=1` 保留先前 Console 的兼容视图。真实来源失败不会自动进入演示。
 
 ```powershell
 npm.cmd ci

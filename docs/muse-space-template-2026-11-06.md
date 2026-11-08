@@ -8,10 +8,10 @@
 |---|---|
 | `?demo=1` | 默认：合并后的 Space 框架（`MuseSpaceApp.tsx`） |
 | `?demo=1&template=current` | 上一版默认：Muse 分享页还原（`MuseCurrentApp.tsx`） |
-| `?demo=1&template=zip` | 最早的 zip 源码对照（`MuseApp.tsx`） |
+| ~~`?demo=1&template=zip`~~ | 已于 2026-11-08 移除：最早的 zip 源码对照 |
 | `?legacy=1` | 兼容 Console |
 
-`MusePanel` 的 `appearance` 默认值改为 `"space"`，可选 `"current"`、`"zip"`。
+`MusePanel` 的 `appearance` 默认值改为 `"space"`，可选 `"current"`（zip 对照已移除）。
 
 ## 不变的前提
 

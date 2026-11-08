@@ -20,7 +20,7 @@ def test_muse_transport_generated_from_authoritative_schemas():
 
 
 def test_muse_reference_layout_is_preserved_and_personal_migrations_are_absent():
-    source = (ROOT / "frontend/src/muse/MuseApp.tsx").read_text(encoding="utf-8")
+    source = (ROOT / "frontend/src/muse/MuseSpaceApp.tsx").read_text(encoding="utf-8")
     for name in [
         "FiveColumnTable",
         "TodoDialog",
@@ -40,14 +40,10 @@ def test_muse_reference_layout_is_preserved_and_personal_migrations_are_absent()
     assert "./console/console.js" not in source
 
 
-def test_zip_classes_and_theme_keep_the_recorded_source_fingerprints():
+def test_the_shared_theme_keeps_the_recorded_source_fingerprint():
     directory = ROOT / "frontend/src/muse"
     provenance = json.loads((directory / "provenance.json").read_text(encoding="utf-8"))
-    source = (directory / "MuseApp.tsx").read_text(encoding="utf-8")
-    classes = re.findall(r'className="([^"]*)"', source)
-    assert len(classes) == provenance["zip_literal_classes"]
-    digest = hashlib.sha256("\n".join(classes).encode()).hexdigest()
-    assert digest == provenance["zip_literal_classes_sha256"]
+    assert not (directory / "MuseApp.tsx").exists()  # the zip reference copy is retired
     assert (
         hashlib.sha256((directory / "theme.css").read_bytes()).hexdigest()
         == provenance["zip_theme_sha256"]

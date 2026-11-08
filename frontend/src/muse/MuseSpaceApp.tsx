@@ -2102,7 +2102,7 @@ function TodoDialog({
 
             {item.kind === "review" && (
               <div className="mt-3">
-                <h5 className="text-sm font-semibold">需要你决定的原因</h5>
+                <h5 className="text-sm font-semibold">决定依据</h5>
                 {item.reasons.map((r, i) => (
                   <blockquote
                     key={i}

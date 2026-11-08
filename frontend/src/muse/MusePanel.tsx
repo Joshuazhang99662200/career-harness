@@ -8,7 +8,6 @@ import {
   type MuseConfiguration,
   type MuseCvFiles,
 } from "./context";
-import { MuseApp } from "./MuseApp";
 import { MuseCurrentApp } from "./MuseCurrentApp";
 import { MuseSpaceApp } from "./MuseSpaceApp";
 import { createMuseActions } from "./adapter";
@@ -17,7 +16,7 @@ import "./theme.css";
 
 export interface MusePanelProps {
   actions: MuseActions;
-  appearance?: "space" | "current" | "zip";
+  appearance?: "space" | "current";
   configuration?: MuseConfiguration;
   cvFiles?: MuseCvFiles;
   syncActions?: Partial<MuseSyncActions>;
@@ -49,13 +48,7 @@ export function MusePanel({
     <QueryClientProvider client={client}>
       <MuseContext.Provider value={{ actions, configuration, cvFiles }}>
         <div className="hatch-space-root" data-hatch-space-root>
-          {appearance === "zip" ? (
-            <MuseApp />
-          ) : appearance === "current" ? (
-            <MuseCurrentApp />
-          ) : (
-            <MuseSpaceApp />
-          )}
+          {appearance === "current" ? <MuseCurrentApp /> : <MuseSpaceApp />}
         </div>
       </MuseContext.Provider>
     </QueryClientProvider>

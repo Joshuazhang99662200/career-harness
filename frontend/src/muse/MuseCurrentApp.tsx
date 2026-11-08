@@ -20,7 +20,7 @@ import {
   plainText,
   fmtRunTime,
   MaterialList,
-} from "./MuseApp";
+} from "./currentHelpers";
 import { saveMuseDecision } from "./decisions";
 import { refreshAfterWrite } from "./refresh";
 import "./current.css";

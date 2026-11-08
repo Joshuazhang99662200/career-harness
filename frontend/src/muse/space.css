@@ -10,3 +10,64 @@
   line-height: 1.25;
   color: var(--text);
 }
+
+.muse-space .public-careers {
+  padding: 16px 0;
+  overflow-wrap: anywhere;
+}
+.muse-space .public-careers h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.muse-space .public-careers > p,
+.muse-space .public-careers [role="status"] {
+  color: var(--dim);
+}
+.muse-space .public-careers summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--accent);
+}
+.muse-space .public-careers .fields {
+  margin: 0;
+}
+.muse-space .public-careers .fields > div {
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.muse-space .public-careers .fields dd {
+  margin: 0;
+}
+.muse-space .public-careers-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+.muse-space .public-career {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px;
+}
+.muse-space .public-career h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.muse-space .public-career a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.muse-space .public-region {
+  display: block;
+  margin: 8px 0 12px;
+  color: var(--warn);
+}
+.muse-space .public-jd {
+  white-space: pre-wrap;
+}

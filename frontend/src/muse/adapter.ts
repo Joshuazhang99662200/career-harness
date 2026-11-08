@@ -426,10 +426,10 @@ export function createMuseActions(
         gaps: strings(job.job.gaps),
         draftGreeting:
           (material?.body ?? value(job.job.draft_greeting)) || null,
-        approvedGreeting:
-          entry && latestDecision(entry)?.kind === "approve_material"
-            ? (latestDecision(entry)?.material?.body ?? null)
-            : null,
+        // An approval covers only the exact current material; a newer draft voids it.
+        approvedGreeting: hasApprovedMaterial(entry)
+          ? (latestDecision(entry!)?.material?.body ?? null)
+          : null,
         draftVersion: material?.label ?? null,
         completeness: value(job.job.completeness) || null,
         matchStrengths: strings(job.match_result?.strengths),

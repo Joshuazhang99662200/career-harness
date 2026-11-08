@@ -7,8 +7,8 @@ import {
   MuseContext,
   type MuseConfiguration,
   type MuseCvFiles,
+  type MusePublicCareers,
 } from "./context";
-import { MuseCurrentApp } from "./MuseCurrentApp";
 import { MuseSpaceApp } from "./MuseSpaceApp";
 import { createMuseActions } from "./adapter";
 import { executionAvailability } from "./availability";
@@ -16,18 +16,18 @@ import "./theme.css";
 
 export interface MusePanelProps {
   actions: MuseActions;
-  appearance?: "space" | "current";
   configuration?: MuseConfiguration;
   cvFiles?: MuseCvFiles;
+  publicCareers?: MusePublicCareers;
   syncActions?: Partial<MuseSyncActions>;
   dataRevision?: number;
 }
 /** Source-derived Muse UI; the host supplies its own RPC implementation and assets. */
 export function MusePanel({
   actions,
-  appearance = "space",
   configuration = {},
   cvFiles = {},
+  publicCareers,
   dataRevision = 0,
 }: MusePanelProps) {
   const client = useMemo(
@@ -46,9 +46,11 @@ export function MusePanel({
   }, [client, dataRevision]);
   return (
     <QueryClientProvider client={client}>
-      <MuseContext.Provider value={{ actions, configuration, cvFiles }}>
+      <MuseContext.Provider
+        value={{ actions, configuration, cvFiles, publicCareers }}
+      >
         <div className="hatch-space-root" data-hatch-space-root>
-          {appearance === "current" ? <MuseCurrentApp /> : <MuseSpaceApp />}
+          <MuseSpaceApp />
         </div>
       </MuseContext.Provider>
     </QueryClientProvider>
@@ -90,6 +92,9 @@ export function MuseSourcePanel({
       )}
       <MusePanel
         actions={actions}
+        publicCareers={() =>
+          source.getSnapshot().then((snapshot) => snapshot.public_careers)
+        }
         {...props}
         dataRevision={revision}
         configuration={{

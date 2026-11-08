@@ -73,7 +73,7 @@ python -m jobagent.bridge.mcp_server --database .jobagent/jobagent.sqlite3 --wor
 
 展示和交互统一见[当前面板要求](muse-panel.md)，组件与事件接线见[宿主接口](react-console-host-interface.md)。本文只定义查询、阶段观察及恢复，不另维护一份展示规则。
 
-`Console` / `SourceConsole` 已提供可注入的宿主接口，默认 `console serve` 及 MCP 查询仍只读。用户操作须绑定候选人、岗位与准确材料，由宿主调用既有服务、保存并回读后刷新；字段以同版本 Schema 和 `console definitions` 为准。不能直接改 SQL，也不能把演示或普通点击当正式批准与发送。
+`MusePanel` / `MuseSourcePanel` 已提供可注入的宿主接口，默认 `console serve` 及 MCP 查询仍只读。用户操作须绑定候选人、岗位与准确材料，由宿主调用既有服务、保存并回读后刷新；字段以同版本 Schema 和 `console definitions` 为准。不能直接改 SQL，也不能把演示或普通点击当正式批准与发送。
 
 真实宿主分别验证视图交互、合成业务写入和实际渠道能力。未接通操作禁用，失败、冲突和未知都保留反馈；组件可运行不等于 Muse 已联调。完整验收要求见面板协议。
 

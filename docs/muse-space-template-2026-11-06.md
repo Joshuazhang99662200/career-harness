@@ -1,17 +1,17 @@
 # 默认面板模板合并记录（2026-11-06）
 
-本轮按用户要求，把真实面板代码包（Space「任务状态面板」2026-11-06 版 `client/src/App.tsx`）的页面框架合并为仓库默认的 Muse 前端，前提不变。合并结果在 `frontend/src/muse/MuseSpaceApp.tsx`。原默认模板保留为对照入口；代码包本身不进仓库，原因是其中含私有快照与简历。
+本轮按用户要求，把真实面板代码包（Space「任务状态面板」2026-11-06 版 `client/src/App.tsx`）的页面框架合并为仓库默认的 Muse 前端，前提不变。合并结果在 `frontend/src/muse/MuseSpaceApp.tsx`。原默认模板曾保留为对照入口，已于 2026-11-08 移除；代码包本身不进仓库，原因是其中含私有快照与简历。
 
 ## 入口
 
 | 地址 | 模板 |
 |---|---|
 | `?demo=1` | 默认：合并后的 Space 框架（`MuseSpaceApp.tsx`） |
-| `?demo=1&template=current` | 上一版默认：Muse 分享页还原（`MuseCurrentApp.tsx`） |
+| ~~`?demo=1&template=current`~~ | 已于 2026-11-08 移除：上一版默认，Muse 分享页还原 |
 | ~~`?demo=1&template=zip`~~ | 已于 2026-11-08 移除：最早的 zip 源码对照 |
-| `?legacy=1` | 兼容 Console |
+| ~~`?legacy=1`~~ | 已于 2026-11-08 移除：兼容 Console |
 
-`MusePanel` 的 `appearance` 默认值改为 `"space"`，可选 `"current"`（zip 对照已移除）。
+`MusePanel` 的 `appearance` 属性已移除，面板只渲染合并后的 Space 框架。原兼容 Console 的公开职位补充移到面板的“公开职位补充”页。
 
 ## 不变的前提
 
@@ -36,4 +36,4 @@
 
 ## 验收
 
-`tests/muse-space.spec.ts` 覆盖：默认入口与一键投递规则、批准不等于发送、改稿后必须重新批准、沟通记录缺失时保持未知、执行清单不显示内部编号、只读来源的未知计数与禁用写入、来源不可用时不回落演示，以及 390px 下无横向滚动。原默认模板的测试改为访问 `?template=current`，继续单独校验。
+`tests/muse-space.spec.ts` 覆盖：默认入口与一键投递规则、批准不等于发送、改稿后必须重新批准、沟通记录缺失时保持未知、执行清单不显示内部编号、只读来源的未知计数与禁用写入、来源不可用时不回落演示，以及 390px 下无横向滚动。旧模板移除时，仍适用的规则测试移到 `tests/muse-space-rules.spec.ts` 和 `tests/muse-regeneration.spec.ts`，改在默认面板上校验。

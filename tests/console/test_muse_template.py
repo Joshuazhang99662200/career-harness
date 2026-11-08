@@ -1,6 +1,5 @@
 import hashlib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -43,22 +42,10 @@ def test_muse_reference_layout_is_preserved_and_personal_migrations_are_absent()
 def test_the_shared_theme_keeps_the_recorded_source_fingerprint():
     directory = ROOT / "frontend/src/muse"
     provenance = json.loads((directory / "provenance.json").read_text(encoding="utf-8"))
-    assert not (directory / "MuseApp.tsx").exists()  # the zip reference copy is retired
+    # The zip reference copy and the earlier share-page template are retired.
+    assert not (directory / "MuseApp.tsx").exists()
+    assert not (directory / "MuseCurrentApp.tsx").exists()
     assert (
         hashlib.sha256((directory / "theme.css").read_bytes()).hexdigest()
         == provenance["zip_theme_sha256"]
     )
-
-
-def test_current_muse_style_declarations_keep_the_live_reference_values():
-    directory = ROOT / "frontend/src/muse"
-    provenance = json.loads((directory / "provenance.json").read_text(encoding="utf-8"))
-    css = (directory / "current.css").read_text(encoding="utf-8")
-    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-    declarations = re.findall(r"(?<=[{;])\s*([-\w]+)\s*:\s*([^;{}]+)", css)
-    original = [
-        (key, re.sub(r"\s+", " ", value.strip()))
-        for key, value in declarations[: provenance["current_style_declarations"]]
-    ]
-    encoded = json.dumps(original, ensure_ascii=False, separators=(",", ":")).encode()
-    assert hashlib.sha256(encoded).hexdigest() == provenance["current_declarations_sha256"]

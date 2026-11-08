@@ -20,7 +20,7 @@
 
 点击行内的岗位、公司、渠道、匹配、进展或留白，打开同一岗位详情。红点、原岗位链接和其他独立按钮执行自己的动作，避免事件冒泡重复打开；选择或复制文字不应误触。键盘入口、焦点恢复和移动端阅读也须可用。
 
-默认 Muse 页面的视觉以同版本 `MuseSpaceApp.tsx`、`theme.css`、`space.css` 及[合并记录](muse-space-template-2026-11-06.md)为准；`?template=current` 保留上一版分享页还原（[模板来源说明](muse-source-template-2026-11-02.md)）；zip 来源对照已移除。仅 `?legacy=1` 的兼容 Console 沿用 [styles.css](../frontend/src/styles.css) 的白、灰、浅蓝样式。本文约束共同的业务展示与交互，不覆盖当前 Muse 的设计，也不恢复已废弃的旧模板。红点表示本人待办，红色用于“放弃岗位”。
+默认 Muse 页面的视觉以同版本 `MuseSpaceApp.tsx`、`theme.css`、`space.css` 及[合并记录](muse-space-template-2026-11-06.md)为准，这是仓库唯一的前端；上一版分享页还原（`?template=current`）、zip 来源对照和兼容 Console（`?legacy=1`）均已移除。本文约束共同的业务展示与交互，不覆盖当前 Muse 的设计，也不恢复已废弃的旧模板。红点表示本人待办，红色用于“放弃岗位”。
 
 ## 进展由 Agent 根据事实写
 

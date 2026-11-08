@@ -6,6 +6,8 @@
 - `console decide` 接受 `answer_todo`：暂缓只登记暂缓；要求重写只登记要求与备注。两者都不批准、不发送、不进偏好记忆，按操作键回读。
 - 新增 `console batch-create`、`batch-confirm`、`batch`：执行清单只收已批准的首条招呼并写明其余排除原因；确认只把选中项交给宿主按既有发送节奏处理，仓库不发送；条目状态由发送审计与逐字回读推导，未回读为 unknown。迁移 0037 新增执行清单与确认表（只追加）。
 - 移除 zip 源码对照（`MuseApp.tsx`、`?template=zip`、`appearance="zip"`）；上一版模板用到的辅助函数原样移到 `currentHelpers.tsx`。
+- **不兼容**：移除上一版分享页还原（`?template=current`、`MuseCurrentApp.tsx`、`appearance` 属性）与兼容 Console（`?legacy=1`、`Console` / `SourceConsole` 及包根导出 `@jobagent/polling-console`、`@jobagent/polling-console/styles.css`）。嵌入方改用 `@jobagent/polling-console/muse` 的 `MusePanel` / `MuseSourcePanel`。公开职位补充移到默认面板的同名页；仍适用的规则测试改在默认面板上校验。
+- 默认面板修正：已关闭或已回绝的岗位不再标“（现在）”；重新生成只有在宿主记下改前与改后全文时才显示成功，生成期间正文不可编辑；新稿出现后不再把旧批准当作当前稿的批准。
 - 新增 `console selection` / `console select`：面板选择队列由仓库按版本保存（迁移 0038，只追加），过期修改被拒绝；只有选中后经逐字回读核实的发送才让岗位离开选择。
 
 ## 未发布 — 默认面板合并真实代码包框架

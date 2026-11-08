@@ -4,14 +4,14 @@
 
 ## 接入方式
 
-`ConsoleDataSource` 定义在 `frontend/src/dataSource.ts`；`SourceConsole` 负责加载和刷新，`Console` 继续负责展示。只读快照、HTTP 查询和明确的合成模式共用渲染组件。新宿主传输模型以 `src/jobagent/schemas/console_host.py` 为权威，运行生成脚本更新 TypeScript；它们不取代 pipeline、审批或证据契约。
+`ConsoleDataSource` 定义在 `frontend/src/dataSource.ts`；`MuseSourcePanel` 负责把数据源转换为面板动作并渲染默认面板。只读快照、HTTP 查询和明确的合成模式共用同一面板。原 `Console` / `SourceConsole` 组件和包根导出已于 2026-11-08 移除。新宿主传输模型以 `src/jobagent/schemas/console_host.py` 为权威，运行生成脚本更新 TypeScript；它们不取代 pipeline、审批或证据契约。
 
 ```tsx
-import { SourceConsole, createHttpSource } from '@jobagent/polling-console';
-import '@jobagent/polling-console/styles.css';
+import { MuseSourcePanel } from '@jobagent/polling-console/muse';
+import '@jobagent/polling-console/muse/styles.css';
 
-const source = createHttpSource();
-<SourceConsole source={source} />;
+// source 由宿主实现 ConsoleDataSource（见 frontend/src/dataSource.ts）。
+<MuseSourcePanel source={source} />;
 ```
 
 宿主适配器须提供 `getSnapshot`、`getDefinitions`、`getJob`、`getMaterials`、`getHostState`、`getTodos`、`getChannelLogin`、`getBatch`。需要接入写入时，按能力提供可选方法，省略的方法会使对应动作禁用并说明原因，不构造不存在的 HTTP 端点。

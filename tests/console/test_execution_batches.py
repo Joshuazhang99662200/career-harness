@@ -111,6 +111,15 @@ def read_back(path, sent):
     pipelines.transition(event, proof, now=event.changed_at)
 
 
+def leaves_selection(item):
+    """The panel's hasVerifiedReadback (frontend/src/hostService.ts): only these leave."""
+    readback = item.readback
+    return (item.selected and item.status == "verified" and readback is not None
+            and readback.status == "verified" and bool(readback.evidence)
+            and readback.observed_at is not None
+            and readback.material_revision == item.material.revision)
+
+
 def test_only_approved_greetings_enter_a_batch(tmp_path):
     path = build(tmp_path)
     batch = create_execution_batch(path, "CAND_TEST", [PIPE], now=LATER)
@@ -218,6 +227,7 @@ def test_sent_without_readback_is_unknown_and_exact_readback_is_verified(tmp_pat
 
     [entry] = read_execution_batch(path, "CAND_TEST", batch.batch_id).items
     assert entry.status == "unknown" and entry.readback.status == "unknown"
+    assert not leaves_selection(entry)  # stays selected until it is checked
 
     read_back(path, sent)
     after = read_execution_batch(path, "CAND_TEST", batch.batch_id)
@@ -226,6 +236,7 @@ def test_sent_without_readback_is_unknown_and_exact_readback_is_verified(tmp_pat
     assert entry.readback.status == "verified"
     assert entry.readback.material_revision == entry.material.revision
     assert sent.audit_id in entry.readback.evidence and entry.readback.observed_at is not None
+    assert leaves_selection(entry)
 
 
 def test_a_failed_send_is_failed_with_its_reason(tmp_path):

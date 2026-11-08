@@ -151,6 +151,29 @@ class HostExecutionRequest(HostModel):
     selected: list[HostExecutionSelection] = Field(min_length=1)
 
 
+class HostSelection(HostModel):
+    """The panel's selection queue. Selecting never approves or sends anything."""
+
+    candidate_id: CandidateId
+    version: int = Field(ge=0)
+    contact_ids: list[NonEmptyString]
+
+
+class HostSelectionRequest(HostModel):
+    candidate_id: CandidateId
+    expected_version: int = Field(ge=0)
+    operation: Literal[
+        "select", "deselect", "select_visible", "invert_visible", "clear_visible", "clear_all"
+    ]
+    contact_ids: list[NonEmptyString]
+
+
+class HostSelectionReceipt(HostModel):
+    status: Literal["saved", "rejected"]
+    message: str
+    selection: HostSelection
+
+
 class HostChannel(HostModel):
     channel: NonEmptyString
     label: NonEmptyString

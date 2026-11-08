@@ -103,6 +103,22 @@ export interface HostReceipt {
   message: string;
   event_id: string | null;
 }
+export interface HostSelection {
+  candidate_id: string;
+  version: number;
+  contact_ids: Array<string>;
+}
+export interface HostSelectionReceipt {
+  status: "saved" | "rejected";
+  message: string;
+  selection: HostSelection;
+}
+export interface HostSelectionRequest {
+  candidate_id: string;
+  expected_version: number;
+  operation: "select" | "deselect" | "select_visible" | "invert_visible" | "clear_visible" | "clear_all";
+  contact_ids: Array<string>;
+}
 export interface HostState {
   protocol_version: "1.0";
   candidate_id: string;

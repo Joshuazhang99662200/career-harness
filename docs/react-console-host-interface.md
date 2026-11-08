@@ -38,6 +38,8 @@ Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删�
 | `recordDecision` | `jobagent console decide <HostDecisionRequest.json> --actor <操作人>` | `approve_material`：仅原文，单条清单上走原审批门禁；`save_draft`：改写反馈，待重新生成复核；`decline`：回绝反馈。`approve_text` 只是文案意见，不构成批准，返回 rejected 且不保存；其他种类同样返回 rejected |
 | `getOperation` | `jobagent console operation <operation_key> --candidate <ID>` | 按操作键回读；无记录即未保存，可重新提交 |
 | `getHostState` | `jobagent console host-state --candidate <ID>` | 只读：每个联系的首条招呼材料、面板操作（`event_id` 与回执一致）、个人待办和执行清单；渠道状态由宿主提供 |
+| `getSelectionQueue` | `jobagent console selection --candidate <ID>` | 已选岗位（流水线联系）与版本；选择不代表批准 |
+| `toggleSelectionItem` / `applySelectionOperation` | `jobagent console select <HostSelectionRequest.json>` | 按上次读到的版本修改选择，版本不符即拒绝、不写入 |
 | `createExecutionBatch` | `jobagent console batch-create --candidate <ID> --contact <PIPE_*> …` | 只列入已批准的首条招呼，每项 `approval_event_id` 指向真实批准；其余逐个写明排除原因 |
 | `confirmExecution` | `jobagent console batch-confirm <HostExecutionRequest.json> --actor <操作人>` | 只处理明确选中的项，逐项重新核对后交给宿主；仓库不发送 |
 | `getBatch` | `jobagent console batch <batch_id> --candidate <ID>` | 每项状态从发送审计与逐字回读推导；未知清单输出 null |
@@ -58,6 +60,8 @@ Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删�
 确认时只处理请求里选中的项，逐项核对正文、材料版本、无附件，并重新核对批准仍有效、尚未发送；任何一项不符就整份拒绝，不保存。每份清单只确认一次；同一操作键重放返回原回执，内容不同则拒绝。确认只记录本人选了哪些条目，选中项保持 `queued` 并标为 `selected`，由宿主按 `outreach lease` / `next` / `record` 节奏发送；没选中的项保持原状。
 
 条目状态只从真实记录推导：没有发送审计为 `queued`；审计为已发送，且有绑定该审计的逐字回读（流水线 `greeting_sent` 迁移，或旧版发送跟踪），正文摘要与批准原文一致，才算 `verified`，并给出证据、材料版本与观察时间；失败、需要人工接手、对话里已有招呼、已撤回为 `failed` 并保留原因；已登记发送但没有回读为 `unknown`，先核实，不自动重试。前端只把带完整正向回读的 `verified` 项移出选择队列。
+
+**选择队列。** 选择保存在仓库里，刷新或换设备打开都不会丢；每次修改追加一个新版本，宿主带着上次读到的版本提交，过期的修改被拒绝而不覆盖。选择只是本人挑出要看或要执行的岗位，不批准、不发送。岗位只在“选中之后”的一次发送经逐字回读核实后离开选择；排队、失败或结果未知的都留在选择里，不会悄悄消失。
 
 回执状态为 saved 时退出码为 0，rejected 为 1，JSON 回执始终输出。决定都不发送；已批准的条目仍由现有租约与 `outreach next` 节奏发送并回读。
 

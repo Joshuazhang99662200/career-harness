@@ -385,6 +385,8 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。待办回答 `answer_todo` 只接受暂缓（hold）与要求重写（revise），只登记操作，不批准、不发送、不进偏好记忆，条目保持可决定。不发送；文案意见 `approve_text` 等其他种类明确拒绝 |
 | 面板宿主状态 | 已落地(只读) | `jobagent console host-state` | 面板 getHostState：按候选人列出各流水线联系的首条招呼材料（revision 与 `console materials` 一致，待决定的排在最后）、已保存的面板操作（event_id 与回执一致），以及每条已提问首条招呼的个人待办（处理或回答后为已处理）。渠道由宿主提供；sync 为 unknown，说明未做平台同步核对 |
 | 面板操作回读 | 已落地 | `jobagent console operation` | 面板 getOperation：按操作键回读真实保存结果（决定、待办回答或执行确认），不重复执行；无记录即未保存 |
+| 面板选择队列 | 已落地(只读) | `jobagent console selection` | 面板 getSelectionQueue：按候选人读取已选岗位与版本。选择不代表批准、不授予发送权；只有选中之后发生、经逐字回读核实的发送才让岗位离开选择，排队、失败与结果未知的都留下 |
+| 面板选择修改 | 已落地 | `jobagent console select` | 面板 toggleSelectionItem / applySelectionOperation：按上次读到的版本修改选择（选中、取消、可见行全选、反选、取消、全部清空），版本不符或含其他候选人的岗位即拒绝且不写入；每次修改只追加新版本 |
 | 面板执行清单 | 已落地(只列已批准首条招呼) | `jobagent console batch-create` | 面板 createExecutionBatch：只列入已有绑定摘要人工批准的首条招呼，每项指向真实批准；未批准、材料已更新、已撤回、已发送或已联系、平台当天叫停、猎聘等分别写明排除原因。不发送 |
 | 面板执行确认 | 已落地(交给宿主) | `jobagent console batch-confirm` | 面板 confirmExecution：须带 `--actor`。只处理请求里明确选中的项，逐项重新核对材料版本、批准仍有效、尚未发送；每份清单只确认一次，同一操作键重放返回原回执。确认只把条目交给宿主按 `outreach lease` / `next` / `record` 节奏发送，仓库不发送 |
 | 面板执行进度 | 已落地(只读) | `jobagent console batch` | 面板 getBatch：每项状态只从真实记录推导。没有发送审计为 queued；审计为已发送且有绑定该审计的逐字回读（流水线 greeting_sent 或发送跟踪）才算 verified；失败、需要接手、已撤回为 failed 并保留原因；已发送但无回读为 unknown，先核验、不自动重试 |

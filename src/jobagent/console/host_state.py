@@ -16,6 +16,7 @@ from jobagent.bridge.panel_decisions import (
     panel_todos,
     receipt_message,
 )
+from jobagent.console.execution import execution_batches, execution_receipts
 from jobagent.schemas.console_host import (
     HostJob,
     HostMaterial,
@@ -63,14 +64,14 @@ def host_state(database: Path, candidate_id: str) -> HostState:
         ))
     return HostState(
         candidate_id=candidate_id, jobs=jobs, todos=panel_todos(db, candidate_id, events),
-        channels=[], batches=[],
+        channels=[], batches=execution_batches(db, candidate_id),
         receipts=[
             HostReceipt(
                 operation_key=e.operation_key, status="saved", event_id=e.event_id,
                 message=receipt_message(e),
             )
             for e in events
-        ],
+        ] + execution_receipts(db, candidate_id),
         sync=HostSync(
             status="unknown", checked_at=None, differences=[],
             message="没有做平台同步核对；待办只来自已保存的首条招呼提问与面板决定，渠道状态由宿主提供。",

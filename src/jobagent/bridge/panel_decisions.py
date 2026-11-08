@@ -71,7 +71,7 @@ LIEPIN_NOT_WIRED = (
 )
 
 
-def _is_liepin_job(db: Database, platform_job_id: str) -> bool:
+def is_liepin_job(db: Database, platform_job_id: str) -> bool:
     with db.connect() as connection:
         return connection.execute(
             "SELECT 1 FROM normalized_jobs WHERE json_extract(job_json, '$.source') = 'liepin' "
@@ -186,7 +186,7 @@ def panel_todos(db: Database, candidate_id: str, events: list[HostEvent]) -> lis
     answers = _answers(events)
     todos = []
     for job, meta in PipelineRepository(db).list_records(candidate_id):
-        if meta.normalized_job_id is None or _is_liepin_job(db, job.job_id):
+        if meta.normalized_job_id is None or is_liepin_job(db, job.job_id):
             continue
         for batch, ask, item in asked_items(db, candidate_id, meta.normalized_job_id):
             key = todo_id(ask.ask_id, item.number)
@@ -314,7 +314,7 @@ def record_panel_decision(
                 and previous.content_digest == text_digest(request.body))
         return panel_operation(database, request.candidate_id, request.operation_key) if same \
             else rejected("同一操作键已保存了不同的决定，已停止写入。")
-    if _is_liepin_job(db, request.job_id):
+    if is_liepin_job(db, request.job_id):
         return rejected(LIEPIN_NOT_WIRED)
     try:
         platform_job, job_id = _normalized_job_id(db, request.candidate_id, request.contact_id)
@@ -366,7 +366,7 @@ def _answer(
         return panel_operation(db.path, request.candidate_id, request.operation_key)
     if request.attachment_digests:
         raise _Rejected("首条招呼不带附件；附件材料需走简历审批。")
-    if _is_liepin_job(db, request.job_id):
+    if is_liepin_job(db, request.job_id):
         raise _Rejected(LIEPIN_NOT_WIRED)
     platform_job, job_id = _normalized_job_id(db, request.candidate_id, request.contact_id)
     if platform_job != request.job_id:

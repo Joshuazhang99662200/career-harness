@@ -74,6 +74,18 @@ def policy_digest(policy: OutreachPolicy) -> str:
     return canonical_digest(policy.model_dump(mode="json"))
 
 
+def platform_halted_today(
+    audits: Sequence[OutreachAudit], platform: str, now: datetime
+) -> bool:
+    """Whether a failure or a needed takeover stopped this platform for today's sending."""
+    today = now.astimezone(PLATFORM_DAY).date()
+    return any(
+        audit.platform == platform and audit.result in _HALTING
+        and audit.recorded_at.astimezone(PLATFORM_DAY).date() == today
+        for audit in audits
+    )
+
+
 def contacted_job_ids(audits: Sequence[OutreachAudit]) -> set[str]:
     """Jobs a first greeting has reached, or was found to have reached already."""
     return {audit.job_id for audit in audits if audit.result in _COUNTS_AS_CONTACT}

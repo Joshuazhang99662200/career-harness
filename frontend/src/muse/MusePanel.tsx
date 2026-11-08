@@ -12,6 +12,7 @@ import { MuseApp } from "./MuseApp";
 import { MuseCurrentApp } from "./MuseCurrentApp";
 import { MuseSpaceApp } from "./MuseSpaceApp";
 import { createMuseActions } from "./adapter";
+import { executionAvailability } from "./availability";
 import "./theme.css";
 
 export interface MusePanelProps {
@@ -103,11 +104,7 @@ export function MuseSourcePanel({
           regenerationAvailable:
             !!props.syncActions?.regenerateGreeting &&
             !!props.syncActions?.getGreetingSignals,
-          quickExecutionAvailable:
-            source.mode === "demo" ||
-            !!props.syncActions?.executeSelectionDirect,
-          retryAvailable:
-            source.mode === "demo" || !!props.syncActions?.executeJobDirect,
+          ...executionAvailability(source, props.syncActions),
           ...(!source.recordDecision
             ? { readonlyReason: "决定保存服务尚未接入，当前只能查看已有记录。" }
             : {}),

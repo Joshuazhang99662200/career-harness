@@ -5,6 +5,9 @@ import type {
   HostExecutionRequest,
   HostMaterial,
   HostReceipt,
+  HostSelection,
+  HostSelectionReceipt,
+  HostSelectionRequest,
   HostState,
   HostSync,
 } from "./hostContracts";
@@ -24,6 +27,9 @@ export interface ConsoleDataSource {
   getOperation?(key: string): Promise<HostReceipt>;
   createExecutionBatch?(contactIds: string[]): Promise<HostBatch>;
   confirmExecution?(request: HostExecutionRequest): Promise<HostReceipt>;
+  /** The host-kept selection queue; selecting never approves or sends. */
+  getSelection?(): Promise<HostSelection>;
+  saveSelection?(request: HostSelectionRequest): Promise<HostSelectionReceipt>;
   requestLoginRestore?(channel: string): Promise<HostReceipt>;
   synchronize?(): Promise<HostSync>;
 }

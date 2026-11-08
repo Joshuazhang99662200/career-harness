@@ -95,6 +95,14 @@ class GreetingClaimReview(ContractModel):
     reason: NonEmptyString
 
 
+class GreetingRuleCheck(ContractModel):
+    """Whether the draft follows one selected preference rule, with the deciding span."""
+
+    rule_id: NonEmptyString
+    verdict: Literal["followed", "violated", "not_applicable"]
+    excerpt: Annotated[str, Field(max_length=300)] = ""
+
+
 class GreetingReview(ContractModel):
     input_digest: Digest
     draft_digest: Digest
@@ -105,6 +113,8 @@ class GreetingReview(ContractModel):
     style_ok: bool
     conflicts_resolved: bool
     issues: list[NonEmptyString] = Field(default_factory=list, max_length=20)
+    # One verdict per selected preference rule; required when rules were selected.
+    rule_checks: list[GreetingRuleCheck] = Field(default_factory=list, max_length=24)
 
 
 class GreetingAttempt(ContractModel):

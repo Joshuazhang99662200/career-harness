@@ -55,6 +55,9 @@ class HostEvent(HostModel):
     occurred_at: AwareDatetime
     detail: str
     material: HostMaterial | None
+    # Set only when the event answers a personal todo (kind "answer_todo").
+    todo_id: str | None = None
+    option_id: str | None = None
 
 
 class HostOption(HostModel):
@@ -146,6 +149,29 @@ class HostExecutionRequest(HostModel):
     operation_key: NonEmptyString
     batch_id: NonEmptyString
     selected: list[HostExecutionSelection] = Field(min_length=1)
+
+
+class HostSelection(HostModel):
+    """The panel's selection queue. Selecting never approves or sends anything."""
+
+    candidate_id: CandidateId
+    version: int = Field(ge=0)
+    contact_ids: list[NonEmptyString]
+
+
+class HostSelectionRequest(HostModel):
+    candidate_id: CandidateId
+    expected_version: int = Field(ge=0)
+    operation: Literal[
+        "select", "deselect", "select_visible", "invert_visible", "clear_visible", "clear_all"
+    ]
+    contact_ids: list[NonEmptyString]
+
+
+class HostSelectionReceipt(HostModel):
+    status: Literal["saved", "rejected"]
+    message: str
+    selection: HostSelection
 
 
 class HostChannel(HostModel):

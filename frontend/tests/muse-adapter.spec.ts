@@ -128,3 +128,17 @@ test("readonly Muse view preserves unknown personal-source diagnostics and has n
   ).toBe("not_integrated");
   expect((await api.getExecPrecheck({ rank })).executable).toBe(false);
 });
+
+test("a todo answer keeps its option: a rewrite request is not shown as a deferral", async () => {
+  const { api, rank } = await setup();
+  const r = await api.recordDecision({
+    rank,
+    kind: "accept_revise",
+    note: "开头太长",
+    greetingText: null,
+  });
+  expect(r.ok && r.error).toBe(null);
+  const kinds = (await api.getJob({ rank })).decisions.map((d) => d.kind);
+  expect(kinds).toContain("accept_revise");
+  expect(kinds).not.toContain("skip");
+});

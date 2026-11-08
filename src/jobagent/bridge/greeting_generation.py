@@ -6,8 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jobagent.bridge.codex_runner import CodexTextRunner
-from jobagent.capabilities import ReasoningOutputT
+from jobagent.capabilities import ReasoningOutputT, TextRunner
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
 from jobagent.outreach.generation import DRAFT_PROMPT, REVIEW_PROMPT
@@ -23,7 +22,11 @@ _TASKS = {
         "an exact continuous nonoverlapping text span and supporting evidence_ids. "
         "Do not copy a sentence bank or assemble fixed phrases. Use the supplied display_name. "
         "For targeted mode quote exact job.jd_raw in jd_spans; for default mode use an empty "
-        "jd_spans list. Write angle separately from the message."
+        "jd_spans list. Write angle separately from the message. You may reword evidence in "
+        "plainer language as long as no fact is added or changed; do not copy evidence "
+        "sentences verbatim when that breaks a selected preference rule. Follow every rule in "
+        "request.preference_memory. Never write in the greeting that the candidate is not "
+        "interested in, or would not take, this kind of job."
     ),
     REVIEW_PROMPT: (
         "Independently review the entire greeting against the supplied source facts and JD. "
@@ -31,13 +34,16 @@ _TASKS = {
         "approve the greeting. Judge every supplied claim and also find substantive statements "
         "the author's ledger omitted. Real evidence IDs do not prove semantic support. "
         "Check ownership, dates, explicit corrections, qualifiers, actual target relevance and "
-        "all style constraints. Reject unsupported, partial or contradicted statements."
+        "all style constraints. Reject unsupported, partial or contradicted statements. "
+        "Judge facts by meaning, not wording: a faithful plainer paraphrase of evidence is "
+        "supported. For every rule in request.preference_memory.rules add one rule_checks "
+        "entry: followed, violated (quote the violating span in excerpt) or not_applicable."
     ),
 }
 
 
 class CodexGreetingProvider:
-    def __init__(self, runner: CodexTextRunner) -> None:
+    def __init__(self, runner: TextRunner) -> None:
         self.runner = runner
 
     def generate(

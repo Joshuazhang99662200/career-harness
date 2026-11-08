@@ -55,7 +55,7 @@ class GreetingGenerator:
                 if (review.input_digest != identity
                         or review.draft_digest != review_context["draft_digest"]):
                     raise InvalidProviderOutputError("Greeting review has stale source digests.")
-                problems.extend(self._review_problems(draft, review))
+                problems.extend(self._review_problems(draft, review, request))
             attempts.append(GreetingAttempt(draft=draft, review=review, problems=problems))
             if not problems:
                 break
@@ -128,8 +128,21 @@ class GreetingGenerator:
             raise InvalidProviderOutputError("Default greetings cannot invent a target JD.")
 
     @staticmethod
-    def _review_problems(draft: GreetingDraft, review: GreetingReview) -> list[str]:
+    def _review_problems(
+        draft: GreetingDraft, review: GreetingReview, request: GreetingRequest
+    ) -> list[str]:
         problems = list(review.issues)
+        selected = (
+            [rule.rule_id for rule in request.preference_memory.rules]
+            if request.preference_memory else []
+        )
+        judged = [check.rule_id for check in review.rule_checks]
+        if sorted(judged) != sorted(selected):
+            problems.append("review_rule_coverage")
+        problems.extend(
+            f"rule:{check.rule_id}:violated:{check.excerpt}"
+            for check in review.rule_checks if check.verdict == "violated"
+        )
         actual = [item.text for item in review.claims]
         expected = [claim.text for claim in draft.claims]
         if len(actual) != len(expected) or set(actual) != set(expected):

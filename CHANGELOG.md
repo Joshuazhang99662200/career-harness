@@ -1,5 +1,15 @@
 # 版本记录
 
+## 未发布 — 面板待办与执行批次接线
+
+- `console host-state` 为每条已提问的首条招呼生成个人待办（选项：招呼语要改、暂缓处理），条目被决定或回答后变为已处理；`sync` 改为 unknown 并说明未做平台同步核对。
+- `console decide` 接受 `answer_todo`：暂缓只登记暂缓；要求重写只登记要求与备注。两者都不批准、不发送、不进偏好记忆，按操作键回读。
+- 新增 `console batch-create`、`batch-confirm`、`batch`：执行清单只收已批准的首条招呼并写明其余排除原因；确认只把选中项交给宿主按既有发送节奏处理，仓库不发送；条目状态由发送审计与逐字回读推导，未回读为 unknown。迁移 0037 新增执行清单与确认表（只追加）。
+- 移除 zip 源码对照（`MuseApp.tsx`、`?template=zip`、`appearance="zip"`）；上一版模板用到的辅助函数原样移到 `currentHelpers.tsx`。
+- **不兼容**：移除上一版分享页还原（`?template=current`、`MuseCurrentApp.tsx`、`appearance` 属性）与兼容 Console（`?legacy=1`、`Console` / `SourceConsole` 及包根导出 `@jobagent/polling-console`、`@jobagent/polling-console/styles.css`）。嵌入方改用 `@jobagent/polling-console/muse` 的 `MusePanel` / `MuseSourcePanel`。公开职位补充移到默认面板的同名页；仍适用的规则测试改在默认面板上校验。
+- 默认面板修正：已关闭或已回绝的岗位不再标“（现在）”；重新生成只有在宿主记下改前与改后全文时才显示成功，生成期间正文不可编辑；新稿出现后不再把旧批准当作当前稿的批准。
+- 新增 `console selection` / `console select`：面板选择队列由仓库按版本保存（迁移 0038，只追加），过期修改被拒绝；只有选中后经逐字回读核实的发送才让岗位离开选择。
+
 ## 未发布 — 默认面板合并真实代码包框架
 
 - 默认 Muse 前端改为合并自真实面板代码包（2026-11-06）的框架（`MuseSpaceApp.tsx`）；上一版保留为 `?template=current`，zip 对照与兼容 Console 不变。
@@ -17,6 +27,9 @@
 - 新增 `jobagent memory effect` 与 `memory simulate`：按显式观察窗口和最小样本把已发送招呼关联到招聘方来信，用 Wilson / Newcombe 区间比较各记忆版本与规则；未结束的窗口不计入，样本不足如实报告。模拟在已知真实效果的合成数据上检验误报率与检出率。
 - Muse 面板接通首条招呼逐条决定：`console materials`、`console decide`、`console operation` 对应面板的 getMaterials、recordDecision、getOperation。批准只认提问时的准确原文并走原审批门禁，修改记为改写反馈；批量审批不再能重复批准已逐条决定的条目。
 - `console list` 的 `approvals` 现在列出归属本人的首条招呼及其决定、批准原话与发送结果，面板与各对话读到同一份状态。
+- 新增本机 Gemini CLI 运行器与 `jobagent roleplay` 合成角色扮演验证：本机 Claude 扮演合成人设、Gemini 起草与复核，生成方看不到人设，只能经反馈与记忆学习；报告给出不变式、隐藏偏好捕获与通过率趋势。协议见 `roleplay-memory-eval.md`。
+- Gemini 运行器支持 Antigravity CLI（`agy`）：配置 `protocol: "agy_stream_json"` 后，任务以 stream-json 消息传入，并从过程事件判断有无工具调用（任何非文本步骤、未知步骤或被拒动作都判失败）；配置拒绝自动批准工具的参数。
+- 偏好记忆按 40 轮长程验证结果改进：总结改为增量编辑（新增、修订、合并、作废）；先泛化，通用规则每轮直接生效，`role` 条件不得是岗位标题；复核逐条判定已选规则；允许不改事实地改写证据措辞；起草前按岗位规则做方向判断，可建议跳过；Gemini 运行器支持一次受限修复重试、结构化 schema 参数、按步骤配置与调用记录；角色扮演支持 `--memory-mode` 对照臂和 `--strict-owner`。`greeting-ai.md` 去掉了残留的个人禁用词与数字规则，旧策略下生成的招呼需重新生成。
 - 内部整理：摘要统一由 `jobagent.digest` 计算且字节不变；写事务统一为 `Database.transaction()`；CLI 共用失败输出与私有输入读取；删除无引用的 `pipeline_sql.py` 与猎聘投递连接器中不起作用的参数和校验。
 
 ## 未发布 — 品牌与入口对齐

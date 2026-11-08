@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { SourceConsole } from "./SourceConsole";
 import { createHttpSource, type ConsoleDataSource } from "./dataSource";
 import { createDemoSource } from "./demoHost";
 import "./app.css";
@@ -52,20 +51,7 @@ function App() {
         <p role="status">正在读取本地任务记录…</p>
       </main>
     );
-  return new URLSearchParams(location.search).get("legacy") === "1" ? (
-    <SourceConsole source={source} syncUrl />
-  ) : (
-    <MuseSourcePanel
-      source={source}
-      appearance={
-        ({ zip: "zip", current: "current" } as const)[
-          new URLSearchParams(location.search).get("template") as
-            | "zip"
-            | "current"
-        ] ?? "space"
-      }
-    />
-  );
+  return <MuseSourcePanel source={source} />;
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

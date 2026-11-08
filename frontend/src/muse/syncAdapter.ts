@@ -51,12 +51,70 @@ export function createSyncActions(
     const state = await source.getHostState();
     return { s, state };
   }
-  function demoOnly() {
-    if (source.mode !== "demo")
+  const hostKeepsSelection = () =>
+    source.mode !== "demo" && !!source.getSelection && !!source.saveSelection;
+  function requireSelection() {
+    if (source.mode !== "demo" && !hostKeepsSelection())
       throw new Error("服务端选择队列尚未接入，当前不能修改选择或快捷执行。");
   }
+  function requireExecution() {
+    if (
+      source.mode !== "demo" &&
+      !(source.createExecutionBatch && source.confirmExecution)
+    )
+      throw new Error("执行服务尚未接入，当前不能快捷执行。");
+  }
+  /** A real host keeps the selection by contact; the panel shows it by rank. */
+  async function hostSelected() {
+    const s = (await base.getConsoleSnapshot({})).snapshot;
+    const selection = await source.getSelection!();
+    if (selection.candidate_id !== s.candidate_id)
+      throw new Error("选择与当前候选人不匹配");
+    const rankOf = new Map(
+      s.jobs.map((j) => [String(j.job.pipeline_id), Number(j.job.host_rank)]),
+    );
+    const ranks = selection.contact_ids
+      .map((id) => rankOf.get(id))
+      .filter((rank): rank is number => rank !== undefined)
+      .sort((a, b) => a - b);
+    return { s, selection, ranks };
+  }
+  async function hostChange(
+    operation:
+      | "select"
+      | "deselect"
+      | "select_visible"
+      | "invert_visible"
+      | "clear_visible"
+      | "clear_all",
+    ranks: number[],
+  ) {
+    const { s, selection } = await hostSelected();
+    const contactOf = new Map(
+      s.jobs.map((j) => [Number(j.job.host_rank), String(j.job.pipeline_id)]),
+    );
+    const contacts = [...new Set(ranks)].map((rank) => contactOf.get(rank));
+    if (contacts.some((id) => !id))
+      throw new Error("选择包含未关联的岗位，已停止保存");
+    const receipt = await source.saveSelection!({
+      candidate_id: s.candidate_id,
+      expected_version: selection.version,
+      operation,
+      contact_ids: contacts as string[],
+    });
+    if (receipt.status !== "saved") throw new Error(receipt.message);
+    changed();
+    const { ranks: next } = await hostSelected();
+    return { ranks: next, count: next.length };
+  }
+  async function selectedRanks() {
+    requireSelection();
+    return hostKeepsSelection()
+      ? (await hostSelected()).ranks
+      : (await selected()).ranks;
+  }
   async function selected() {
-    demoOnly();
+    requireSelection();
     const { s, state } = await scope();
     const key = `muse.sync.selection.${s.candidate_id}`;
     const saved = JSON.parse(store.load(key) ?? "[]") as
@@ -139,9 +197,9 @@ export function createSyncActions(
     taskStarted: false,
   });
   async function execute(ranks: number[]) {
-    demoOnly();
-    const c = await selected();
-    const candidate = c.s.candidate_id;
+    requireExecution();
+    const { s } = await scope();
+    const candidate = s.candidate_id;
     if (active.has(candidate))
       return {
         ...reject("已有执行请求待核验，不能重复提交。"),
@@ -230,16 +288,25 @@ export function createSyncActions(
   }
   return {
     getSelectionQueue: async () => {
-      const { ranks, count } = await selected();
-      return { ranks, count };
+      const ranks = await selectedRanks();
+      return { ranks, count: ranks.length };
     },
     toggleSelectionItem: async ({ rank, selected: yes }) => {
+      requireSelection();
+      if (hostKeepsSelection())
+        return hostChange(yes ? "select" : "deselect", [rank]);
       const c = await selected();
       return write(
         yes ? [...c.ranks, rank] : c.ranks.filter((r) => r !== rank),
       );
     },
     applySelectionOperation: async ({ operation, visibleRanks }) => {
+      requireSelection();
+      if (hostKeepsSelection())
+        return hostChange(
+          operation,
+          operation === "clear_all" ? [] : visibleRanks,
+        );
       const c = await selected();
       const set = new Set(c.ranks);
       if (operation === "clear_all") set.clear();
@@ -254,7 +321,7 @@ export function createSyncActions(
         }
       return write([...set]);
     },
-    executeSelectionDirect: async () => execute((await selected()).ranks),
+    executeSelectionDirect: async () => execute(await selectedRanks()),
     executeJobDirect: async ({ rank }) => execute([rank]),
     regenerateGreeting: async () => ({
       ok: false,

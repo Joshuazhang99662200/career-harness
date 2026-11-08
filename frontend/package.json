@@ -8,11 +8,6 @@
   },
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./lib/Console.d.ts",
-      "import": "./lib/console.js"
-    },
-    "./styles.css": "./lib/console.css",
     "./muse": {
       "types": "./lib/muse/index.d.ts",
       "import": "./muse-lib/muse.js"

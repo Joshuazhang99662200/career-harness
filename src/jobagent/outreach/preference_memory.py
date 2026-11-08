@@ -9,15 +9,19 @@ from jobagent.capabilities import ReasoningOutputT, ReasoningProvider
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError, InvalidProviderOutputError
 from jobagent.schemas.preference_memory import (
+    DirectionCheck,
+    DirectionDecision,
     PreferenceApplication,
+    PreferenceEditSet,
     PreferenceMemory,
+    PreferenceRule,
     PreferenceSelection,
-    PreferenceUpdate,
 )
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
 
-SUMMARIZE_PROMPT = "preference.memory.summarize.v1"
+SUMMARIZE_PROMPT = "preference.memory.summarize.v2"
 SELECT_PROMPT = "preference.memory.select.v1"
+DIRECTION_PROMPT = "preference.direction.check.v1"
 
 
 def memory_digest(memory: PreferenceMemory) -> str:
@@ -80,17 +84,30 @@ class PreferenceLearner:
                    "events": [event.model_dump(mode="json") for event in fresh]}
         identity = canonical_digest(context)
         proposal = self._generate(
-            SUMMARIZE_PROMPT, {**context, "input_digest": identity}, PreferenceUpdate,
+            SUMMARIZE_PROMPT, {**context, "input_digest": identity}, PreferenceEditSet,
         )
         if proposal.input_digest != identity:
             raise InvalidProviderOutputError("Preference summary has a stale input digest.")
         known = set(memory.consumed_event_ids) | set(unique)
         fresh_ids = {event.event_id for event in fresh}
         old_rules = {rule.rule_id: rule for rule in memory.rules}
-        for rule in proposal.rules:
+        rules = _apply_edits(memory.rules, proposal, fresh_ids)
+        for rule in rules:
             if not set(rule.source_event_ids) <= known:
                 raise InvalidProviderOutputError("Preference rule refers to an unknown source.")
             sources = [unique[eid] for eid in rule.source_event_ids if eid in unique]
+            if rule.scope == "role" and old_rules.get(rule.rule_id) != rule:
+                condition = " ".join(rule.condition.split()).casefold()
+                labels = {
+                    " ".join(value.split()).casefold()
+                    for event in sources for value in (event.job_title, event.company) if value
+                }
+                if condition in labels:
+                    raise InvalidProviderOutputError(
+                        "A role preference names a job title or company instead of a kind of "
+                        "job; describe the category, or scope it to the job.",
+                        details={"rule_id": rule.rule_id},
+                    )
             if (not set(rule.source_event_ids) & fresh_ids
                     and old_rules.get(rule.rule_id) != rule):
                 raise InvalidProviderOutputError("Changed preferences need a fresh owner source.")
@@ -125,7 +142,7 @@ class PreferenceLearner:
                     **memory.consumed_event_digests,
                     **{event.event_id: digests[event.event_id] for event in fresh},
                 },
-                rules=proposal.rules, updated_at=now,
+                rules=rules, updated_at=now,
             )
         except ValidationError:
             raise InvalidProviderOutputError(
@@ -143,8 +160,12 @@ class PreferenceLearner:
         eligible = [rule for rule in memory.rules if rule.category == category
                     and (rule.scope != "job" or rule.job_id == job_id)
                     and (job_id is not None or task == "search" or rule.scope == "general")]
+        # General rules apply to every task of their category by definition, so they are
+        # always used; the model only judges which scoped rules fit this task.
+        general = [rule for rule in eligible if rule.scope == "general"]
+        eligible = [rule for rule in eligible if rule.scope != "general"]
         selection = PreferenceSelection(memory_version=memory.version,
-                                        memory_digest=memory_digest(memory))
+                                        memory_digest=memory_digest(memory), rules=general)
         if not eligible:
             return selection
         # The model may only choose IDs from host-filtered applicable categories.
@@ -159,6 +180,89 @@ class PreferenceLearner:
                 or len(set(applied.selected_rule_ids)) != len(applied.selected_rule_ids)
                 or (task != "search" and applied.search_queries)):
             raise InvalidProviderOutputError("Preference selection is stale or outside its scope.")
-        selection.rules = [by_id[key] for key in applied.selected_rule_ids]
+        selection.rules = [*general, *(by_id[key] for key in applied.selected_rule_ids)]
         selection.search_queries = applied.search_queries
         return selection
+
+
+    def direction(
+        self, memory: PreferenceMemory, *, job_id: str, context: str
+    ) -> DirectionDecision:
+        """Before drafting: do the person's jobs rules say to skip this posting?"""
+        memory = PreferenceMemory.model_validate(memory.model_dump())
+        eligible = [rule for rule in memory.rules if rule.category == "jobs"
+                    and (rule.scope != "job" or rule.job_id == job_id)]
+        if not eligible:
+            return DirectionDecision(memory_version=memory.version, decision="draft")
+        view = memory.model_copy(update={"rules": eligible}).model_dump(mode="json")
+        payload = {"memory": view, "job_id": job_id, "context": context}
+        identity = canonical_digest(payload)
+        check = self._generate(DIRECTION_PROMPT, {**payload, "input_digest": identity},
+                               DirectionCheck)
+        by_id = {rule.rule_id: rule for rule in eligible}
+        matched = check.matched_rule_ids
+        if (check.input_digest != identity or not set(matched) <= set(by_id)
+                or len(set(matched)) != len(matched)
+                or (check.decision == "suggest_skip") != bool(matched)):
+            raise InvalidProviderOutputError(
+                "A direction check must cite exactly the jobs rules it relies on."
+            )
+        return DirectionDecision(
+            memory_version=memory.version, decision=check.decision,
+            rules=[by_id[rule_id] for rule_id in matched], reason=check.reason,
+        )
+
+def _apply_edits(
+    current: list[PreferenceRule], proposal: PreferenceEditSet, fresh_ids: set[str]
+) -> list[PreferenceRule]:
+    """Apply edits in order; every rule an edit does not name stays exactly as it was."""
+    rules = list(current)
+    touched: set[str] = set()
+
+    def position(rule_id: str) -> int:
+        for index, rule in enumerate(rules):
+            if rule.rule_id == rule_id:
+                return index
+        raise InvalidProviderOutputError(
+            "A preference edit names an unknown rule.", details={"rule_id": rule_id}
+        )
+
+    for edit in proposal.edits:
+        names = set(edit.replaces) | ({edit.rule.rule_id} if edit.rule else set())
+        if names & touched:
+            raise InvalidProviderOutputError("One summary changes the same rule twice.")
+        touched |= names
+        if edit.op == "add":
+            assert edit.rule is not None
+            if any(rule.rule_id == edit.rule.rule_id for rule in rules):
+                raise InvalidProviderOutputError("A new preference reuses an existing rule ID.")
+            rules.append(edit.rule)
+        elif edit.op == "edit":
+            assert edit.rule is not None
+            rules[position(edit.rule.rule_id)] = edit.rule
+        elif edit.op == "merge":
+            assert edit.rule is not None
+            if len(edit.replaces) < 2:
+                raise InvalidProviderOutputError("A merge combines at least two rules.")
+            indexes = [position(rule_id) for rule_id in edit.replaces]
+            merged_sources = {
+                source for index in indexes for source in rules[index].source_event_ids
+            }
+            if not merged_sources <= set(edit.rule.source_event_ids):
+                raise InvalidProviderOutputError(
+                    "A merged preference must keep all sources of the rules it replaces."
+                )
+            if (edit.rule.rule_id not in edit.replaces
+                    and any(rule.rule_id == edit.rule.rule_id for rule in rules)):
+                raise InvalidProviderOutputError("A merged preference reuses another rule ID.")
+            first = min(indexes)
+            rules = [rule for index, rule in enumerate(rules) if index not in indexes]
+            rules.insert(first, edit.rule)
+        else:
+            if not set(edit.because_event_ids) & fresh_ids:
+                raise InvalidProviderOutputError(
+                    "Retiring a preference needs fresh owner feedback as its reason."
+                )
+            for rule_id in edit.replaces:
+                rules.pop(position(rule_id))
+    return rules

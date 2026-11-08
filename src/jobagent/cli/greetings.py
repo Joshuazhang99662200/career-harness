@@ -80,6 +80,13 @@ def generate(
     codex_executable: Annotated[Path | None, typer.Option("--codex-executable")] = None,
     timeout: Annotated[float, typer.Option("--timeout")] = 120,
     rules_file: Annotated[Path | None, typer.Option("--rules-file")] = None,
+    ignore_direction: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-direction",
+            help="Draft even if a learned jobs rule suggests skipping this posting.",
+        ),
+    ] = False,
 ) -> None:
     """Generate a default or stored-JD greeting and save it for human review."""
     try:
@@ -113,6 +120,19 @@ def generate(
                      for item in request.interests], ensure_ascii=False,
                 )
             )
+            if request.job is not None and job is not None and not ignore_direction:
+                direction = PreferenceLearner(preference_provider).direction(
+                    memory, job_id=job, context=request.job.jd_raw,
+                )
+                if direction.decision == "suggest_skip":
+                    typer.echo(json.dumps({
+                        "status": "skip_suggested", "mode": request.mode,
+                        "memory_version": memory.version,
+                        "direction_rules": [rule.rule_id for rule in direction.rules],
+                        "direction_rule_texts": [rule.text for rule in direction.rules],
+                        "reason": direction.reason, "approval_granted": False,
+                    }, ensure_ascii=False))
+                    return
             selection = PreferenceLearner(preference_provider).select(
                 memory, task="greeting", job_id=job, context=context,
             )

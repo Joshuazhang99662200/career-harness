@@ -32,6 +32,11 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | 记忆实际使用核验 | 已落地(招呼) | `jobagent memory usage`：从外联账本统计各偏好记忆版本、偏好规则与动态规则版本实际进入起草、批准、发送的条目数；`greetings generate` 产出的定向稿在来源绑定中记录生成输入摘要、记忆版本与所选规则。无记录的旧稿或手写稿计为未归因，不推测；回复结果见 `memory effect`，不代表因果结论 |
 | 记忆效果对比 | 已落地(观察性) | `jobagent memory effect`：须显式给出 `--window-days` 观察窗口与 `--min-sample` 最小样本，把有正向发送记录的招呼按岗位与渠道关联到窗口内的招聘方来信；窗口未结束的计为待定、不进任何分母。各记忆版本与规则对比未使用记忆的招呼，用 Wilson / Newcombe 95% 区间，样本不足报 insufficient_sample，区间跨 0 报 no_clear_difference。非随机分配，只是相关性 |
 | 效果判定模拟 | 已落地 | `jobagent memory simulate`：在已知真实效果的合成数据上重复判定，给出检出率、误报率与反向误判率，用于估计需要多少样本；固定种子可复现 |
+| 角色扮演工作区 | 已落地(仅合成) | `jobagent roleplay init`：在当前目录 `.jobagent/roleplay` 建立独立合成工作区：合成候选人、经 `confirm` 确认的合成证据与合成岗位；已存在即拒绝。`--memory-mode full|notes_only|off` 建立对照臂，`--strict-owner` 拒绝反馈中的全称词 |
+| 模拟本人人设 | 已落地(仅合成) | `jobagent roleplay persona`：只给扮演本人的会话看人设与隐藏偏好；生成方的任何请求都不包含这些内容 |
+| 角色扮演一轮生成 | 已落地(仅合成) | `jobagent roleplay round`：须带私有 `--gemini-config`。刷新偏好记忆、选规则，由本机 Gemini CLI 起草并独立复核招呼，入清单并提问；上一轮未决定时拒绝。Gemini 回执须证明没有工具调用（Gemini CLI 报告次数为 0，或 agy 事件流中无工具步骤），否则失败不重试 |
+| 模拟本人决定 | 已落地(仅合成) | `jobagent roleplay decide`：批准走原审批门禁，改写与回绝走 `outreach feedback`；理由写在 note，否则单次决定不能成为通用偏好。不发送 |
+| 角色扮演验收报告 | 已落地(仅合成) | `jobagent roleplay report`：六项不变式（决定均入账、生成前记忆已消费、规则只引用已记录事件、每稿记录记忆来源、批准只对应批准决定、所选规则进入账本），隐藏偏好的关键词捕获与触发后实际选用、选用时的批准数，跳过提案及答复，前后半程通过率 |
 
 ## 职位情报(Jobs)
 
@@ -181,7 +186,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 
 | 能力 | 状态 | 入口 |
 |---|---|---|
-| 首条招呼全文 AI 生成 | 已落地（通用稿与两类历史完整 JD 的真实模型验收通过） | `jobagent greetings generate`：默认稿、完整 JD 定向稿及反馈重写；`GreetingRequest` → `GreetingDraft` → 独立 `GreetingReview` → `GreetingReport`，使用 [greeting-ai.md](greeting-ai.md)，不读取句库、不授予审批；通过的定向稿保留来源绑定，再进入既有首招门禁 |
+| 首条招呼全文 AI 生成 | 已落地（通用稿与两类历史完整 JD 的真实模型验收通过） | `jobagent greetings generate`：默认稿、完整 JD 定向稿及反馈重写；定向稿起草前先用已学到的岗位规则做方向判断，建议跳过时输出 `skip_suggested` 而不起草，`--ignore-direction` 可强制起草；`GreetingRequest` → `GreetingDraft` → 独立 `GreetingReview` → `GreetingReport`，使用 [greeting-ai.md](greeting-ai.md)，不读取句库、不授予审批；通过的定向稿保留来源绑定，再进入既有首招门禁 |
 | 其他消息自动生成编排 | 未开始 | 求职信与后续回复的统一自动生成仍无独立入口；策略见 [message-generation.md](message-generation.md) |
 | `prepare` / `preview` | 已落地 | `jobagent applications preview` · `ApplicationPreviewService.prepare`：非 mock CLI 须提供 `--artifact` 最终 PDF/Word，可选 `--header`；结构检查、文件字节与摘要绑定，不授予发送权 |
 | `ask` | 已落地 | `jobagent applications ask`(把决定摆给人,**本身不是审批**) · `ApplicationApprovalService.ask` |
@@ -377,8 +382,14 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 控制台统一清单 | 已落地 | `jobagent console list` | 候选人隔离，完整 job/meta/history 与运行及来源诊断；`approvals` 列出按已确认证据或来源绑定归属本人的首条招呼及其状态（待答、已批准及来源、未选中、改写、回绝、撤回）、批准原话与发送结果，任何对话与面板读到同一份；不迁移数据库、不授予任何权限 |
 | 宿主阶段观察 | 已落地 | `jobagent console event` | 仅私有宿主观察，关联已有运行；不授予审批、发送或修改岗位状态权限 |
 | 面板待审材料 | 已落地 | `jobagent console materials` | 面板 getMaterials：按候选人与流水线联系返回仍待本人决定的首条招呼准确全文，版本即条目摘要；已决定、已批准或已撤回的不再出现 |
-| 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。不发送；材料批准、待办回答等尚未接入的种类明确拒绝 |
-| 面板操作回读 | 已落地 | `jobagent console operation` | 面板 getOperation：按操作键回读真实保存结果，不重复执行；无记录即未保存 |
+| 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。待办回答 `answer_todo` 只接受暂缓（hold）与要求重写（revise），只登记操作，不批准、不发送、不进偏好记忆，条目保持可决定。不发送；文案意见 `approve_text` 等其他种类明确拒绝 |
+| 面板宿主状态 | 已落地(只读) | `jobagent console host-state` | 面板 getHostState：按候选人列出各流水线联系的首条招呼材料（revision 与 `console materials` 一致，待决定的排在最后）、已保存的面板操作（event_id 与回执一致），以及每条已提问首条招呼的个人待办（处理或回答后为已处理）。渠道由宿主提供；sync 为 unknown，说明未做平台同步核对 |
+| 面板操作回读 | 已落地 | `jobagent console operation` | 面板 getOperation：按操作键回读真实保存结果（决定、待办回答或执行确认），不重复执行；无记录即未保存 |
+| 面板选择队列 | 已落地(只读) | `jobagent console selection` | 面板 getSelectionQueue：按候选人读取已选岗位与版本。选择不代表批准、不授予发送权；只有选中之后发生、经逐字回读核实的发送才让岗位离开选择，排队、失败与结果未知的都留下 |
+| 面板选择修改 | 已落地 | `jobagent console select` | 面板 toggleSelectionItem / applySelectionOperation：按上次读到的版本修改选择（选中、取消、可见行全选、反选、取消、全部清空），版本不符或含其他候选人的岗位即拒绝且不写入；每次修改只追加新版本 |
+| 面板执行清单 | 已落地(只列已批准首条招呼) | `jobagent console batch-create` | 面板 createExecutionBatch：只列入已有绑定摘要人工批准的首条招呼，每项指向真实批准；未批准、材料已更新、已撤回、已发送或已联系、平台当天叫停、猎聘等分别写明排除原因。不发送 |
+| 面板执行确认 | 已落地(交给宿主) | `jobagent console batch-confirm` | 面板 confirmExecution：须带 `--actor`。只处理请求里明确选中的项，逐项重新核对材料版本、批准仍有效、尚未发送；每份清单只确认一次，同一操作键重放返回原回执。确认只把条目交给宿主按 `outreach lease` / `next` / `record` 节奏发送，仓库不发送 |
+| 面板执行进度 | 已落地(只读) | `jobagent console batch` | 面板 getBatch：每项状态只从真实记录推导。没有发送审计为 queued；审计为已发送且有绑定该审计的逐字回读（流水线 greeting_sent 或发送跟踪）才算 verified；失败、需要接手、已撤回为 failed 并保留原因；已发送但无回读为 unknown，先核验、不自动重试 |
 | 本地 React 控制台 | 已落地 | `jobagent console serve` | 仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示 |
 
 ## 公开职位补充渠道

@@ -24,6 +24,13 @@ RULE = {
 }
 
 
+def _review_with(rule_checks):
+    def change(prompt_id, result):
+        if "review" in prompt_id:
+            result["rule_checks"] = rule_checks
+    return change
+
+
 def with_memory(base: GreetingRequest) -> GreetingRequest:
     return GreetingRequest.model_validate({
         **base.model_dump(),
@@ -36,8 +43,13 @@ def with_memory(base: GreetingRequest) -> GreetingRequest:
     })
 
 
+FOLLOWED = [{"rule_id": "PREF_EVAL_FIRST", "verdict": "followed", "excerpt": "research"}]
+
+
 def test_targeted_draft_records_the_memory_rules_and_input_it_was_generated_from():
-    report = GreetingGenerator(Provider()).generate(with_memory(request(targeted=True)))
+    report = GreetingGenerator(Provider(change=_review_with(FOLLOWED))).generate(
+        with_memory(request(targeted=True))
+    )
 
     assert report.outreach_draft is not None
     binding = report.outreach_draft.source_binding
@@ -78,7 +90,9 @@ def test_bindings_without_generation_keep_their_stored_item_digest():
 
 
 def test_usage_counts_drafted_approved_and_sent_items_per_memory_version_and_rule():
-    report = GreetingGenerator(Provider()).generate(with_memory(request(targeted=True)))
+    report = GreetingGenerator(Provider(change=_review_with(FOLLOWED))).generate(
+        with_memory(request(targeted=True))
+    )
     assert report.outreach_draft is not None
     job = next(iter(JOBS.values()))
     remembered = report.outreach_draft.model_copy(
@@ -137,3 +151,24 @@ def test_cli_reports_ledger_items_without_provenance_as_unattributed(tmp_path):
     unattributed = report["unattributed"]
     assert (unattributed["drafted"], unattributed["approved"], unattributed["sent"]) == (1, 1, 0)
     assert report["evidence"] == "outreach_ledger"
+
+
+def test_review_must_judge_every_selected_rule_and_a_violation_forces_a_rewrite():
+    covered = GreetingGenerator(Provider(change=_review_with([
+        {"rule_id": "PREF_EVAL_FIRST", "verdict": "followed", "excerpt": "research report"},
+    ]))).generate(with_memory(request(targeted=True)))
+    assert covered.status == "passed"
+
+    missing = GreetingGenerator(Provider()).generate(with_memory(request(targeted=True)))
+    assert missing.status == "rejected"
+    assert "review_rule_coverage" in missing.attempts[0].problems
+
+    violated = GreetingGenerator(Provider(change=_review_with([
+        {"rule_id": "PREF_EVAL_FIRST", "verdict": "violated", "excerpt": "Hello, I built"},
+    ]))).generate(with_memory(request(targeted=True)))
+    assert violated.status == "rejected" and len(violated.attempts) == 2
+    assert "rule:PREF_EVAL_FIRST:violated:Hello, I built" in violated.attempts[0].problems
+
+
+def test_without_selected_rules_no_rule_verdicts_are_needed():
+    assert GreetingGenerator(Provider()).generate(request(targeted=True)).status == "passed"

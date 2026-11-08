@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { api, ApiResponse } from "./contracts";
 import {
   useMuseActions,
   useMuseConfiguration,
   useMuseCvFiles,
+  useMusePublicCareers,
 } from "./context";
 import { ChannelTag } from "./ChannelTag";
 import "./space.css";
+import { PublicCareers } from "../PublicCareers";
 import { saveExactDecision, saveMuseDecision } from "./decisions";
 import { refreshAfterWrite } from "./refresh";
 
@@ -152,7 +159,7 @@ const DECISION_KIND_LABELS: Record<string, string> = {
   approve_text: "认可这版招呼语",
 };
 
-type MainTab = "progress" | "runs" | "comms" | "about";
+type MainTab = "progress" | "runs" | "comms" | "public" | "about";
 
 type JobFilter = "all" | "active" | "todo" | "waiting" | "contacted" | "ended";
 
@@ -497,6 +504,7 @@ export function MuseSpaceApp() {
                   ["progress", "任务进度"],
                   ["runs", "运行记录"],
                   ["comms", "沟通进展"],
+                  ["public", "公开职位补充"],
                   ["about", "数据说明"],
                 ] as [MainTab, string][]
               ).map(([key, label]) => (
@@ -1028,6 +1036,8 @@ export function MuseSpaceApp() {
               />
             )}
 
+            {tab === "public" && <PublicCareersPanel />}
+
             {tab === "about" && (
               <AboutPanel
                 snapshot={snapshot}
@@ -1294,6 +1304,25 @@ function FiveColumnTable({
 
 type TodoJob = TodosResp["jobs"][number];
 type TodoItem = TodoJob["items"][number];
+
+function PublicCareersPanel() {
+  const load = useMusePublicCareers();
+  const query = useQuery({
+    queryKey: ["public-careers"],
+    // react-query rejects undefined; a missing channel is kept as null, not empty.
+    queryFn: async () => (await load!()) ?? null,
+    enabled: !!load,
+  });
+  if (load && query.isPending)
+    return <p className="py-8 text-[var(--dim)]">读取公开职位补充中……</p>;
+  if (query.isError)
+    return (
+      <p className="py-8 text-[var(--danger)]" role="alert">
+        公开职位补充没有读取成功，不能确认有无岗位；请核对来源记录。
+      </p>
+    );
+  return <PublicCareers value={query.data ?? undefined} />;
+}
 
 type SnapshotData = ApiResponse<typeof api, "getConsoleSnapshot">["snapshot"];
 
@@ -1614,9 +1643,10 @@ function RegenerateGreetingButton({
   const [unknown, setUnknown] = useState(false);
   const unavailable = policy.regenerationAvailable === false;
   const regen = useMutation({
-    mutationFn: () =>
-      api.regenerateGreeting({ rank, currentText: currentText || null }),
-    onSuccess: async (r) => {
+    mutationKey: ["regenerate-greeting", rank],
+    mutationFn: (before: string) =>
+      api.regenerateGreeting({ rank, currentText: before || null }),
+    onSuccess: async (r, before) => {
       if (!r.ok || !r.greeting) {
         setFailed(true);
         if (r.error === "outcome_unknown") setUnknown(true);
@@ -1630,8 +1660,13 @@ function RegenerateGreetingButton({
       try {
         const fresh = await api.getJob({ rank });
         const audit = await api.getGreetingSignals({ rank });
+        // Verified only when the host recorded both the text it replaced and the new text.
         const recorded = audit.signals.some(
-          (sig) => sig.kind === "ai_regenerate" && sig.afterText === r.greeting,
+          (sig) =>
+            sig.kind === "ai_regenerate" &&
+            sig.afterText === r.greeting &&
+            typeof sig.beforeText === "string" &&
+            (!before || sig.beforeText === before),
         );
         if (fresh.draftGreeting !== r.greeting || !recorded) {
           setFailed(true);
@@ -1662,7 +1697,7 @@ function RegenerateGreetingButton({
         aria-label="重新生成招呼语"
         className="rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1.5 text-sm font-medium text-[var(--accent)] disabled:opacity-50"
         disabled={disabled || regen.isPending || unavailable || unknown}
-        onClick={() => regen.mutate()}
+        onClick={() => regen.mutate(currentText)}
       >
         {regen.isPending ? "正在重新生成……" : "重新生成"}
       </button>
@@ -1701,6 +1736,8 @@ function TodoDialog({
   onRetryJob: (rank: number) => void;
 }) {
   const api = useMuseActions();
+  const regenerating =
+    useIsMutating({ mutationKey: ["regenerate-greeting", rank] }) > 0;
   const policy = useMuseConfiguration();
   void onMakeBatch;
   const queryClient = useQueryClient();
@@ -2043,7 +2080,7 @@ function TodoDialog({
                   className="mt-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-2 text-sm leading-relaxed focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                   rows={7}
                   value={greetingValue}
-                  disabled={saving || detail.isPending}
+                  disabled={saving || detail.isPending || regenerating}
                   onChange={(e) => setGreetingText(e.target.value)}
                 />
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -2102,7 +2139,7 @@ function TodoDialog({
 
             {item.kind === "review" && (
               <div className="mt-3">
-                <h5 className="text-sm font-semibold">需要你决定的原因</h5>
+                <h5 className="text-sm font-semibold">决定依据</h5>
                 {item.reasons.map((r, i) => (
                   <blockquote
                     key={i}
@@ -2497,6 +2534,8 @@ function ExecConfirmView({
   onWatchBatch: (id: number) => void;
 }) {
   const api = useMuseActions();
+  const regenerating =
+    useIsMutating({ mutationKey: ["regenerate-greeting", rank] }) > 0;
   const policy = useMuseConfiguration();
   const queryClient = useQueryClient();
   const precheck = useQuery({
@@ -2748,7 +2787,7 @@ function ExecConfirmView({
             className="mt-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-2.5 text-[15px] leading-relaxed text-[var(--text)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             rows={8}
             value={textValue}
-            disabled={locked}
+            disabled={locked || regenerating}
             onChange={(e) => {
               setText(e.target.value);
               setApprovedNow(false);
@@ -2921,6 +2960,8 @@ function JobDetailDialog({
   onRetryJob: (rank: number) => void;
 }) {
   const api = useMuseActions();
+  const regenerating =
+    useIsMutating({ mutationKey: ["regenerate-greeting", rank] }) > 0;
   const policy = useMuseConfiguration();
   const CV_FILES = useMuseCvFiles();
   const queryClient = useQueryClient();
@@ -3165,9 +3206,13 @@ function JobDetailDialog({
         status: lastStepStatus,
       },
     ];
-  const currentStep = workflowSteps.findIndex(
-    (s) => !s.done && s.status !== "failed" && s.status !== "executing",
-  );
+  // A closed or declined job has no current step; closing never completes the flow.
+  const currentStep =
+    job.state === "closed" || job.state === "declined"
+      ? -1
+      : workflowSteps.findIndex(
+          (s) => !s.done && s.status !== "failed" && s.status !== "executing",
+        );
 
   const hasMaterials =
     (m?.sentGreetings.length ?? 0) > 0 ||
@@ -3260,7 +3305,7 @@ function JobDetailDialog({
         className="mt-2 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-2.5 text-[15px] leading-relaxed text-[var(--text)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
         rows={8}
         value={greetingValue}
-        disabled={saving}
+        disabled={saving || regenerating}
         onChange={(e) => {
           setGreetingEdit(e.target.value);
           setDraftMsg(null);

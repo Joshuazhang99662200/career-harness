@@ -39,6 +39,8 @@ export interface HostEvent {
   occurred_at: string;
   detail: string;
   material: HostMaterial | null;
+  todo_id: string | null;
+  option_id: string | null;
 }
 export interface HostExcluded {
   job_id: string;
@@ -100,6 +102,22 @@ export interface HostReceipt {
   status: "saved" | "unknown" | "rejected";
   message: string;
   event_id: string | null;
+}
+export interface HostSelection {
+  candidate_id: string;
+  version: number;
+  contact_ids: Array<string>;
+}
+export interface HostSelectionReceipt {
+  status: "saved" | "rejected";
+  message: string;
+  selection: HostSelection;
+}
+export interface HostSelectionRequest {
+  candidate_id: string;
+  expected_version: number;
+  operation: "select" | "deselect" | "select_visible" | "invert_visible" | "clear_visible" | "clear_all";
+  contact_ids: Array<string>;
 }
 export interface HostState {
   protocol_version: "1.0";

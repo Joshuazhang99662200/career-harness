@@ -8,6 +8,8 @@ from typing import Any
 from jobagent.schemas.console_host import (
     HostDecisionRequest,
     HostExecutionRequest,
+    HostSelectionReceipt,
+    HostSelectionRequest,
     HostState,
 )
 
@@ -32,7 +34,10 @@ def ts_type(schema: dict[str, Any]) -> str:
 
 def generate() -> str:
     models = {}
-    for model in (HostState, HostDecisionRequest, HostExecutionRequest):
+    for model in (
+        HostState, HostDecisionRequest, HostExecutionRequest, HostSelectionRequest,
+        HostSelectionReceipt,
+    ):
         schema = model.model_json_schema()
         models.update(schema.pop("$defs", {}))
         models[model.__name__] = schema

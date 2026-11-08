@@ -75,5 +75,8 @@ api.getGreetingSignals = async (request) => {
   };
 };
 createRoot(document.getElementById("root")!).render(
-  createElement(MusePanel, { actions: api, appearance: "current" }),
+  createElement(MusePanel, {
+    actions: api,
+    configuration: { regenerationAvailable: true },
+  }),
 );

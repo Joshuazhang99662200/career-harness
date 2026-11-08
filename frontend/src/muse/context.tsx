@@ -1,5 +1,9 @@
 import { createContext, useContext } from "react";
 import type { MuseActions } from "./contracts";
+import type { Snapshot } from "../contracts";
+
+/** Read-only loader for the supplementary public-careers channel; absent means not connected. */
+export type MusePublicCareers = () => Promise<Snapshot["public_careers"]>;
 
 export interface MuseConfiguration {
   refreshMs?: number;
@@ -17,6 +21,7 @@ export const MuseContext = createContext<{
   actions: MuseActions;
   configuration: MuseConfiguration;
   cvFiles: MuseCvFiles;
+  publicCareers?: MusePublicCareers;
 } | null>(null);
 export function useMuseActions() {
   const context = useContext(MuseContext);
@@ -26,3 +31,5 @@ export function useMuseActions() {
 export const useMuseConfiguration = () =>
   useContext(MuseContext)?.configuration ?? {};
 export const useMuseCvFiles = () => useContext(MuseContext)?.cvFiles ?? {};
+export const useMusePublicCareers = () =>
+  useContext(MuseContext)?.publicCareers;

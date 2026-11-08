@@ -6,23 +6,27 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jobagent.bridge.codex_runner import CodexTextRunner
-from jobagent.capabilities import ReasoningOutputT
+from jobagent.capabilities import ReasoningOutputT, TextRunner
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
-from jobagent.outreach.preference_memory import SELECT_PROMPT, SUMMARIZE_PROMPT
+from jobagent.outreach.preference_memory import (
+    DIRECTION_PROMPT,
+    SELECT_PROMPT,
+    SUMMARIZE_PROMPT,
+)
 from jobagent.schemas.coordinator import CodexTextRecord, CodexTextRequest
 from jobagent.schemas.preference_memory import (
+    DirectionCheck,
     PreferenceApplication,
+    PreferenceEditSet,
     PreferenceMemory,
-    PreferenceUpdate,
 )
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
 from jobagent.skill_resources import read_reference
 
 
 class CodexPreferenceProvider:
-    def __init__(self, runner: CodexTextRunner) -> None:
+    def __init__(self, runner: TextRunner) -> None:
         self.runner = runner
 
     def generate(
@@ -32,12 +36,15 @@ class CodexPreferenceProvider:
         context: Mapping[str, Any],
         output_type: type[ReasoningOutputT],
     ) -> ReasoningOutputT:
-        contracts = {SUMMARIZE_PROMPT: PreferenceUpdate, SELECT_PROMPT: PreferenceApplication}
-        keys = (
-            {"memory", "events", "input_digest"}
-            if prompt_id == SUMMARIZE_PROMPT
-            else {"memory", "task", "job_id", "context", "input_digest"}
-        )
+        contracts = {
+            SUMMARIZE_PROMPT: PreferenceEditSet, SELECT_PROMPT: PreferenceApplication,
+            DIRECTION_PROMPT: DirectionCheck,
+        }
+        keys = {
+            SUMMARIZE_PROMPT: {"memory", "events", "input_digest"},
+            SELECT_PROMPT: {"memory", "task", "job_id", "context", "input_digest"},
+            DIRECTION_PROMPT: {"memory", "job_id", "context", "input_digest"},
+        }.get(prompt_id, set())
         if (
             prompt_id not in contracts
             or output_type is not contracts[prompt_id]
@@ -57,10 +64,30 @@ class CodexPreferenceProvider:
                 ) or len({event.event_id for event in events}) != len(events):
                     raise ValueError("foreign or previously consumed events")
                 task = (
-                    "Summarize the new owner feedback into a complete set of at most 24 short "
-                    "source-bound preference rules. Return PreferenceUpdate and copy input_digest. "
-                    "Preserve unaffected existing rules, scope local feedback conservatively and "
-                    "do not invent candidate facts, permissions or fixed message sentences."
+                    "Turn the new owner feedback into the smallest set of edits to the current "
+                    "rules. Return PreferenceEditSet and copy input_digest. Do not repeat rules "
+                    "that do not change: they are kept as they are. Use add for a new "
+                    "preference, edit to refine one rule, merge when two or more rules say the "
+                    "same thing (the merged rule keeps all their source_event_ids), and retire "
+                    "only when new feedback contradicts a rule (cite it in because_event_ids). "
+                    "Generalize first: when the same preference appears in feedback on two or "
+                    "more different jobs, merge it into one general rule. Use role only for a "
+                    "category or feature of jobs, never a job title or company name; use job "
+                    "only when the feedback points at this posting. Keep each rule short; at "
+                    "most 24 rules in total. Do not invent candidate facts, permissions or "
+                    "fixed message sentences."
+                )
+            elif prompt_id == DIRECTION_PROMPT:
+                if not isinstance(context["context"], str) or not isinstance(
+                    context["job_id"], str
+                ):
+                    raise ValueError("invalid direction task")
+                task = (
+                    "Decide whether the supplied jobs rules say the person would not pursue "
+                    "this posting. Return DirectionCheck and copy input_digest. Answer "
+                    "suggest_skip only when a rule clearly covers this JD, and list exactly "
+                    "those rule IDs in matched_rule_ids; otherwise answer draft with no IDs. "
+                    "Give a one-sentence reason. This is a proposal: the person decides."
                 )
             else:
                 if (

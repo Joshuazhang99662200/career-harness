@@ -4,14 +4,14 @@
 
 ## 接入方式
 
-`ConsoleDataSource` 定义在 `frontend/src/dataSource.ts`；`SourceConsole` 负责加载和刷新，`Console` 继续负责展示。只读快照、HTTP 查询和明确的合成模式共用渲染组件。新宿主传输模型以 `src/jobagent/schemas/console_host.py` 为权威，运行生成脚本更新 TypeScript；它们不取代 pipeline、审批或证据契约。
+`ConsoleDataSource` 定义在 `frontend/src/dataSource.ts`；`MuseSourcePanel` 负责把数据源转换为面板动作并渲染默认面板。只读快照、HTTP 查询和明确的合成模式共用同一面板。原 `Console` / `SourceConsole` 组件和包根导出已于 2026-11-08 移除。新宿主传输模型以 `src/jobagent/schemas/console_host.py` 为权威，运行生成脚本更新 TypeScript；它们不取代 pipeline、审批或证据契约。
 
 ```tsx
-import { SourceConsole, createHttpSource } from '@jobagent/polling-console';
-import '@jobagent/polling-console/styles.css';
+import { MuseSourcePanel } from '@jobagent/polling-console/muse';
+import '@jobagent/polling-console/muse/styles.css';
 
-const source = createHttpSource();
-<SourceConsole source={source} />;
+// source 由宿主实现 ConsoleDataSource（见 frontend/src/dataSource.ts）。
+<MuseSourcePanel source={source} />;
 ```
 
 宿主适配器须提供 `getSnapshot`、`getDefinitions`、`getJob`、`getMaterials`、`getHostState`、`getTodos`、`getChannelLogin`、`getBatch`。需要接入写入时，按能力提供可选方法，省略的方法会使对应动作禁用并说明原因，不构造不存在的 HTTP 端点。
@@ -19,6 +19,7 @@ const source = createHttpSource();
 | 接口 | 约束 |
 |---|---|
 | `recordDecision` | 候选人、岗位、联系轮次、材料版本、准确正文、附件摘要及去重键绑定；只记录决定 |
+| `getHostState` | `jobagent console host-state --candidate <ID>` | 只读：各联系的首条招呼材料与已保存的面板决定事件，回执的 `event_id` 可在 `jobs[].events` 中找到；待办、渠道、执行批次由宿主补充 |
 | `getOperation` | 核验同一去重键的真实业务结果；未知不自动重试 |
 | `createExecutionBatch` | 先检查去重、屏蔽、业务状态、渠道、材料与审批；返回全文材料和排除原因 |
 | `confirmExecution` | 只处理明确勾选项，核对当前材料与批准；逐项通过已有业务能力执行和回读 |
@@ -36,8 +37,31 @@ Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删�
 | `getMaterials` | `jobagent console materials --candidate <ID> --contact <PIPE_*>` | 仍待本人决定的首条招呼准确全文；`revision` 为条目摘要 |
 | `recordDecision` | `jobagent console decide <HostDecisionRequest.json> --actor <操作人>` | `approve_material`：仅原文，单条清单上走原审批门禁；`save_draft`：改写反馈，待重新生成复核；`decline`：回绝反馈。`approve_text` 只是文案意见，不构成批准，返回 rejected 且不保存；其他种类同样返回 rejected |
 | `getOperation` | `jobagent console operation <operation_key> --candidate <ID>` | 按操作键回读；无记录即未保存，可重新提交 |
+| `getHostState` | `jobagent console host-state --candidate <ID>` | 只读：每个联系的首条招呼材料、面板操作（`event_id` 与回执一致）、个人待办和执行清单；渠道状态由宿主提供 |
+| `getSelectionQueue` | `jobagent console selection --candidate <ID>` | 已选岗位（流水线联系）与版本；选择不代表批准 |
+| `toggleSelectionItem` / `applySelectionOperation` | `jobagent console select <HostSelectionRequest.json>` | 按上次读到的版本修改选择，版本不符即拒绝、不写入 |
+| `createExecutionBatch` | `jobagent console batch-create --candidate <ID> --contact <PIPE_*> …` | 只列入已批准的首条招呼，每项 `approval_event_id` 指向真实批准；其余逐个写明排除原因 |
+| `confirmExecution` | `jobagent console batch-confirm <HostExecutionRequest.json> --actor <操作人>` | 只处理明确选中的项，逐项重新核对后交给宿主；仓库不发送 |
+| `getBatch` | `jobagent console batch <batch_id> --candidate <ID>` | 每项状态从发送审计与逐字回读推导；未知清单输出 null |
 
 `approve_material` 与 `approve_text` 的含义和前端、演示宿主保持一致：只有前者是批准。宿主状态里当前材料的 `revision` 必须取 `console materials` 返回的值，否则决定会因材料已变化被拒绝。前端在改稿后先保存草稿再批准；接 CLI 时草稿保存为改写反馈、原文不变，前端据此提示需重新生成复核，不会批准改动后的文字。
+
+**个人待办。** 每条已提问、证据经本人确认的首条招呼对应一条待办，`todo_id` 由提问编号与条目号确定，`material_revision` 为条目摘要。待办在条目被批准、放弃、保存改写、整份清单批准或撤回，或被下面两种回答处理后变为 resolved，`result` 写明结果。没有提问记录的岗位不生成待办，也不推断“没有待办”；猎聘没有首条招呼，不生成待办。
+
+**回答待办（`answer_todo`）。** 只接受当前待办提供的两个选项，且正文和 `material_revision` 须与该条目一致：
+
+- `hold`（暂缓处理）：只登记暂缓。不批准、不发送、不写偏好反馈，条目保持可决定，之后仍可批准或放弃。
+- `revise`（招呼语要改）：登记“要求重写”，附本人备注。偏好记忆里的 `revise` 必须带改写全文，`decline` 表示不要这个岗位，两者都不适合“要改但没给新文字”，所以这一回答只作为面板操作保存，不进偏好记忆、不批准；宿主据此重新生成，本人再对新稿作为新条目决定。取舍：旧条目在重新生成前仍可被批准或放弃，不会被自动关闭，避免把“要改”误记成放弃。
+
+两种回答都按操作键保存，可用 `console operation` 与 `host-state` 回读；同一操作键提交不同回答会被拒绝，已处理的待办不能再回答。
+
+**执行清单。** 勾选不等于批准：清单只收已有绑定摘要人工批准的首条招呼（面板单条批准或整份清单批准），未批准、材料已更新、已撤回、已发送或已联系、平台当天叫停（发送失败或需要人工接手）、猎聘（统一在线简历直接投递，没有首条招呼）都放进 `excluded` 并写明原因。新建清单的条目为 `queued` 且 `selected` 为 false，清单为 `ready`。
+
+确认时只处理请求里选中的项，逐项核对正文、材料版本、无附件，并重新核对批准仍有效、尚未发送；任何一项不符就整份拒绝，不保存。每份清单只确认一次；同一操作键重放返回原回执，内容不同则拒绝。确认只记录本人选了哪些条目，选中项保持 `queued` 并标为 `selected`，由宿主按 `outreach lease` / `next` / `record` 节奏发送；没选中的项保持原状。
+
+条目状态只从真实记录推导：没有发送审计为 `queued`；审计为已发送，且有绑定该审计的逐字回读（流水线 `greeting_sent` 迁移，或旧版发送跟踪），正文摘要与批准原文一致，才算 `verified`，并给出证据、材料版本与观察时间；失败、需要人工接手、对话里已有招呼、已撤回为 `failed` 并保留原因；已登记发送但没有回读为 `unknown`，先核实，不自动重试。前端只把带完整正向回读的 `verified` 项移出选择队列。
+
+**选择队列。** 选择保存在仓库里，刷新或换设备打开都不会丢；每次修改追加一个新版本，宿主带着上次读到的版本提交，过期的修改被拒绝而不覆盖。选择只是本人挑出要看或要执行的岗位，不批准、不发送。宿主在 `ConsoleDataSource` 上提供 `getSelection` / `saveSelection`（分别对应 `console selection` / `console select`），以及 `createExecutionBatch` / `confirmExecution`（对应 `console batch-create` / `batch-confirm`）后，面板的选择栏、一键投递和失败重试才启用；只提供执行服务时可以重试单个岗位，选择栏仍禁用并说明原因。岗位只在“选中之后”的一次发送经逐字回读核实后离开选择；排队、失败或结果未知的都留在选择里，不会悄悄消失。
 
 回执状态为 saved 时退出码为 0，rejected 为 1，JSON 回执始终输出。决定都不发送；已批准的条目仍由现有租约与 `outreach next` 节奏发送并回读。
 

@@ -1564,7 +1564,7 @@ function AboutPanel({
     {
       heading: "红点是什么意思",
       lines: [
-        `红点表示需要你决定的事：${todoJobs} 个岗位、共 ${todoItems} 件，处理并保存后才消失。`,
+        `红点表示需要你本人决定的事：${todoJobs} 个岗位、共 ${todoItems} 件，处理并保存后才消失。`,
       ],
     },
     {

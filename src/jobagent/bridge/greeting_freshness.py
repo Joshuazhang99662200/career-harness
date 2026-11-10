@@ -8,12 +8,12 @@ from typing import Never
 
 from pydantic import ValidationError
 
+from jobagent.bridge.greeting_policy import greeting_policy
 from jobagent.digest import canonical_digest
 from jobagent.errors import JobAgentError, StaleApprovalError
 from jobagent.reasoning.job_matcher import is_admissible
 from jobagent.schemas.greeting import GreetingJob
 from jobagent.schemas.outreach import OutreachDraft, OutreachItem
-from jobagent.skill_resources import read_reference
 from jobagent.storage.candidate_repository import SqliteCandidateRepository
 from jobagent.storage.database import Database
 from jobagent.storage.job_repository import SqliteJobRepository
@@ -67,7 +67,7 @@ def verify_greeting_sources(
         snapshot = _SnapshotDatabase(database.path, connection)
         candidates = SqliteCandidateRepository(snapshot)
         jobs = SqliteJobRepository(snapshot)
-        policy_digest = canonical_digest(read_reference("references/greeting-ai.md"))
+        policy_digest = canonical_digest(greeting_policy())
         for item in bound:
             binding = item.source_binding
             assert binding is not None

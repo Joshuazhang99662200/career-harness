@@ -161,6 +161,7 @@ def synthetic_legal_files(source):
         "COMMERCIAL_LICENSE.md": "Synthetic paid commercial authorization route",
         "LICENSES/Apache-2.0.txt": "Synthetic preserved third-party license",
         "LICENSES/Career-Ops-MIT.txt": "Synthetic Career Ops attribution and MIT terms",
+        "LICENSES/JD-Greeting-MIT.txt": "Synthetic JD Greeting MIT terms",
     }.items():
         path = source / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,6 +180,7 @@ def test_standalone_distribution_preserves_legal_terms_and_integrity(tmp_path, h
         "COMMERCIAL_LICENSE.md",
         "LICENSES/Apache-2.0.txt",
         "LICENSES/Career-Ops-MIT.txt",
+        "LICENSES/JD-Greeting-MIT.txt",
     ):
         original = (source / relative).read_bytes()
         assert (installed / relative).read_bytes() == original

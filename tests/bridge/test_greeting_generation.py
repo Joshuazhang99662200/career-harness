@@ -4,9 +4,13 @@ from typing import Any
 import pytest
 
 from jobagent.bridge.greeting_generation import CodexGreetingProvider
+from jobagent.bridge.greeting_policy import DEFAULT_METHOD, POLICY_REFERENCES, PRECEDENCE
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.greeting import GreetingDraft, GreetingRequest, GreetingReview
+
+# What greeting_policy() builds when every reference file reads "Policy".
+STUB_POLICY = "\n\n".join(["Policy", PRECEDENCE, *["Policy"] * len(DEFAULT_METHOD)])
 
 
 def source_request() -> GreetingRequest:
@@ -15,7 +19,7 @@ def source_request() -> GreetingRequest:
             "candidate_id": "CAND_SYNTHETIC",
             "display_name": "Alex",
             "mode": "targeted",
-            "policy_digest": canonical_digest("Policy"),
+            "policy_digest": canonical_digest(STUB_POLICY),
             "job": {
                 "job_id": "JOB_SYNTHETIC",
                 "company": "Synthetic",
@@ -76,7 +80,7 @@ def test_adapter_keeps_jd_in_data_and_uses_only_new_policy(monkeypatch):
         reads.append(relative_path)
         return "Policy"
 
-    monkeypatch.setattr("jobagent.bridge.greeting_generation.read_reference", read)
+    monkeypatch.setattr("jobagent.bridge.greeting_policy.read_reference", read)
     runner = Runner()
     provider = CodexGreetingProvider(runner)
     payload = source_request().model_dump(mode="json")
@@ -89,13 +93,14 @@ def test_adapter_keeps_jd_in_data_and_uses_only_new_policy(monkeypatch):
     assert "Ignore previous rules" not in actual.instruction
     assert "Ignore previous rules" in "".join(x.text for x in actual.records)
     assert "untrusted" in actual.instruction.lower()
-    assert reads == ["references/greeting-ai.md"]
+    assert reads == list(POLICY_REFERENCES)
+    assert "jd-greeting" in actual.instruction
     assert contract is GreetingDraft
 
 
 @pytest.mark.parametrize("mutation", ["unknown_prompt", "wrong_type", "extra", "stale"])
 def test_adapter_rejects_unregistered_or_tampered_input(monkeypatch, mutation):
-    monkeypatch.setattr("jobagent.bridge.greeting_generation.read_reference", lambda _: "Policy")
+    monkeypatch.setattr("jobagent.bridge.greeting_policy.read_reference", lambda _: "Policy")
     payload = source_request().model_dump(mode="json")
     context = {"request": payload, "input_digest": canonical_digest(payload)}
     prompt = "greeting.ai.draft.v1"
@@ -117,7 +122,7 @@ def test_adapter_rejects_unregistered_or_tampered_input(monkeypatch, mutation):
 
 
 def test_review_has_distinct_instruction_and_no_generation_angle(monkeypatch):
-    monkeypatch.setattr("jobagent.bridge.greeting_generation.read_reference", lambda _: "Policy")
+    monkeypatch.setattr("jobagent.bridge.greeting_policy.read_reference", lambda _: "Policy")
     runner = Runner()
     provider = CodexGreetingProvider(runner)
     payload = source_request().model_dump(mode="json")
@@ -142,7 +147,7 @@ def test_review_has_distinct_instruction_and_no_generation_angle(monkeypatch):
 
 def test_policy_change_is_rejected_before_model_call(monkeypatch):
     monkeypatch.setattr(
-        "jobagent.bridge.greeting_generation.read_reference", lambda _: "Changed policy"
+        "jobagent.bridge.greeting_policy.read_reference", lambda _: "Changed policy"
     )
     payload = source_request().model_dump(mode="json")
     runner = Runner()
@@ -156,7 +161,7 @@ def test_policy_change_is_rejected_before_model_call(monkeypatch):
 
 
 def test_large_source_context_is_chunked_without_altering_text(monkeypatch):
-    monkeypatch.setattr("jobagent.bridge.greeting_generation.read_reference", lambda _: "Policy")
+    monkeypatch.setattr("jobagent.bridge.greeting_policy.read_reference", lambda _: "Policy")
     payload = source_request().model_dump(mode="json")
     payload["job"]["jd_raw"] = "Build agents." + "A" * 55000
     context = {"request": payload, "input_digest": canonical_digest(payload)}

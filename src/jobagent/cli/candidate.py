@@ -80,9 +80,18 @@ def _emit_handoff(handoff: AgentHandoffRequiredError) -> None:
     )
 
 
-def _reasoning_provider(name: str, handoff_dir: Path, effort: str) -> ReasoningProvider:
+def _reasoning_provider(
+    name: str, handoff_dir: Path, effort: str, database: Path
+) -> ReasoningProvider:
     if name == AGENT_PROVIDER:
-        return AgentHandoffProvider(handoff_dir)
+        # The host replays resume_argv as is, so it must name the database used here.
+        return AgentHandoffProvider(
+            handoff_dir,
+            resume_argv=[
+                "jobagent", "candidate", "import-draft", "{output_path}",
+                "--database", str(database),
+            ],
+        )
     if name == CLAUDE_PROVIDER:
         return ClaudeReasoningProvider(effort=effort)  # type: ignore[arg-type]
     raise ContractValidationError(
@@ -150,7 +159,7 @@ def onboard(
         parsed = PdfResumeParser().parse(resume_path, candidate_id)
         repository.save_resume(parsed)
         extractor = ReasoningCandidateDraftExtractor(
-            _reasoning_provider(provider_name, handoff_dir, effort)
+            _reasoning_provider(provider_name, handoff_dir, effort, database)
         )
         draft = extractor.extract(parsed)
         repository.save_draft(draft)
@@ -273,6 +282,69 @@ def confirm(
             expected_digest=statement_digest,
         )
         _emit(confirmed)
+    except JobAgentError as error:
+        fail(error)
+
+
+@candidate_app.command("confirm-many")
+def confirm_many(
+    candidate_id: str,
+    item: Annotated[
+        list[str],
+        typer.Option(
+            "--item",
+            help="EVID_...=statement_digest of one fact the person confirmed as shown. "
+            "Repeat per fact; if any item is stale, missing or weak, none is confirmed.",
+        ),
+    ],
+    database: DatabaseOption = DEFAULT_DATABASE,
+) -> None:
+    """Confirm a whole table of facts the person approved, all or nothing."""
+    shown: list[tuple[str, str]] = []
+    for raw in item:
+        evidence_id, separator, digest = raw.partition("=")
+        if not separator or not evidence_id or not digest:
+            _input_error("Each --item must be written as 'EVID_...=sha256:...'.")
+        shown.append((evidence_id.strip(), digest.strip()))
+    try:
+        confirmed = CandidateEvidenceService(_repository(database)).confirm_shown(
+            candidate_id, shown
+        )
+        typer.echo(
+            json.dumps(
+                {"confirmed": [evidence.model_dump(mode="json") for evidence in confirmed]},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    except JobAgentError as error:
+        fail(error)
+
+
+@candidate_app.command("resolve-unknown")
+def resolve_unknown(
+    candidate_id: str,
+    path: Annotated[str, typer.Argument(help="unknown_fields path the person has answered.")],
+    database: DatabaseOption = DEFAULT_DATABASE,
+) -> None:
+    """Clear one unknown left by extraction once the person has answered or skipped it.
+
+    Only the profile's open-question list changes; no evidence is created or confirmed.
+    """
+    try:
+        repository = _repository(database)
+        profile = _required_profile(repository, candidate_id)
+        remaining = [field for field in profile.unknown_fields if field.path != path]
+        if len(remaining) == len(profile.unknown_fields):
+            raise ContractValidationError(
+                "That unknown field is not on the profile.",
+                details={"candidate_id": candidate_id, "path": path},
+            )
+        updated = CandidateProfile.model_validate(
+            {**profile.model_dump(mode="python"), "unknown_fields": remaining}
+        )
+        repository.save_profile(updated)
+        _emit(updated)
     except JobAgentError as error:
         fail(error)
 

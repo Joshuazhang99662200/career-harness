@@ -66,7 +66,10 @@ def test_resume_handoff_is_visible_until_the_host_draft_is_imported(tmp_path):
         "--handoff-dir",
         str(handoff),
     )
-    request = json.loads(Path(paused["handoff"]["details"]["request_path"]).read_text())
+    request_path = Path(paused["handoff"]["details"]["request_path"])
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    # Running the stored resume command must write back to the database chosen here.
+    assert request["resume_argv"][-2:] == ["--database", str(database)]
     [resume] = onboarding_state(database, CANDIDATE).resumes
     assert resume.extraction == "waiting_host" and "Synthetic Person" in resume.pages[0].text
 
@@ -99,7 +102,9 @@ def test_resume_handoff_is_visible_until_the_host_draft_is_imported(tmp_path):
     Path(request["output_path"]).write_text(draft.model_dump_json(), encoding="utf-8")
     assert onboarding_state(database, CANDIDATE).resumes[0].extraction == "output_ready"
 
-    cli("candidate", "import-draft", request["output_path"], "--database", str(database))
+    resume_argv = request["resume_argv"]
+    assert resume_argv[:3] == ["jobagent", "candidate", "import-draft"]
+    cli(*resume_argv[1:])
     state = onboarding_state(database, CANDIDATE)
     [fact] = state.facts
     assert state.resumes[0].extraction == "imported" and state.stage == "collecting"

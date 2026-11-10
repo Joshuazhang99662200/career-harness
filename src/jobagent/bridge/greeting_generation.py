@@ -6,15 +6,14 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from jobagent.bridge.greeting_policy import greeting_policy
 from jobagent.capabilities import ReasoningOutputT, TextRunner
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
 from jobagent.outreach.generation import DRAFT_PROMPT, REVIEW_PROMPT
 from jobagent.schemas.coordinator import CodexTextRecord, CodexTextRequest
 from jobagent.schemas.greeting import GreetingDraft, GreetingRequest, GreetingReview
-from jobagent.skill_resources import read_reference
 
-POLICY_REFERENCE = "references/greeting-ai.md"
 _TASKS = {
     DRAFT_PROMPT: (
         "Generate one complete original greeting from the supplied facts and target. "
@@ -80,7 +79,7 @@ class CodexGreetingProvider:
                     isinstance(p, str) for p in revision["problems"]
                 ):
                     raise ValueError("invalid revision problems")
-            policy = read_reference(POLICY_REFERENCE)
+            policy = greeting_policy()
             if request.policy_digest != canonical_digest(policy):
                 raise ValueError("policy changed")
             body = json.dumps(dict(context), ensure_ascii=False, sort_keys=True, allow_nan=False)

@@ -25,3 +25,9 @@ References: providers/greenhouse.mjs, providers/ashby.mjs, providers/_http.mjs,
 providers/_ip-guard.mjs; modes/pdf.md, modes/_writing.md, modes/pdf/hm-audit.md.
 Provider adapters are independent Python adaptations; resume guidance is
 a Chinese methodological adaptation, without upstream templates or runtime.
+
+JD Greeting skill v1.1.0 (bundled as the default greeting method)
+Copyright (c) 2026 JD Greeting contributors
+MIT license retained in LICENSES/JD-Greeting-MIT.txt.
+Bundled unmodified in skills/job-hunting/greeting/ (SKILL.md and references/);
+evals, scripts and the historical Chinese v1.0.0 documents are not bundled.

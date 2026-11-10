@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from jobagent.bridge.greeting_freshness import verify_greeting_sources
+from jobagent.bridge.greeting_policy import greeting_policy
 from jobagent.digest import canonical_digest
 from jobagent.errors import StaleApprovalError
 from jobagent.jobs.normalization import JobNormalizer
@@ -13,7 +14,6 @@ from jobagent.schemas.candidate import CandidateProfile, Confidence, EvidenceIte
 from jobagent.schemas.greeting import GreetingJob
 from jobagent.schemas.job_intelligence import SourceJobRecord
 from jobagent.schemas.outreach import OutreachDraft, OutreachItem, OutreachSourceBinding
-from jobagent.skill_resources import read_reference
 from jobagent.storage.candidate_repository import SqliteCandidateRepository
 from jobagent.storage.database import Database
 from jobagent.storage.job_repository import SqliteJobRepository
@@ -53,7 +53,7 @@ def sources(tmp_path: Path):
         evidence_digest=canonical_digest([item.model_dump(mode="json") for item in evidence]),
         job_digest=canonical_digest(target.model_dump(mode="json")),
         text_digest=canonical_digest(text),
-        policy_digest=canonical_digest(read_reference("references/greeting-ai.md")),
+        policy_digest=canonical_digest(greeting_policy()),
     )
     draft = OutreachDraft(
         job_id=job.id, platform=job.source, text=text, evidence_ids=["EVID_A"],
@@ -114,7 +114,7 @@ def test_same_id_jd_change_rejects(sources):
 
 def test_current_policy_change_rejects(sources, monkeypatch):
     db, _, _, draft = sources
-    monkeypatch.setattr("jobagent.bridge.greeting_freshness.read_reference", lambda _: "changed")
+    monkeypatch.setattr("jobagent.bridge.greeting_policy.read_reference", lambda _: "changed")
     with pytest.raises(StaleApprovalError):
         verify_greeting_sources(db, [draft])
 

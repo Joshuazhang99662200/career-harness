@@ -107,3 +107,72 @@ def test_revise_refuses_an_empty_statement(tmp_path):
         fact["statement_digest"],
     )
     assert code == 1
+
+
+def _two_facts(database: Path) -> list[dict]:
+    invoke(database, "candidate", "start", CANDIDATE)
+    for answer in ("做过合成评测集。", "带过两人的合成项目小组。"):
+        _, question = invoke(database, "candidate", "question", CANDIDATE)
+        invoke(database, "candidate", "answer", CANDIDATE, question["id"], "--answer", answer)
+    return state(database)["facts"]
+
+
+def test_confirm_many_promotes_every_shown_fact_in_one_call(tmp_path):
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    facts = _two_facts(database)
+    assert len(facts) == 2
+    items = [x for f in facts for x in ("--item", f"{f['evidence_id']}={f['statement_digest']}")]
+    code, confirmed = invoke(database, "candidate", "confirm-many", CANDIDATE, *items)
+    assert code == 0 and [c["user_confirmed"] for c in confirmed["confirmed"]] == [True, True]
+    assert all(f["confirmed"] for f in state(database)["facts"])
+
+
+def test_confirm_many_is_all_or_nothing(tmp_path):
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    first, second = _two_facts(database)
+    code, failed = invoke(
+        database,
+        "candidate",
+        "confirm-many",
+        CANDIDATE,
+        "--item",
+        f"{first['evidence_id']}={first['statement_digest']}",
+        "--item",
+        f"{second['evidence_id']}=sha256:not-what-was-shown",
+    )
+    assert code == 1 and failed["error"]["code"] == "STALE_APPROVAL"
+    assert not any(f["confirmed"] for f in state(database)["facts"])
+    code, bad = invoke(database, "candidate", "confirm-many", CANDIDATE, "--item", "no-digest")
+    assert code == 1 and bad["error"]["code"] == "CONTRACT_VALIDATION_ERROR"
+
+
+def test_resolve_unknown_clears_one_answered_gap(tmp_path):
+    from jobagent.schemas.candidate import CandidateDraft, CandidateProfile, UnknownField
+
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    draft = tmp_path / ".jobagent" / "draft.json"
+    database.parent.mkdir(parents=True)
+    draft.write_text(
+        CandidateDraft(
+            candidate_id=CANDIDATE,
+            profile=CandidateProfile(
+                id=CANDIDATE,
+                unknown_fields=[
+                    UnknownField(path="experiences[0].end", reason="Not stated."),
+                    UnknownField(path="education", reason="Not stated."),
+                ],
+            ),
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+    invoke(database, "candidate", "import-draft", str(draft))
+    assert len(state(database)["gaps"]) == 5  # experience, skills, name, two unknowns
+    code, profile = invoke(
+        database, "candidate", "resolve-unknown", CANDIDATE, "experiences[0].end"
+    )
+    assert code == 0 and [u["path"] for u in profile["unknown_fields"]] == ["education"]
+    labels = [g["label"] for g in state(database)["gaps"]]
+    assert not any("experiences[0].end" in label for label in labels)
+    assert any("education" in label for label in labels)
+    code, missing = invoke(database, "candidate", "resolve-unknown", CANDIDATE, "nope")
+    assert code == 1 and missing["error"]["code"] == "CONTRACT_VALIDATION_ERROR"

@@ -42,10 +42,7 @@ def sequence(tmp_path: Path, *bodies: str) -> Path:
         f"log = {str(tmp_path / 'calls.json')!r}\n"
         "seen = json.load(open(log)) if os.path.exists(log) else []\n"
         "args = sys.argv[1:]\n"
-        "schema = open(args[args.index('--json-schema') + 1]).read() "
-        "if '--json-schema' in args else None\n"
-        "seen.append({'argv': args, 'stdin': sys.stdin.read(),"
-        " 'cwd_files': os.listdir('.'), 'schema': schema})\n"
+        "seen.append({'argv': args, 'stdin': sys.stdin.read()})\n"
         "json.dump(seen, open(log, 'w'))\n"
         f"bodies = {list(bodies)!r}\n"
         "sys.stdout.write(bodies[min(n, len(bodies) - 1)])\n",
@@ -110,16 +107,6 @@ def test_a_second_mechanical_failure_fails_closed(tmp_path):
     with pytest.raises(InvalidProviderOutputError):
         runner(tmp_path, sequence(tmp_path, bad, bad), repair_retries=1).run(REQUEST, Answer)
     assert len(calls(tmp_path)) == 2
-
-
-def test_json_schema_flag_passes_a_schema_file_outside_the_working_directory(tmp_path):
-    script = sequence(tmp_path, agy(OK))
-    runner(tmp_path, script, json_schema_flag="--json-schema").run(REQUEST, Answer)
-    [sent] = calls(tmp_path)
-    assert sent["cwd_files"] == []
-    assert "--json-schema" in sent["argv"]
-    schema = json.loads(sent["schema"])
-    assert schema["title"] == "Answer" and "score" in schema["properties"]
 
 
 def test_steps_override_argv_and_timeout_by_output_contract(tmp_path):

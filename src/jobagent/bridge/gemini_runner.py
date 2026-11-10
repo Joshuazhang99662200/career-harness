@@ -210,16 +210,10 @@ class GeminiTextRunner:
             else prompt
         )
         self.workspace.mkdir(parents=True, exist_ok=True)
-        with TemporaryDirectory(prefix="gemini-schema-", dir=self.workspace) as schemas, \
-                TemporaryDirectory(prefix="gemini-text-", dir=self.workspace) as folder:
-            command = list(argv)
-            if self.config.json_schema_flag:
-                path = Path(schemas) / "output-schema.json"
-                path.write_text(schema, encoding="utf-8")
-                command += [self.config.json_schema_flag, str(path)]
+        with TemporaryDirectory(prefix="gemini-text-", dir=self.workspace) as folder:
             try:
                 done = subprocess.run(
-                    command, input=stdin, cwd=folder, shell=False,
+                    list(argv), input=stdin, cwd=folder, shell=False,
                     capture_output=True, text=True, encoding="utf-8", errors="replace",
                     timeout=timeout, check=False,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),

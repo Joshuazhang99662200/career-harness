@@ -98,6 +98,20 @@ class SqliteCandidateRepository:
             self._raise_storage_error("load resume ingestion", error)
         return None if row is None else ParsedResume.model_validate_json(row["resume_json"])
 
+    def list_resumes(self, candidate_id: str) -> list[ParsedResume]:
+        try:
+            with self.database.connect() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT resume_json FROM resume_ingestions
+                    WHERE candidate_id = ? ORDER BY created_at, resume_id
+                    """,
+                    (candidate_id,),
+                ).fetchall()
+        except sqlite3.Error as error:
+            self._raise_storage_error("list resume ingestions", error)
+        return [ParsedResume.model_validate_json(row["resume_json"]) for row in rows]
+
     def append_interview_event(self, event: InterviewEvent) -> None:
         try:
             with self.database.connect() as connection, connection:

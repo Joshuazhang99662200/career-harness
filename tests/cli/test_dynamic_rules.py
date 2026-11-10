@@ -7,9 +7,11 @@ from tests.rules.test_dynamic_registry import request
 
 
 def test_cli_parameter_proposal_approval_export_and_notice(tmp_path):
-    path = tmp_path / "request.json"
+    private = tmp_path / ".jobagent"
+    private.mkdir()
+    path = private / "request.json"
     path.write_text(request().model_dump_json(), encoding="utf-8")
-    db = str(tmp_path / "rules.sqlite3")
+    db = str(private / "rules.sqlite3")
     runner = CliRunner()
     proposed = runner.invoke(app, ["rules", "propose", str(path), "--database", db])
     assert proposed.exit_code == 0, proposed.stdout
@@ -33,7 +35,7 @@ def test_cli_parameter_proposal_approval_export_and_notice(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.stdout
-    exported = tmp_path / ".jobagent" / "effective.json"
+    exported = private / "effective.json"
     effective = runner.invoke(
         app, ["rules", "effective", "CAND_SYNTHETIC", "--output", str(exported), "--database", db]
     )
@@ -44,13 +46,28 @@ def test_cli_parameter_proposal_approval_export_and_notice(tmp_path):
 
 
 def test_rules_propose_does_not_activate(tmp_path):
-    path = tmp_path / "request.json"
+    private = tmp_path / ".jobagent"
+    private.mkdir()
+    path = private / "request.json"
     path.write_text(request().model_dump_json(), encoding="utf-8")
-    db = str(tmp_path / "rules.sqlite3")
+    db = str(private / "rules.sqlite3")
     runner = CliRunner()
     assert runner.invoke(app, ["rules", "propose", str(path), "--database", db]).exit_code == 0
     effective = runner.invoke(app, ["rules", "effective", "CAND_SYNTHETIC", "--database", db])
     assert effective.exit_code != 0
+
+
+def test_rules_refuse_request_and_database_outside_private_paths(tmp_path):
+    path = tmp_path / "request.json"
+    path.write_text(request().model_dump_json(), encoding="utf-8")
+    db = str(tmp_path / ".jobagent" / "rules.sqlite3")
+    outcome = CliRunner().invoke(app, ["rules", "propose", str(path), "--database", db])
+    assert outcome.exit_code == 1
+    assert "must remain private" in outcome.stdout
+    outside = CliRunner().invoke(
+        app, ["rules", "effective", "CAND_SYNTHETIC", "--database", str(tmp_path / "r.sqlite3")]
+    )
+    assert outside.exit_code == 1 and "must remain private" in outside.stdout
 
 
 def test_read_budget_cli_uses_dynamic_cap_and_reports_version(tmp_path):

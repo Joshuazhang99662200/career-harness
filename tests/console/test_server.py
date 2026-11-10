@@ -65,7 +65,8 @@ def test_missing_assets_reports_build_required(tmp_path):
         thread.join()
 
 
-def test_onboarding_state_is_readable_and_never_writable(tmp_path):
+
+def test_facts_are_not_served_to_the_page(tmp_path):
     from jobagent.console.server import make_server
 
     database = tmp_path / ".jobagent" / "jobagent.sqlite3"
@@ -76,14 +77,8 @@ def test_onboarding_state_is_readable_and_never_writable(tmp_path):
         client = http.client.HTTPConnection("127.0.0.1", server.server_port)
         client.request("GET", "/api/onboarding")
         response = client.getresponse()
-        state = json.loads(response.read())
-        assert response.status == 200
-        assert (state["stage"], state["source"]) == ("not_started", "missing")
-        for path in ("/api/onboarding", "/api/onboarding/start"):
-            client.request("POST", path, body=b"{}", headers={"Content-Type": "application/json"})
-            response = client.getresponse()
-            assert response.status == 405
-            response.read()
+        assert response.status == 404
+        response.read()
         client.close()
         assert not database.exists()
     finally:

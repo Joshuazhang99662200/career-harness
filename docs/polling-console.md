@@ -57,11 +57,11 @@ jobagent console serve CAND_DEMO --database .jobagent/jobagent.sqlite3 --workspa
 
 ### 首次使用
 
-首次引导在对话里进行，流程见 [首次引导](../skills/job-hunting/references/first-use.md)，页面不提供录入或确认。
+首次引导、事实核对和找岗设置都在对话里进行，流程见 [首次引导](../skills/job-hunting/references/first-use.md)。页面不展示、也不确认本人资料与事实。
 
-根入口先读同源只读的 `/api/onboarding`。没有本人档案、或还没有任何已确认事实时，页面显示首次引导进度（简历整理情况、已确认与待确认事实、当前等本人回答的问题、尚缺信息、求职设置是否已登记），并提示回到对话继续；页面上的“查看岗位进展”在任何阶段都能打开抓取结果与进度；读取失败显示失败，不进入演示。已有档案且至少确认过一条事实时直接进入岗位进展，可随时切回“本人资料与就绪情况”。
+根入口只看岗位进度：快照里有岗位或运行记录时显示岗位进展；还没有时只显示“还没有岗位进来”和刷新按钮；快照读取失败时由岗位面板报告失败，不进入演示。
 
-宿主用 `jobagent console onboarding --candidate <编号> --database <私有数据库>` 读到同一份状态，其中每条事实的 `statement_digest` 用于 `candidate confirm --statement-digest` 绑定本人看过的原文。
+宿主读取首次引导进度用只读的 `jobagent console onboarding --candidate <编号> --database <私有数据库>`，其中每条事实的 `statement_digest` 用于 `candidate confirm-many` / `confirm --statement-digest` 绑定本人看过的原文。
 
 演示入口显式使用 `?demo=1`，并标注合成数据。真实请求失败时不会自动换成演示或显示成功零结果。不要把真实快照放入前端 public、构建目录或仓库。
 

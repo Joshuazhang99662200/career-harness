@@ -1,8 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
 import demo from "../src/demo.json" with { type: "json" };
-import { readyProfile } from "./fixtures/readyProfile";
-
-test.beforeEach(({ page }) => readyProfile(page));
 
 async function open(page: Page) {
   await page.goto("/?demo=1");

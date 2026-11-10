@@ -17,7 +17,7 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 |---|---|---|
 | `parse_resume` | 已落地 | `jobagent candidate ingest` · `PdfResumeParser.parse` |
 | `extract_draft` | 已落地 | `jobagent candidate onboard`(默认 `--provider agent`,由调用方智能体产出,无需凭证;`--provider claude` 走 API。证据仍未确认) |
-| `update_profile` | 已落地 | `jobagent candidate import-draft`(整份草稿写入;暂无字段级编辑) · `jobagent candidate start`(无简历时建空档案;已有档案原样复用,不重置) |
+| `update_profile` | 已落地 | `jobagent candidate import-draft`(整份草稿写入;暂无字段级编辑) · `jobagent candidate start`(无简历时建空档案;已有档案原样复用,不重置) · `jobagent candidate resolve-unknown`(本人答复或跳过后清除一条抽取留下的未知项;不产生、不确认证据) |
 | `detect_gaps` | 已落地 | `jobagent candidate status` · `GapDetector.detect` |
 | `ask_question` | 已落地 | `jobagent candidate question` · `AdaptiveInterview.next_question` |
 | `add_evidence` | 已落地 | `jobagent candidate answer` · `jobagent candidate confirm`(可加 `--statement-digest` 绑定给本人看过的原文,内容已变即拒绝) · `jobagent candidate confirm-many`(一次确认本人对整张事实表的答复;逐条绑定摘要,任一条过期、缺失或较弱则全部不确认) · `jobagent candidate revise`(按本人原话改写,来源改为 user_edit 并退回未确认) |

@@ -144,3 +144,35 @@ def test_confirm_many_is_all_or_nothing(tmp_path):
     assert not any(f["confirmed"] for f in state(database)["facts"])
     code, bad = invoke(database, "candidate", "confirm-many", CANDIDATE, "--item", "no-digest")
     assert code == 1 and bad["error"]["code"] == "CONTRACT_VALIDATION_ERROR"
+
+
+def test_resolve_unknown_clears_one_answered_gap(tmp_path):
+    from jobagent.schemas.candidate import CandidateDraft, CandidateProfile, UnknownField
+
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    draft = tmp_path / ".jobagent" / "draft.json"
+    database.parent.mkdir(parents=True)
+    draft.write_text(
+        CandidateDraft(
+            candidate_id=CANDIDATE,
+            profile=CandidateProfile(
+                id=CANDIDATE,
+                unknown_fields=[
+                    UnknownField(path="experiences[0].end", reason="Not stated."),
+                    UnknownField(path="education", reason="Not stated."),
+                ],
+            ),
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+    invoke(database, "candidate", "import-draft", str(draft))
+    assert len(state(database)["gaps"]) == 5  # experience, skills, name, two unknowns
+    code, profile = invoke(
+        database, "candidate", "resolve-unknown", CANDIDATE, "experiences[0].end"
+    )
+    assert code == 0 and [u["path"] for u in profile["unknown_fields"]] == ["education"]
+    labels = [g["label"] for g in state(database)["gaps"]]
+    assert not any("experiences[0].end" in label for label in labels)
+    assert any("education" in label for label in labels)
+    code, missing = invoke(database, "candidate", "resolve-unknown", CANDIDATE, "nope")
+    assert code == 1 and missing["error"]["code"] == "CONTRACT_VALIDATION_ERROR"

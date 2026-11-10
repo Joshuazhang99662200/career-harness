@@ -321,6 +321,34 @@ def confirm_many(
         fail(error)
 
 
+@candidate_app.command("resolve-unknown")
+def resolve_unknown(
+    candidate_id: str,
+    path: Annotated[str, typer.Argument(help="unknown_fields path the person has answered.")],
+    database: DatabaseOption = DEFAULT_DATABASE,
+) -> None:
+    """Clear one unknown left by extraction once the person has answered or skipped it.
+
+    Only the profile's open-question list changes; no evidence is created or confirmed.
+    """
+    try:
+        repository = _repository(database)
+        profile = _required_profile(repository, candidate_id)
+        remaining = [field for field in profile.unknown_fields if field.path != path]
+        if len(remaining) == len(profile.unknown_fields):
+            raise ContractValidationError(
+                "That unknown field is not on the profile.",
+                details={"candidate_id": candidate_id, "path": path},
+            )
+        updated = CandidateProfile.model_validate(
+            {**profile.model_dump(mode="python"), "unknown_fields": remaining}
+        )
+        repository.save_profile(updated)
+        _emit(updated)
+    except JobAgentError as error:
+        fail(error)
+
+
 @candidate_app.command("revise")
 def revise(
     candidate_id: str,

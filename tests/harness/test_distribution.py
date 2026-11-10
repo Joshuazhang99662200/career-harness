@@ -247,3 +247,19 @@ def test_private_directory_names_are_excluded_case_insensitively(tmp_path):
     result = build(tmp_path / "installed", "codex")
 
     assert not (result / "references/Private").exists()
+
+
+def test_bootstrap_skips_requirements_for_other_platforms():
+    spec = importlib.util.spec_from_file_location(
+        "bundle_bootstrap", Path("skills/job-hunting/scripts/bootstrap.py")
+    )
+    assert spec and spec.loader
+    bootstrap = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bootstrap)
+    other = "linux" if sys.platform == "win32" else "win32"
+    requirement = f"jobagent-absent-package>=1; sys_platform == '{other}'"
+    assert bootstrap.dependencies([requirement]) == []
+    here = f"jobagent-absent-package>=1; sys_platform == '{sys.platform}'"
+    assert bootstrap.dependencies([here]) == [here]
+    with pytest.raises(ValueError, match="marker"):
+        bootstrap.dependencies(["jobagent-absent-package>=1; python_version < '3.12'"])

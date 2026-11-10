@@ -2,9 +2,11 @@
 
 ## 未发布 — 首次使用引导
 
-- 根入口先读 `/api/onboarding`：没有本人档案或还没有已确认事实时显示首次引导（开始 → 简历或问答 → 逐条核对 → 就绪情况），不再落到空岗位看板；读取失败显示失败，不进入演示。已有档案且有已确认事实时直接进入岗位进展。
-- `console serve` 新增 `--allow-onboarding-writes`（默认关闭）：只开放首次引导写入，要求同源与意图头，数据库须在私有目录；简历整理交宿主 Agent，载入前按存档简历核对页码来源；确认只走 `CandidateEvidenceService.confirm` 并绑定所见原文摘要；每次写入返回回读状态。新增只读 `console onboarding`。
-- 访谈的提问与回答步骤移到 `candidate/interview_session.py`，CLI 与面板共用，行为不变。
+- 首次引导改为在对话里进行：新增技能参考 `first-use.md`，由宿主 Agent 先读状态、一次一个问题地收集简历或经历、按批展示带来源的事实，只在本人对已展示条目明确答复后确认；已有档案从断点继续，不重新初始化。
+- 新增 `candidate start`（无简历时建空档案，已有档案原样复用）、`candidate revise`（按本人原话改写，来源改为 user_edit 并退回未确认）；`candidate confirm` 新增 `--statement-digest`，内容在展示后变化即拒绝。确认仍只走 `CandidateEvidenceService.confirm`。
+- 新增只读 `console onboarding` 与控制台 `/api/onboarding`：档案、简历整理是否在等宿主、逐条事实与来源、当前问题（中文）、尚缺信息、就绪度与求职设置登记情况。读取不创建数据库，缺失与读取失败分别报告。
+- 控制台根入口在尚无已确认事实时只显示首次引导进度并提示回到对话，不再落到空岗位看板；读取失败不进入演示。`console serve` 仍完全只读。
+- 访谈的提问与回答步骤移到 `candidate/interview_session.py`，CLI 与读模型共用，行为不变。
 - 修正：两个动态参数 CLI 测试改把请求与数据库放进私有目录（不放宽校验）；Windows 声明 `tzdata` 依赖，独立包引导按 `sys_platform` 标记判断；新增 `reasoning` 可选依赖，mypy 不再要求安装 anthropic。
 
 ## 未发布 — 面板待办与执行批次接线

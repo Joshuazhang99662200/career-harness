@@ -8,7 +8,7 @@
 2. 使用用户选定的独立、可写工作区。没有选定时只询问工作区和简历位置，检查依赖可并行进行。候选人文件、请求与状态留在该工作区的 `candidate/private/`、`candidate/variants/`、`.jobagent/`；安装代码保持只读。
 3. 执行 `python <skill>/scripts/bootstrap.py --workspace <workspace> --check`。这是只读检查，不创建计划、不登录、不发送。完整性失败先修复安装；依赖缺失时明确列出，再通过 `--setup` 在该工作区建私有 venv。不得覆盖全局 Python 或宿主配置。Python 需 3.11+。
 4. 后续文档中的 `jobagent <argv>` 都通过 `python <skill>/scripts/bootstrap.py --workspace <workspace> -- <argv>` 执行。不能依赖全局 `jobagent`、开发者的 skill 或当前仓库 cwd。每个路径保持独立 argv，避免拼接 shell 字符串。
-5. 为当前会话产生随机 session ID，执行 `jobagent harness start CAND_<ID> codex|claude-code --session-id <session>`。保存返回的 RUN ID。启动不创建候选人事实，仍需走候选人导入、询问与显式确认。
+5. 为当前会话产生随机 session ID，执行 `jobagent harness start CAND_<ID> codex|claude-code --session-id <session>`。保存返回的 RUN ID。启动不创建候选人事实，仍需走候选人导入、询问与显式确认：按 [first-use.md](first-use.md) 先读 `console onboarding`，没有档案时在对话里一次一个问题地引导，已有档案就从断点继续，不重新初始化。
 
 ## 推进与上下文
 

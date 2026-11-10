@@ -1,8 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import demo from "../src/demo.json" with { type: "json" };
+import { readyProfile } from "./fixtures/readyProfile";
 
 /** Product rules carried over from the retired templates, checked on the default panel. */
 async function serve(page: Page, snapshot: object) {
+  await readyProfile(page);
   await page.route("**/api/snapshot", (route) =>
     route.fulfill({ json: snapshot }),
   );

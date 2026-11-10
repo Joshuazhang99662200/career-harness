@@ -390,7 +390,8 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 面板执行清单 | 已落地(只列已批准首条招呼) | `jobagent console batch-create` | 面板 createExecutionBatch：只列入已有绑定摘要人工批准的首条招呼，每项指向真实批准；未批准、材料已更新、已撤回、已发送或已联系、平台当天叫停、猎聘等分别写明排除原因。不发送 |
 | 面板执行确认 | 已落地(交给宿主) | `jobagent console batch-confirm` | 面板 confirmExecution：须带 `--actor`。只处理请求里明确选中的项，逐项重新核对材料版本、批准仍有效、尚未发送；每份清单只确认一次，同一操作键重放返回原回执。确认只把条目交给宿主按 `outreach lease` / `next` / `record` 节奏发送，仓库不发送 |
 | 面板执行进度 | 已落地(只读) | `jobagent console batch` | 面板 getBatch：每项状态只从真实记录推导。没有发送审计为 queued；审计为已发送且有绑定该审计的逐字回读（流水线 greeting_sent 或发送跟踪）才算 verified；失败、需要接手、已撤回为 failed 并保留原因；已发送但无回读为 unknown，先核验、不自动重试 |
-| 本地 React 控制台 | 已落地 | `jobagent console serve` | 仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示 |
+| 首次引导状态 | 已落地(只读) | `jobagent console onboarding` | 面板首次使用入口的读模型：本人档案是否存在、已导入简历及逐页原文、抽取请求是否在等宿主、逐条事实与来源和确认状态、当前唯一待答问题、尚缺信息、就绪度与首次配置是否已登记。读取不创建数据库；记录缺失为 missing，读取失败为 unavailable，均不当作空资料 |
+| 本地 React 控制台 | 已落地 | `jobagent console serve` | 默认仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示。显式加 `--allow-onboarding-writes` 后，只开放首次引导写入（开始、上传 PDF 简历、导入宿主抽取结果、提问、回答或跳过、逐条确认或改写事实），要求同源、意图头且数据库在私有目录；简历抽取交宿主 Agent 完成，确认只走 `CandidateEvidenceService.confirm` 并绑定所见原文摘要，每次写入后返回回读状态。不开放岗位、审批、发送或配置写入 |
 
 ## 公开职位补充渠道
 

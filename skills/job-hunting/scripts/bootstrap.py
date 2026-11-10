@@ -38,7 +38,14 @@ def manifest() -> dict:
 def dependencies(requirements: list[str]) -> list[str]:
     missing = []
     for requirement in requirements:
-        name, constraints = re.split(r"(?=[<>=])", requirement, maxsplit=1)
+        spec, _, marker = requirement.partition(";")
+        if marker:
+            platform = re.fullmatch(r"\s*sys_platform\s*==\s*['\"](\w+)['\"]\s*", marker)
+            if not platform:
+                raise ValueError("Unsupported dependency marker")
+            if sys.platform != platform[1]:
+                continue
+        name, constraints = re.split(r"(?=[<>=])", spec.strip(), maxsplit=1)
         try:
             actual = tuple(int(p) for p in importlib.metadata.version(name).split(".")[:3])
         except (importlib.metadata.PackageNotFoundError, ValueError):

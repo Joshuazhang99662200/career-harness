@@ -1,5 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import demo from "../src/demo.json" with { type: "json" };
+import { readyProfile } from "./fixtures/readyProfile";
+
+test.beforeEach(({ page }) => readyProfile(page));
 
 async function open(page: Page) {
   await page.goto("/?demo=1");
@@ -42,15 +45,18 @@ test("the merged frame is the default and keeps the approval-only selection rule
 }) => {
   await open(page);
   const surface = page.locator(".muse-space");
-  await expect(surface.getByRole("tab", { name: "切换到任务进度" })).toHaveAttribute(
-    "aria-selected",
-    "true",
+  await expect(
+    surface.getByRole("tab", { name: "切换到任务进度" }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(surface.locator("[aria-label='岗位列表']")).toContainText(
+    "选择",
   );
-  await expect(surface.locator("[aria-label='岗位列表']")).toContainText("选择");
   await expect(surface.getByLabel("选择队列与一键投递")).toContainText(
     "只执行已批准的岗位",
   );
-  await expect(surface.getByRole("button", { name: /一键投递，已选 0 个岗位/ })).toBeDisabled();
+  await expect(
+    surface.getByRole("button", { name: /一键投递，已选 0 个岗位/ }),
+  ).toBeDisabled();
   await expectCleanCopy(page);
   for (const tab of ["运行记录", "沟通进展", "数据说明"]) {
     await surface.getByRole("tab", { name: `切换到${tab}` }).click();
@@ -86,7 +92,9 @@ test("an edited draft must be approved again before it can be sent", async ({
     .getByRole("textbox", { name: "招呼语（拟发送，可编辑）" })
     .fill("您好，这是改过的合成招呼语。");
   await expect(dialog).toContainText("正文改过了，需要重新批准后才能发送。");
-  await expect(dialog.getByRole("button", { name: "批准这份招呼语" })).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "批准这份招呼语" }),
+  ).toBeVisible();
   await expect(dialog.getByRole("button", { name: "确认发送" })).toHaveCount(0);
 });
 
@@ -132,10 +140,14 @@ test("a read-only real source keeps counts unknown and disables writes", async (
   await page.goto("/");
   await expect(page.getByRole("alert")).toContainText("待办来源读取未完成");
   await expect(page.getByRole("tab", { name: /^等你处理/ })).toContainText("?");
-  await expect(page.getByRole("button", { name: "生成执行清单" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "生成执行清单" }),
+  ).toBeDisabled();
   await openDetail(page, "数据工程师");
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("button", { name: "批准并发送" })).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: "批准并发送" }),
+  ).toBeDisabled();
   await expect(dialog.getByRole("status")).toContainText("保存服务尚未接入");
 });
 

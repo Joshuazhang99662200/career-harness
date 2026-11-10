@@ -5,15 +5,41 @@ import { createDemoSource } from "./demoHost";
 import "./app.css";
 import { MuseSourcePanel } from "./muse/MusePanel";
 
-function LoadState({ title, error }: { title: string; error?: string }) {
+/** Shown before the board: loading, an error, or "nothing here yet" with one action. */
+function LoadState({
+  title,
+  error,
+  status = "正在读取本地记录…",
+  onRefresh,
+}: {
+  title: string;
+  error?: string;
+  status?: string;
+  onRefresh?: () => void;
+}) {
   return (
-    <main className="load-state">
-      <h1>{title}</h1>
-      {error ? (
-        <p role="alert">{error}</p>
-      ) : (
-        <p role="status">正在读取本地记录…</p>
-      )}
+    <main className="min-h-screen bg-[var(--bg)] px-4 py-10 text-[var(--text)]">
+      <div className="mx-auto max-w-3xl">
+        <h1 className="text-2xl font-semibold">{title}</h1>
+        {error ? (
+          <p role="alert" className="mt-2 text-sm text-[var(--danger)]">
+            {error}
+          </p>
+        ) : (
+          <p role="status" className="mt-2 text-sm text-[var(--dim)]">
+            {status}
+          </p>
+        )}
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="mt-4 min-h-11 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 text-sm hover:bg-[var(--accent-soft)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+          >
+            刷新
+          </button>
+        )}
+      </div>
     </main>
   );
 }
@@ -73,13 +99,7 @@ function LiveApp() {
   if (view === "loading") return <LoadState title="岗位进展" />;
   if (view === "empty")
     return (
-      <main className="load-state">
-        <h1>岗位进展</h1>
-        <p role="status">还没有岗位进来。</p>
-        <button type="button" onClick={load}>
-          刷新
-        </button>
-      </main>
+      <LoadState title="岗位进展" status="还没有岗位进来。" onRefresh={load} />
     );
   return <MuseSourcePanel source={board} />;
 }

@@ -713,8 +713,8 @@ export function MuseSpaceApp() {
                           role="alert"
                         >
                           {tableQuery.isError
-                            ? "岗位列表读取未完成。"
-                            : "待办来源读取未完成，数量尚不确定。"}
+                            ? "岗位列表读取失败，点「刷新」重试。"
+                            : "待办读取失败，数量未知，点「刷新」重试。"}
                         </p>
                       )}
 
@@ -837,11 +837,11 @@ export function MuseSpaceApp() {
                                 </button>
                               </div>
                               <p className="mt-1.5 text-xs text-[var(--dim)]">
-                                只执行已批准的岗位；没批准、被屏蔽、已执行或结果未知的岗位留在已选里，原因写进各自岗位的进展。
+                                只投递已批准的岗位，其余留在已选里。
                                 {selectionUnavailable
-                                  ? " 选择队列服务尚未接入，暂时不能勾选。"
+                                  ? " 选择服务未接入，暂不能勾选。"
                                   : policy.quickExecutionAvailable === false &&
-                                    " 一键投递服务尚未接入。"}
+                                    " 一键投递服务未接入。"}
                               </p>
                               {directResult && (
                                 <div
@@ -889,9 +889,6 @@ export function MuseSpaceApp() {
                 })()}
 
                 <section aria-label="决定与执行" className="pt-2">
-                  <p className="text-[13px] text-[var(--dim)]">
-                    勾选岗位后点「一键投递」，只执行其中已批准的岗位；「执行清单」里可以逐条核对已批准、还没发送的岗位。
-                  </p>
                   {notice && (
                     <p
                       className="mt-2 text-sm text-[var(--accent)]"
@@ -909,7 +906,7 @@ export function MuseSpaceApp() {
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="text-sm font-semibold">
                           {batchStatus.data.batch.status === "executing"
-                            ? `第 ${batchStatus.data.batch.id} 批正在执行，逐条核实结果；你可以继续处理别的岗位。`
+                            ? `第 ${batchStatus.data.batch.id} 批执行中`
                             : batchStatus.data.batch.status === "done"
                               ? `第 ${batchStatus.data.batch.id} 批已全部完成`
                               : batchStatus.data.batch.status === "partial"
@@ -929,7 +926,6 @@ export function MuseSpaceApp() {
                       </div>
                       {batchStatus.data.batch.status !== "executing" ? (
                         <p className="mt-2 text-sm">
-                          这一批的逐条结果已经写进各自岗位的进展里
                           {(() => {
                             const items = batchStatus.data.items;
                             const done = items.filter(
@@ -946,7 +942,7 @@ export function MuseSpaceApp() {
                               `失败 ${failed} 条`,
                             ];
                             if (blocked > 0) parts.push(`拦下 ${blocked} 条`);
-                            return `：${parts.join("、")}。失败原因在对应岗位的进展和详情里，也可以在那里重试。`;
+                            return `${parts.join("、")}。${failed > 0 ? "失败原因与重试见对应岗位。" : ""}`;
                           })()}
                         </p>
                       ) : (
@@ -984,10 +980,6 @@ export function MuseSpaceApp() {
                     </section>
                   )}
 
-                  <p className="mt-4 text-sm text-[var(--dim)]">
-                    点击任意一行，打开对应岗位的详情。
-                  </p>
-
                   <section aria-label="更多" className="mt-6">
                     <details className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3">
                       <summary className="cursor-pointer text-sm font-semibold">
@@ -997,9 +989,6 @@ export function MuseSpaceApp() {
                         <summary className="cursor-pointer text-sm font-semibold">
                           排查问题
                         </summary>
-                        <p className="mt-2 text-sm text-[var(--dim)]">
-                          这里是排查问题时用的数据来源和原始记录。原始字段都保留着，只是不在日常视图里显示。
-                        </p>
                         <h4 className="mt-3 text-sm font-semibold">数据来源</h4>
                         <ul className="mt-1 space-y-1 text-sm">
                           {snapshot.sources.map((s) => (
@@ -1099,7 +1088,7 @@ function FiveColumnTable({
     <section aria-label="岗位列表" className="w-full pt-4">
       {pendingProgress > 0 && (
         <p className="pb-2 text-xs text-[var(--dim)]" role="status">
-          {pendingProgress} 个岗位的进展正在更新，还没更新的先显示上次的进展。
+          {pendingProgress} 个岗位的进展更新中，先显示上次结果。
         </p>
       )}
       {failedProgress > 0 && (
@@ -1371,7 +1360,7 @@ function RunsPanel({ snapshot }: { snapshot: SnapshotData }) {
           <h2 className="text-base font-semibold">运行记录</h2>
           <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--dim)]">
             共 {runs.length} 批、{totalActs}{" "}
-            条已完成的工作，按时间从新到旧排列。没有记录时间的工作不在此列，可在岗位详情的历史中查看。
+            条已完成的工作，新的在前；没有时间的记录见岗位详情。
           </p>
         </div>
         {runs.length === 0 ? (
@@ -1470,7 +1459,7 @@ function CommsPanel({
         <div className="border-b border-[var(--border)] px-4 py-3">
           <h2 className="text-base font-semibold">沟通进展</h2>
           <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--dim)]">
-            这里只列已核实的联系：发出的招呼语和投递的简历。双方消息原文没有保存，对方是否回复，核实之前不下结论。
+            只列已核实的招呼语和投递，对方是否回复以核实为准。
           </p>
         </div>
         {total === 0 ? (
@@ -1556,35 +1545,31 @@ function AboutPanel({
       heading: "岗位与状态",
       lines: [
         `这一页共有 ${total} 个岗位，来自你的求职队列：待审阅 ${statusOf("pending_review")} 个、已批准待执行 ${statusOf("approved_pending_execution")} 个、已投递 ${statusOf("delivered")} 个、你已放弃 ${statusOf("declined")} 个${total > listed ? `、其他状态 ${total - listed} 个` : ""}。`,
-        "点右上角「刷新」会重新读取求职队列；你在面板里做的决定都会保存，刷新或重新打开不会丢失。",
+        "你的决定都会保存，刷新后不会丢失。",
       ],
     },
     {
       heading: "匹配情况怎么看",
       lines: [
-        `匹配情况是把每个岗位的职位要求和你的工作记录逐条核对后的结论，已经评估 ${matchCount} 个岗位。基本要求核对：符合 ${hardCounts["PASS"] ?? 0} 个、有一项待确认 ${hardCounts["REVIEW"] ?? 0} 个、不符合 ${hardCounts["REJECT"] ?? 0} 个${matchCount > hardTotal ? `、尚未核对 ${matchCount - hardTotal} 个` : ""}。`,
-        "列表里分点列出核对结论、相符的经历和待确认项；分数只作次要参考，以文字结论为准。详细依据在岗位详情里。",
+        `已评估 ${matchCount} 个岗位。基本要求：符合 ${hardCounts["PASS"] ?? 0} 个、有一项待确认 ${hardCounts["REVIEW"] ?? 0} 个、不符合 ${hardCounts["REJECT"] ?? 0} 个${matchCount > hardTotal ? `、尚未核对 ${matchCount - hardTotal} 个` : ""}。`,
+        "以文字结论为准，分数只作参考；依据见岗位详情。",
       ],
     },
     {
       heading: "进展是怎么来的",
       lines: [
-        "每段进展由 AI 根据这个岗位已保存的记录整理，只说明目前进展；记录有变化时会重新整理。进展只是说明，不能作为发送或批准的凭证。",
+        "进展由 AI 根据已保存的记录整理，记录变化时更新；它不是发送或批准的凭证。",
       ],
     },
     {
       heading: "红点是什么意思",
       lines: [
-        `红点只表示需要你本人决定的事，现在有 ${todoJobs} 个岗位、共 ${todoItems} 件事。看过或关掉弹窗不会让红点消失，处理并保存成功后才会更新。`,
-        "还没写招呼语的岗位由系统继续处理，不算你的待办，也不显示红点。",
+        `红点表示需要你决定的事：${todoJobs} 个岗位、共 ${todoItems} 件，处理并保存后才消失。`,
       ],
     },
     {
       heading: "还缺的记录",
-      lines: [
-        "双方消息原文没有保存，对方是否回复，核实之前不下结论；「沟通进展」里只列已核实的发送和投递。",
-        "没有记录时间的条目，详情里会注明「时间未记录」。",
-      ],
+      lines: ["双方消息原文没有保存。"],
     },
   ];
   return (

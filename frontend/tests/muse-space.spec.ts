@@ -49,7 +49,7 @@ test("the merged frame is the default and keeps the approval-only selection rule
     "选择",
   );
   await expect(surface.getByLabel("选择队列与一键投递")).toContainText(
-    "只执行已批准的岗位",
+    "只投递已批准的岗位",
   );
   await expect(
     surface.getByRole("button", { name: /一键投递，已选 0 个岗位/ }),
@@ -135,7 +135,7 @@ test("a read-only real source keeps counts unknown and disables writes", async (
 }) => {
   await page.route("**/api/snapshot", (route) => route.fulfill({ json: demo }));
   await page.goto("/");
-  await expect(page.getByRole("alert")).toContainText("待办来源读取未完成");
+  await expect(page.getByRole("alert")).toContainText("待办读取失败");
   await expect(page.getByRole("tab", { name: /^等你处理/ })).toContainText("?");
   await expect(
     page.getByRole("button", { name: "生成执行清单" }),

@@ -7,6 +7,7 @@ from jobagent.rules.registry import definitions
 from jobagent.rules.service import validate_snapshot
 from jobagent.schemas.configuration import (
     BASE_CONFIGURATION_NAMES,
+    TASK_CONFIGURATION_NAMES,
     ConfigurationField,
     ConfigurationFieldStatus,
     ConfigurationPreparationRequest,
@@ -20,6 +21,10 @@ _LABELS = {
     "TOP_PER_QUERY": ("每查询最多取数", "条/查询"),
     "DETAIL_ATTEMPTS_PER_SITE_PER_ROUND": ("每站每轮详情尝试数", "次/站/轮"),
     "DETAIL_CAP_PER_DAY": ("每站每日详情额度", "次/站/日"),
+    "SOURCING_METHODS": (
+        "找岗方式",
+        "mcp / browser_gui / agent_proposed / user_specified; 各写明站点与具体做法",
+    ),
 }
 
 
@@ -65,8 +70,9 @@ def prepare_configuration(
     requested = [name for name in requested_names if name not in consumed]
     if requested_names and not requested:
         conflicts.append("owner_request_already_consumed_or_stale")
+    task_names = TASK_CONFIGURATION_NAMES.get(request.task_type, ())
     names = list(dict.fromkeys((
-        *BASE_CONFIGURATION_NAMES, *request.required_names, *requested_names,
+        *BASE_CONFIGURATION_NAMES, *task_names, *request.required_names, *requested_names,
     )))
     known = {item.name: item for item in definitions()}
     fields = []
@@ -93,6 +99,16 @@ def prepare_configuration(
         questions = [
             f"请裁定{field.label} ({field.name}, 单位: {field.unit})。"
             for field in question_fields
+        ]
+    elif (
+        not conflicts and initialized and mode == "ordinary_run"
+        and all(name in values for name in BASE_CONFIGURATION_NAMES)
+    ):
+        # A task requirement that was never decided is asked once; the baseline stays closed.
+        questions = [
+            f"请裁定{field.label} ({field.name}, 单位: {field.unit})。"
+            for field in missing
+            if field.name in task_names and field.name not in provenance
         ]
     complete_baseline = all(name in values for name in BASE_CONFIGURATION_NAMES)
     can_initialize = (

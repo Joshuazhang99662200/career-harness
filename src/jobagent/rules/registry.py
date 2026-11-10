@@ -44,6 +44,7 @@ _RUNTIME = {
     "MCP_MAX_PARALLEL": "positive_integer",
     "LIEPIN_CALLS_PER_ROUND": "positive_integer",
     "LIEPIN_DELIVERY_SPACING_SEC": "positive_number",
+    "SOURCING_METHODS": "sourcing_methods",
 }
 _HOST = {
     "FIRST_LAUNCH_MIN_JD": "positive_integer",
@@ -137,6 +138,11 @@ def _consumer(name: str) -> str:
         return "jobs sourcing-start/sourcing-take; listings --run-id (frozen query results)"
     if name == "DETAIL_ATTEMPTS_PER_SITE_PER_ROUND":
         return "jobs sourcing-start/sourcing-reserve; reserve-read --run-id (shared round quota)"
+    if name == "SOURCING_METHODS":
+        return (
+            "rules prepare task_type=sourcing (required before a fetch round; the host "
+            "carries out the chosen method; grants no login, captcha or rate-limit bypass)"
+        )
     if name == "QUERIES_PER_SITE_PER_ROUND":
         return "jobs search-plan --rules-file"
     if name == "PENDING_BACKLOG_ASK_THRESHOLD":
@@ -172,6 +178,30 @@ def _local_time(value: JsonValue) -> bool:
         return True
     except ValueError:
         return False
+
+
+SOURCING_METHOD_KINDS = {"mcp", "browser_gui", "agent_proposed", "user_specified"}
+
+
+def _sourcing_methods(value: JsonValue) -> bool:
+    """One or more concrete ways to search: a known kind, the sites, and what exactly to do."""
+    if not isinstance(value, list) or not 1 <= len(value) <= 8:
+        return False
+    for method in value:
+        if not isinstance(method, dict) or set(method) != {"kind", "sites", "how"}:
+            return False
+        sites, how = method["sites"], method["how"]
+        if (
+            method["kind"] not in SOURCING_METHOD_KINDS
+            or not isinstance(sites, list)
+            or not sites
+            or not all(isinstance(site, str) and site.strip() for site in sites)
+            or not isinstance(how, str)
+            or not how.strip()
+            or len(how) > 500
+        ):
+            return False
+    return True
 
 
 def validate_value(name: str, value: JsonValue) -> None:
@@ -242,6 +272,8 @@ def validate_value(name: str, value: JsonValue) -> None:
             }
             and all(_range(item) for item in value.values())
         )
+    elif kind == "sourcing_methods":
+        valid = _sourcing_methods(value)
     if not valid:
         raise ContractValidationError(
             "Invalid dynamic variable value/type/unit.", details={"name": name, "expected": kind}

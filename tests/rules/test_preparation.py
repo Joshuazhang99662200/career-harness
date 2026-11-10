@@ -9,6 +9,12 @@ BASE_VALUES = {
     "DETAIL_CAP_PER_DAY": 37,
 }
 
+METHODS = [
+    {"kind": "mcp", "sites": ["liepin"], "how": "Liepin MCP job search through the call gateway"},
+    {"kind": "agent_proposed", "sites": ["company sites"], "how": "Read public careers pages"},
+]
+SOURCING_VALUES = BASE_VALUES | {"SOURCING_METHODS": METHODS}
+
 
 def preparation(mode="ordinary_run", **changes):
     from jobagent.schemas.configuration import ConfigurationPreparationRequest
@@ -37,8 +43,8 @@ def test_only_initial_setup_questions_for_missing_values():
     initial = prepare_configuration(preparation("initial_setup"), None, initialized=False)
     ordinary = prepare_configuration(preparation(), None, initialized=False)
     assert initial.ask_user and initial.status == "needs_user_decision"
-    assert {field.name for field in initial.fields} == set(BASE_VALUES)
-    assert len(initial.questions) == 4
+    assert {field.name for field in initial.fields} == set(SOURCING_VALUES)
+    assert len(initial.questions) == 5
     assert not ordinary.ask_user and ordinary.questions == [] and not ordinary.ready
     assert ordinary.status == "blocked_by_missing_configuration"
 
@@ -46,7 +52,7 @@ def test_only_initial_setup_questions_for_missing_values():
 def test_completed_first_form_needs_only_machine_initialization():
     from jobagent.rules.preparation import prepare_configuration
 
-    result = prepare_configuration(preparation("initial_setup"), profile(BASE_VALUES),
+    result = prepare_configuration(preparation("initial_setup"), profile(SOURCING_VALUES),
                                    initialized=False)
     assert result.status == "ready_to_initialize" and result.can_initialize
     assert not result.ask_user and not result.ready
@@ -55,14 +61,15 @@ def test_completed_first_form_needs_only_machine_initialization():
 def test_initialized_profile_reuses_values_across_task_types_and_setup_requests():
     from jobagent.rules.preparation import prepare_configuration
 
-    snapshot = profile(BASE_VALUES)
+    snapshot = profile(SOURCING_VALUES)
     for kind in ["sourcing", "research", "recovery", "new-task-type"]:
         request = preparation("initial_setup").model_copy(update={"task_type": kind})
         result = prepare_configuration(request, snapshot, initialized=True)
         assert result.mode == "ordinary_run" and result.ready
         assert not result.ask_user and result.questions == []
         assert result.rules_version == snapshot.version
-        assert {field.name: field.value for field in result.fields} == BASE_VALUES
+        expected = SOURCING_VALUES if kind == "sourcing" else BASE_VALUES
+        assert {field.name: field.value for field in result.fields} == expected
 
 
 def test_missing_or_conflicting_ordinary_config_never_reopens_questions():
@@ -71,9 +78,9 @@ def test_missing_or_conflicting_ordinary_config_never_reopens_questions():
     missing = prepare_configuration(preparation(), profile({"TOP_PER_QUERY": 7}),
                                     initialized=True)
     conflict = prepare_configuration(preparation(conflicts=["source_policy_conflict"]),
-                                     profile(BASE_VALUES), initialized=True)
+                                     profile(SOURCING_VALUES), initialized=True)
     unsupported = prepare_configuration(preparation(required_names=["FIRST_LAUNCH_MIN_JD"]),
-                                        profile(BASE_VALUES | {"FIRST_LAUNCH_MIN_JD": 3}),
+                                        profile(SOURCING_VALUES | {"FIRST_LAUNCH_MIN_JD": 3}),
                                         initialized=True)
     for result in [missing, conflict, unsupported]:
         assert not result.ask_user and not result.ready and result.questions == []
@@ -162,3 +169,44 @@ def test_owner_request_older_than_current_field_decision_never_reopens_questions
         initialized=True, now=at,
     )
     assert not result.ask_user and result.questions == [] and result.status == "blocked_by_conflict"
+
+
+
+def test_sourcing_asks_for_the_search_method_even_after_initialization():
+    from jobagent.rules.preparation import prepare_configuration
+
+    first = prepare_configuration(preparation("initial_setup"), None, initialized=False)
+    assert "SOURCING_METHODS" in {field.name for field in first.fields}
+    assert any("SOURCING_METHODS" in question for question in first.questions)
+    # Initialized before the variable existed: ask this one question, reopen nothing else.
+    later = prepare_configuration(preparation(), profile(BASE_VALUES), initialized=True)
+    assert later.status == "needs_user_decision" and later.ask_user and not later.ready
+    assert len(later.questions) == 1 and "SOURCING_METHODS" in later.questions[0]
+    ready = prepare_configuration(preparation(), profile(SOURCING_VALUES), initialized=True)
+    assert ready.ready and not ready.ask_user
+
+
+def test_other_tasks_do_not_need_a_search_method():
+    from jobagent.rules.preparation import prepare_configuration
+
+    request = preparation().model_copy(update={"task_type": "research"})
+    result = prepare_configuration(request, profile(BASE_VALUES), initialized=True)
+    assert result.ready and "SOURCING_METHODS" not in {field.name for field in result.fields}
+
+
+def test_a_search_method_must_name_a_known_kind_sites_and_a_concrete_how():
+    import pytest
+
+    from jobagent.errors import ContractValidationError
+    from jobagent.rules.registry import validate_value
+
+    validate_value("SOURCING_METHODS", METHODS)
+    for bad in (
+        [],
+        [{"kind": "scrape_everything", "sites": ["x"], "how": "y"}],
+        [{"kind": "mcp", "sites": [], "how": "Liepin MCP"}],
+        [{"kind": "user_specified", "sites": ["boss"], "how": " "}],
+        [{"kind": "mcp", "sites": ["liepin"]}],
+    ):
+        with pytest.raises(ContractValidationError):
+            validate_value("SOURCING_METHODS", bad)

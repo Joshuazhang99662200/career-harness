@@ -107,3 +107,40 @@ def test_revise_refuses_an_empty_statement(tmp_path):
         fact["statement_digest"],
     )
     assert code == 1
+
+
+def _two_facts(database: Path) -> list[dict]:
+    invoke(database, "candidate", "start", CANDIDATE)
+    for answer in ("做过合成评测集。", "带过两人的合成项目小组。"):
+        _, question = invoke(database, "candidate", "question", CANDIDATE)
+        invoke(database, "candidate", "answer", CANDIDATE, question["id"], "--answer", answer)
+    return state(database)["facts"]
+
+
+def test_confirm_many_promotes_every_shown_fact_in_one_call(tmp_path):
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    facts = _two_facts(database)
+    assert len(facts) == 2
+    items = [x for f in facts for x in ("--item", f"{f['evidence_id']}={f['statement_digest']}")]
+    code, confirmed = invoke(database, "candidate", "confirm-many", CANDIDATE, *items)
+    assert code == 0 and [c["user_confirmed"] for c in confirmed["confirmed"]] == [True, True]
+    assert all(f["confirmed"] for f in state(database)["facts"])
+
+
+def test_confirm_many_is_all_or_nothing(tmp_path):
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    first, second = _two_facts(database)
+    code, failed = invoke(
+        database,
+        "candidate",
+        "confirm-many",
+        CANDIDATE,
+        "--item",
+        f"{first['evidence_id']}={first['statement_digest']}",
+        "--item",
+        f"{second['evidence_id']}=sha256:not-what-was-shown",
+    )
+    assert code == 1 and failed["error"]["code"] == "STALE_APPROVAL"
+    assert not any(f["confirmed"] for f in state(database)["facts"])
+    code, bad = invoke(database, "candidate", "confirm-many", CANDIDATE, "--item", "no-digest")
+    assert code == 1 and bad["error"]["code"] == "CONTRACT_VALIDATION_ERROR"

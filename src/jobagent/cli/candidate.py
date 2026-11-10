@@ -286,6 +286,41 @@ def confirm(
         fail(error)
 
 
+@candidate_app.command("confirm-many")
+def confirm_many(
+    candidate_id: str,
+    item: Annotated[
+        list[str],
+        typer.Option(
+            "--item",
+            help="EVID_...=statement_digest of one fact the person confirmed as shown. "
+            "Repeat per fact; if any item is stale, missing or weak, none is confirmed.",
+        ),
+    ],
+    database: DatabaseOption = DEFAULT_DATABASE,
+) -> None:
+    """Confirm a whole table of facts the person approved, all or nothing."""
+    shown: list[tuple[str, str]] = []
+    for raw in item:
+        evidence_id, separator, digest = raw.partition("=")
+        if not separator or not evidence_id or not digest:
+            _input_error("Each --item must be written as 'EVID_...=sha256:...'.")
+        shown.append((evidence_id.strip(), digest.strip()))
+    try:
+        confirmed = CandidateEvidenceService(_repository(database)).confirm_shown(
+            candidate_id, shown
+        )
+        typer.echo(
+            json.dumps(
+                {"confirmed": [evidence.model_dump(mode="json") for evidence in confirmed]},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    except JobAgentError as error:
+        fail(error)
+
+
 @candidate_app.command("revise")
 def revise(
     candidate_id: str,

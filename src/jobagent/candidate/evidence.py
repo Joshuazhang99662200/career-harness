@@ -1,5 +1,7 @@
 """Explicit candidate evidence lifecycle policies."""
 
+from collections.abc import Sequence
+
 from jobagent.candidate.ports import CandidateRepository
 from jobagent.digest import canonical_digest
 from jobagent.errors import (
@@ -53,6 +55,28 @@ class CandidateEvidenceService:
         )
         self.repository.upsert_evidence(candidate_id, confirmed)
         return confirmed
+
+    def confirm_shown(
+        self, candidate_id: str, shown: Sequence[tuple[str, str]]
+    ) -> list[EvidenceItem]:
+        """Confirm a table of facts the person approved, each bound to the wording shown.
+
+        Every item is checked before any is promoted, so one stale, missing or weak
+        item leaves the whole table unconfirmed. Promotion still goes through confirm.
+        """
+        if not shown or len({evidence_id for evidence_id, _ in shown}) != len(shown):
+            raise ContractValidationError("List each shown fact exactly once.")
+        for evidence_id, digest in shown:
+            evidence = self._required(candidate_id, evidence_id, digest)
+            if evidence.confidence is Confidence.WEAK:
+                raise PolicyRejectionError(
+                    "Weak evidence cannot be confirmed.",
+                    details={"candidate_id": candidate_id, "evidence_id": evidence_id},
+                )
+        return [
+            self.confirm(candidate_id, evidence_id, expected_digest=digest)
+            for evidence_id, digest in shown
+        ]
 
     def replace_with_user_edit(
         self,

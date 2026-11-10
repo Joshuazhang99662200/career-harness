@@ -80,9 +80,18 @@ def _emit_handoff(handoff: AgentHandoffRequiredError) -> None:
     )
 
 
-def _reasoning_provider(name: str, handoff_dir: Path, effort: str) -> ReasoningProvider:
+def _reasoning_provider(
+    name: str, handoff_dir: Path, effort: str, database: Path
+) -> ReasoningProvider:
     if name == AGENT_PROVIDER:
-        return AgentHandoffProvider(handoff_dir)
+        # The host replays resume_argv as is, so it must name the database used here.
+        return AgentHandoffProvider(
+            handoff_dir,
+            resume_argv=[
+                "jobagent", "candidate", "import-draft", "{output_path}",
+                "--database", str(database),
+            ],
+        )
     if name == CLAUDE_PROVIDER:
         return ClaudeReasoningProvider(effort=effort)  # type: ignore[arg-type]
     raise ContractValidationError(
@@ -150,7 +159,7 @@ def onboard(
         parsed = PdfResumeParser().parse(resume_path, candidate_id)
         repository.save_resume(parsed)
         extractor = ReasoningCandidateDraftExtractor(
-            _reasoning_provider(provider_name, handoff_dir, effort)
+            _reasoning_provider(provider_name, handoff_dir, effort, database)
         )
         draft = extractor.extract(parsed)
         repository.save_draft(draft)

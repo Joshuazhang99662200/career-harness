@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from jobagent.schemas.candidate import CandidateId
 from jobagent.schemas.common import ContractModel, Digest, NonEmptyString
@@ -21,6 +21,19 @@ class PreferenceRule(ContractModel):
     text: Annotated[str, Field(min_length=1, max_length=500)]
     source_event_ids: list[NonEmptyString] = Field(min_length=1, max_length=30)
     updated_at: datetime
+    # Exact wording the person removed from a greeting this rule learned from. Drafts
+    # containing any of it are sent back without asking the reviewer.
+    forbidden_phrases: list[Annotated[str, Field(min_length=2, max_length=30)]] = Field(
+        default_factory=list, max_length=8,
+    )
+
+    @model_serializer(mode="wrap")
+    def omit_empty_phrases(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        # Rules saved before this field existed keep their stored form and digest.
+        data: dict[str, object] = handler(self)
+        if not self.forbidden_phrases:
+            data.pop("forbidden_phrases", None)
+        return data
 
     @model_validator(mode="after")
     def validate_scope(self) -> "PreferenceRule":
@@ -28,6 +41,8 @@ class PreferenceRule(ContractModel):
             raise ValueError("Only job-specific preferences bind an individual JD.")
         if len(set(self.source_event_ids)) != len(self.source_event_ids):
             raise ValueError("Preference sources must be unique.")
+        if self.forbidden_phrases and self.category != "greetings":
+            raise ValueError("Only greeting preferences forbid wording.")
         return self
 
 
@@ -123,3 +138,36 @@ class DirectionDecision(ContractModel):
     decision: Literal["draft", "suggest_skip"]
     rules: list[PreferenceRule] = Field(default_factory=list)
     reason: str = ""
+
+
+class DirectionProposal(ContractModel):
+    """A recorded skip proposal, so the person's answer can bind to exactly it."""
+
+    proposal_id: Annotated[str, Field(pattern=r"^ODIRP_[A-Z0-9_]+$")]
+    candidate_id: CandidateId
+    job_id: JobId
+    memory_version: NonEmptyString
+    rule_ids: list[NonEmptyString] = Field(min_length=1, max_length=24)
+    reason: Annotated[str, Field(max_length=500)] = ""
+    proposed_at: datetime
+
+
+class DirectionAnswer(ContractModel):
+    """The person's answer to a skip proposal: feedback on the jobs rules it cited.
+
+    confirm_skip says the cited rules rightly cover this posting; override_skip says
+    they reached too far. Either way it can only shape jobs rules, never greetings.
+    """
+
+    answer_id: Annotated[str, Field(pattern=r"^ODIR_[A-Z0-9_]+$")]
+    proposal_id: Annotated[str, Field(pattern=r"^ODIRP_[A-Z0-9_]+$")]
+    candidate_id: CandidateId
+    job_id: JobId
+    rule_ids: list[NonEmptyString] = Field(min_length=1, max_length=24)
+    action: Literal["confirm_skip", "override_skip"]
+    words: Annotated[str, Field(min_length=1, max_length=1000)]
+    free_text: Annotated[str, Field(max_length=1000)] = ""
+    job_title: NonEmptyString
+    company: NonEmptyString
+    jd_text: NonEmptyString
+    occurred_at: datetime

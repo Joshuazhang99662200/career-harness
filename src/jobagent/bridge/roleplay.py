@@ -25,6 +25,7 @@ from jobagent.bridge.greeting_context import load_greeting_request
 from jobagent.bridge.greeting_generation import CodexGreetingProvider
 from jobagent.bridge.preference_memory import (
     MarkdownPreferenceStore,
+    load_direction_answers,
     load_preference_events,
     refresh_preference_memory,
 )
@@ -40,6 +41,7 @@ from jobagent.outreach.service import OutreachService
 from jobagent.schemas.candidate import CandidateProfile, EvidenceItem
 from jobagent.schemas.greeting import GreetingRequest, GreetingSettings
 from jobagent.schemas.job_intelligence import SourceJobRecord
+from jobagent.schemas.preference_memory import DirectionAnswer, DirectionProposal
 from jobagent.schemas.roleplay import (
     PreferenceCapture,
     RoleplayCheck,
@@ -51,6 +53,11 @@ from jobagent.schemas.roleplay import (
 from jobagent.schemas.sourcing_feedback import OutreachFeedbackItem, OutreachFeedbackRequest
 from jobagent.storage.candidate_repository import SqliteCandidateRepository
 from jobagent.storage.database import Database
+from jobagent.storage.direction_repository import (
+    SqliteDirectionRepository,
+    answer_id_for,
+    proposal_id_for,
+)
 from jobagent.storage.feedback_repository import SqliteFeedbackRepository
 from jobagent.storage.job_repository import SqliteJobRepository
 from jobagent.storage.outreach_repository import SqliteOutreachRepository
@@ -172,6 +179,8 @@ def _settings(scenario: RoleplayScenario, paths: RoleplayPaths) -> GreetingSetti
 
 def run_round(paths: RoleplayPaths, runner: TextRunner, *, now: datetime) -> RoleplayRound:
     state = _read_state(paths)
+    # Temp-directory cleaners remove empty folders between rounds; recreate it.
+    paths.rounds.mkdir(parents=True, exist_ok=True)
     scenario = _scenario(paths)
     rounds = state["rounds"]
     if (rounds and rounds[-1]["status"] in {"passed", "skip_proposed"}
@@ -268,6 +277,14 @@ def _skip_round(
     unconsumed: int, direction: Any, now: datetime,
 ) -> RoleplayRound:
     """Record a skip proposal: nothing is drafted, the person confirms or overrides."""
+    proposal = DirectionProposal(
+        proposal_id=proposal_id_for(memory.candidate_id, job.id, memory.version,
+                                    [rule.rule_id for rule in direction.rules], now),
+        candidate_id=memory.candidate_id, job_id=job.id, memory_version=memory.version,
+        rule_ids=[rule.rule_id for rule in direction.rules], reason=direction.reason,
+        proposed_at=now,
+    )
+    SqliteDirectionRepository(Database(paths.database)).save_proposal(proposal)
     view = RoleplayRound(
         round_number=number, job_id=job.id, title=job.title, company=job.company,
         jd_raw=job.jd_raw, generation_status="skip_proposed", memory_version=memory.version,
@@ -282,6 +299,7 @@ def _skip_round(
     state["rounds"].append({
         "round": number, "status": "skip_proposed", "decision": None, "triggered": [],
         "batch_id": None, "ask_id": None, "job_id": job.id,
+        "proposal_id": proposal.proposal_id,
     })
     _write_state(paths, state)
     return view
@@ -303,14 +321,6 @@ def decide_round(
             "A skip proposal takes confirm_skip or override_skip; a greeting takes "
             "approve, revise or decline."
         )
-    if skip_answer:
-        # Not learned yet: feedback must bind to an asked list, and a skip has none.
-        current["decision"] = decision.action
-        current["triggered"] = decision.triggered_preferences
-        if decision.action == "override_skip":
-            state["override_job_id"] = current["job_id"]
-        _write_state(paths, state)
-        return {"round": number, "decision": decision.action, "grants_send": False}
     unknown = set(decision.triggered_preferences) - {
         p.preference_id for p in scenario.hidden_preferences
     }
@@ -327,6 +337,8 @@ def decide_round(
                 details={"terms": used},
             )
     db = Database(paths.database)
+    if skip_answer:
+        return _answer_skip(paths, state, db, scenario, decision, now)
     store = SqliteOutreachRepository(db)
     batch, ask = store.get_batch(current["batch_id"]), store.get_ask(current["ask_id"])
     assert batch is not None and ask is not None
@@ -350,6 +362,35 @@ def decide_round(
     return {"round": number, "event_id": receipt.items[0].event_id, "grants_send": False}
 
 
+def _answer_skip(
+    paths: RoleplayPaths, state: dict[str, Any], db: Database, scenario: RoleplayScenario,
+    decision: RoleplayDecision, now: datetime,
+) -> dict[str, object]:
+    """The answer becomes feedback on the cited jobs rules; an override re-offers the job."""
+    current = state["rounds"][-1]
+    directions = SqliteDirectionRepository(db)
+    proposal = directions.get_proposal(current["proposal_id"])
+    job = SqliteJobRepository(db).get_job(current["job_id"])
+    assert proposal is not None and job is not None
+    action = cast(Literal["confirm_skip", "override_skip"], decision.action)
+    answer = DirectionAnswer(
+        answer_id=answer_id_for(proposal.proposal_id, action, decision.words,
+                                decision.note, now),
+        proposal_id=proposal.proposal_id, candidate_id=scenario.candidate_id,
+        job_id=job.id, rule_ids=proposal.rule_ids, action=action, words=decision.words,
+        free_text=decision.note, job_title=job.title, company=job.company,
+        jd_text=job.jd_raw, occurred_at=now,
+    )
+    directions.record_answer(answer)
+    current["decision"] = decision.action
+    current["triggered"] = decision.triggered_preferences
+    if decision.action == "override_skip":
+        state["override_job_id"] = current["job_id"]
+    _write_state(paths, state)
+    return {"round": current["round"], "decision": decision.action,
+            "answer_id": answer.answer_id, "grants_send": False}
+
+
 def _rate(rounds: list[dict[str, Any]]) -> float | None:
     return sum(r["decision"] == "approve" for r in rounds) / len(rounds) if rounds else None
 
@@ -362,6 +403,8 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
     memory = MarkdownPreferenceStore(paths.memory, scenario.candidate_id).load()
     events = load_preference_events(paths.database, scenario.candidate_id)
     event_ids = {event.event_id for event in events}
+    answer_ids = {a.answer_id for a in load_direction_answers(paths.database,
+                                                               scenario.candidate_id)}
     rounds = state["rounds"]
     mode = state.get("memory_mode", "full")
     decided = [r for r in rounds if r["decision"] in {"approve", "revise", "decline"}]
@@ -400,8 +443,16 @@ def build_report(paths: RoleplayPaths) -> RoleplayReport:
             + ",".join(str(v.unconsumed_events_before_generation) for v in views),
         ),
         RoleplayCheck(
+            check_id="skip_answers_recorded_as_feedback",
+            passed=len(answer_ids) == sum(
+                r["decision"] in {"confirm_skip", "override_skip"} for r in rounds
+            ),
+            detail=f"{len(answer_ids)} bound answers for skip proposals",
+        ),
+        RoleplayCheck(
             check_id="rules_cite_only_recorded_events",
-            passed=all(set(rule.source_event_ids) <= event_ids for rule in memory.rules),
+            passed=all(set(rule.source_event_ids) <= event_ids | answer_ids
+                       for rule in memory.rules),
             detail=f"{len(memory.rules)} rules",
         ),
         RoleplayCheck(

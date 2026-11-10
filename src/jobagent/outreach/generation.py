@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from jobagent.capabilities import ReasoningOutputT, ReasoningProvider
 from jobagent.digest import canonical_digest
 from jobagent.errors import InvalidProviderOutputError
+from jobagent.outreach.preference_memory import forbidden_phrase_problems
 from jobagent.schemas.greeting import (
     GreetingAttempt,
     GreetingDraft,
@@ -41,6 +42,12 @@ class GreetingGenerator:
             problems: list[str] = []
             if attempts and draft.text == attempts[-1].draft.text:
                 problems.append("unchanged_revision")
+            if request.preference_memory is not None:
+                # Checked by program before the reviewer: wording the person cut must not
+                # return, however the reviewer would judge it.
+                problems.extend(
+                    forbidden_phrase_problems(request.preference_memory.rules, draft.text)
+                )
             review: GreetingReview | None = None
             if not problems:
                 # The reviewer never receives the author's angle or previous verdicts.

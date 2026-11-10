@@ -172,3 +172,18 @@ def test_review_must_judge_every_selected_rule_and_a_violation_forces_a_rewrite(
 
 def test_without_selected_rules_no_rule_verdicts_are_needed():
     assert GreetingGenerator(Provider()).generate(request(targeted=True)).status == "passed"
+
+
+def test_wording_the_person_removed_sends_the_draft_back_without_asking_the_reviewer():
+    phrased = with_memory(request(targeted=True))
+    memory = phrased.preference_memory
+    assert memory is not None
+    memory.rules = [memory.rules[0].model_copy(update={"forbidden_phrases": ["Hello"]})]
+    provider = Provider(change=_review_with(FOLLOWED))
+    report = GreetingGenerator(provider).generate(phrased)
+    assert report.status == "passed" and len(report.attempts) == 2
+    first = report.attempts[0]
+    assert first.review is None
+    assert first.problems == ["rule:PREF_EVAL_FIRST:forbidden_phrase:Hello"]
+    assert [p for p, _ in provider.calls].count("greeting.ai.review.v1") == 1
+    assert "Hello" not in report.attempts[1].draft.text

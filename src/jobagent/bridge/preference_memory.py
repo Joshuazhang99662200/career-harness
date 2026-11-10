@@ -20,7 +20,7 @@ from jobagent.outreach.preference_memory import PreferenceLearner, memory_digest
 from jobagent.outreach.service import policy_digest
 from jobagent.schemas.candidate import CandidateProfile, EvidenceItem
 from jobagent.schemas.jobs import NormalizedJob
-from jobagent.schemas.preference_memory import PreferenceMemory
+from jobagent.schemas.preference_memory import DirectionAnswer, DirectionProposal, PreferenceMemory
 from jobagent.schemas.sourcing_feedback import SourcingFeedback
 from jobagent.storage.feedback_repository import bound_feedback
 
@@ -313,6 +313,66 @@ def load_preference_events(database: Path, candidate_id: str) -> list[SourcingFe
         ) from None
 
 
+def load_direction_answers(database: Path, candidate_id: str) -> list[DirectionAnswer]:
+    """Read answers that restate their recorded proposal and a real stored JD; never writes."""
+    try:
+        with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
+            conn.execute("BEGIN")
+            tables = {
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            if not {"direction_proposals", "direction_answers", "normalized_jobs"} <= tables:
+                return []
+            jobs = {
+                job.id: job
+                for job in (
+                    NormalizedJob.model_validate_json(row[0])
+                    for row in conn.execute("SELECT job_json FROM normalized_jobs")
+                )
+            }
+            result: list[DirectionAnswer] = []
+            for row in conn.execute(
+                "SELECT a.answer_id,a.candidate_id,a.answered_at,a.answer_json,"
+                "p.proposal_id,p.candidate_id,p.job_id,p.proposal_json "
+                "FROM direction_answers a "
+                "JOIN direction_proposals p ON p.proposal_id=a.proposal_id "
+                "WHERE a.candidate_id=? ORDER BY a.answered_at,a.answer_id",
+                (candidate_id,),
+            ):
+                try:
+                    answer = DirectionAnswer.model_validate_json(row[3])
+                    proposal = DirectionProposal.model_validate_json(row[7])
+                except (ValidationError, ValueError):
+                    continue
+                job = jobs.get(answer.job_id)
+                if (
+                    answer.answer_id != row[0]
+                    or answer.candidate_id != row[1]
+                    or answer.candidate_id != candidate_id
+                    or answer.occurred_at != datetime.fromisoformat(str(row[2]))
+                    or proposal.proposal_id != row[4]
+                    or answer.proposal_id != row[4]
+                    or proposal.candidate_id != row[5]
+                    or proposal.candidate_id != candidate_id
+                    or proposal.job_id != row[6]
+                    or proposal.job_id != answer.job_id
+                    or proposal.rule_ids != answer.rule_ids
+                    or answer.occurred_at < proposal.proposed_at
+                    or job is None
+                    or not _real_job(job)
+                    or job.jd_raw != answer.jd_text
+                    or job.title != answer.job_title
+                    or job.company != answer.company
+                ):
+                    continue
+                result.append(answer)
+            return result
+    except (sqlite3.Error, ValidationError, ValueError, OSError):
+        raise ContractValidationError(
+            "Direction answers cannot be read from the private database."
+        ) from None
+
+
 def refresh_preference_memory(
     database: Path,
     path: Path,
@@ -324,7 +384,10 @@ def refresh_preference_memory(
     store = MarkdownPreferenceStore(path, candidate_id)
     current = store.load()
     events = load_preference_events(database, candidate_id)
-    updated = PreferenceLearner(provider).update(current, events, now=now or datetime.now(UTC))
+    answers = load_direction_answers(database, candidate_id)
+    updated = PreferenceLearner(provider).update(
+        current, events, answers=answers, now=now or datetime.now(UTC)
+    )
     if not store.path.exists() or memory_digest(updated) != memory_digest(current):
         store.save(updated, expected_version=current.version)
     return updated

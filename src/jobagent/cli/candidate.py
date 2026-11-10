@@ -233,19 +233,65 @@ def answer(
         _input_error("Interview answer is invalid.")
 
 
+DigestOption = Annotated[
+    str | None,
+    typer.Option(
+        "--statement-digest",
+        help="statement_digest of the fact as shown to the person (console onboarding); "
+        "refused if the fact has changed since.",
+    ),
+]
+
+
+@candidate_app.command("start")
+def start(candidate_id: str, database: DatabaseOption = DEFAULT_DATABASE) -> None:
+    """Begin first use without a resume. An existing profile is reused, never reset."""
+    try:
+        repository = _repository(database)
+        created = repository.get_profile(candidate_id) is None
+        if created:
+            repository.save_profile(CandidateProfile(id=candidate_id))
+        typer.echo(json.dumps({"candidate_id": candidate_id, "created": created}))
+    except (JobAgentError, ValidationError) as error:
+        if isinstance(error, JobAgentError):
+            fail(error)
+        _input_error("Candidate ID is invalid.")
+
+
 @candidate_app.command("confirm")
 def confirm(
     candidate_id: str,
     evidence_id: str,
     database: DatabaseOption = DEFAULT_DATABASE,
+    statement_digest: DigestOption = None,
 ) -> None:
     """Explicitly confirm one admissible evidence item."""
     try:
         confirmed = CandidateEvidenceService(_repository(database)).confirm(
             candidate_id,
             evidence_id,
+            expected_digest=statement_digest,
         )
         _emit(confirmed)
+    except JobAgentError as error:
+        fail(error)
+
+
+@candidate_app.command("revise")
+def revise(
+    candidate_id: str,
+    evidence_id: str,
+    statement: Annotated[str, typer.Option("--statement", help="The person's own wording.")],
+    database: DatabaseOption = DEFAULT_DATABASE,
+    statement_digest: DigestOption = None,
+) -> None:
+    """Replace a fact's wording with the person's correction; it must be confirmed again."""
+    try:
+        _emit(
+            CandidateEvidenceService(_repository(database)).replace_with_user_edit(
+                candidate_id, evidence_id, statement, expected_digest=statement_digest
+            )
+        )
     except JobAgentError as error:
         fail(error)
 

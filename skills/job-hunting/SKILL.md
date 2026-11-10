@@ -7,7 +7,7 @@ description: 在 Codex 或 Claude Code 中启动与恢复求职 harness,用于�
 
 组合本项目的原子能力。逐步检查输出并保持审批边界;不要在技能内部重建领域逻辑。
 
-首次使用、从 GitHub 安装后运行或跨 Codex/Claude Code 恢复，先阅读 [references/harness.md](references/harness.md)，并按该文件探测依赖、创建独立工作区与运行租约。用户调用技能后自动推进已授权的步骤；安装或元数据发现不执行外部操作。
+首次使用、从 GitHub 安装后运行或跨 Codex/Claude Code 恢复，先阅读 [references/harness.md](references/harness.md)，并按该文件探测依赖、创建独立工作区与运行租约。用户调用技能后自动推进已授权的步骤；安装或元数据发现不执行外部操作。建立或补全本人资料时，按 [references/first-use.md](references/first-use.md) 在对话里一次一个问题地引导，逐条请本人确认事实；不靠网页表单。
 
 ## 当前阶段
 

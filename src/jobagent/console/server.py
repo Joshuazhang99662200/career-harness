@@ -1,9 +1,4 @@
-"""Loopback-only adapter; no arbitrary private file access.
-
-GET is read-only. The only writes are the first-use onboarding actions, and only
-when the server was started with them explicitly enabled. They call the
-Candidate Core services and answer with the state read back from storage.
-"""
+"""Loopback-only GET adapter; no mutations or arbitrary private file access."""
 
 import json
 import mimetypes
@@ -14,28 +9,9 @@ from urllib.parse import unquote, urlsplit
 
 from pydantic import TypeAdapter
 
-from jobagent.console.onboarding import (
-    MAX_RESUME_BYTES,
-    OnboardingWriter,
-    dumps,
-    onboarding_state,
-)
+from jobagent.console.onboarding import onboarding_state
 from jobagent.console.projection import definitions, snapshot
-from jobagent.errors import JobAgentError
 from jobagent.schemas.candidate import CandidateId
-from jobagent.schemas.onboarding import OnboardingState
-
-# A custom header forces a CORS preflight, which this server never grants.
-INTENT_HEADER = "X-CareerHarness-Intent"
-_JSON_LIMIT = 64 * 1024
-
-
-def _json_object(raw: bytes | None) -> dict[str, object] | None:
-    try:
-        loaded = json.loads(raw) if raw is not None else None
-    except ValueError:
-        return None
-    return loaded if isinstance(loaded, dict) else None
 
 
 def make_server(
@@ -45,11 +21,9 @@ def make_server(
     assets: Path,
     *,
     port: int = 8765,
-    onboarding_writes: bool = False,
 ) -> ThreadingHTTPServer:
     candidate_id = TypeAdapter(CandidateId).validate_python(candidate_id)
     root = assets.resolve()
-    writer = OnboardingWriter(database, candidate_id) if onboarding_writes else None
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:
@@ -89,96 +63,13 @@ def make_server(
                 and self.headers.get("Sec-Fetch-Site") != "cross-site"
             )
 
-        def refuse(self) -> None:
+        def do_POST(self) -> None:
             self.error_json(405, "read_only")
 
-        do_PUT = refuse
-        do_PATCH = refuse
-        do_DELETE = refuse
-        do_OPTIONS = refuse
-
-        def same_origin_write(self) -> bool:
-            host = self.headers.get("Host", "")
-            return (
-                self.allowed()
-                and self.headers.get("Origin") == f"http://{host}"
-                and self.headers.get("Sec-Fetch-Site") in (None, "same-origin")
-                and self.headers.get(INTENT_HEADER) == "onboarding"
-            )
-
-        def body(self, limit: int) -> bytes | None:
-            try:
-                length = int(self.headers.get("Content-Length", ""))
-            except ValueError:
-                return None
-            if not 0 <= length <= limit:
-                return None
-            return self.rfile.read(length)
-
-        def state_reply(self, status: int, state: OnboardingState, error: str = "") -> None:
-            payload = state.model_dump(mode="json")
-            body = {"state": payload} if not error else {"error": {"code": error}, "state": payload}
-            self.reply(
-                status,
-                json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                "application/json; charset=utf-8",
-            )
-
-        def do_POST(self) -> None:
-            path = unquote(urlsplit(self.path).path)
-            if writer is None or not path.startswith("/api/onboarding/"):
-                self.refuse()
-                return
-            if not self.same_origin_write():
-                self.error_json(403, "local_origin_required")
-                return
-            action = path.removeprefix("/api/onboarding/")
-            kind = self.headers.get("Content-Type", "").split(";")[0].strip()
-            content: bytes | None = b""
-            fields: dict[str, object] | None = {}
-            if action == "resume":
-                content = self.body(MAX_RESUME_BYTES) if kind == "application/pdf" else None
-            else:
-                raw = self.body(_JSON_LIMIT) if kind == "application/json" else None
-                fields = _json_object(raw)
-            if content is None or fields is None:
-                self.error_json(400, "invalid_request")
-                return
-
-            def text(name: str) -> str:
-                value = fields.get(name)
-                return value if isinstance(value, str) else ""
-
-            try:
-                if action == "start":
-                    state = writer.start()
-                elif action == "resume":
-                    state = writer.add_resume(content, unquote(self.headers.get("X-File-Name", "")))
-                elif action == "import":
-                    state = writer.import_extraction(text("request_id"))
-                elif action == "question":
-                    state = writer.ask()
-                elif action == "answer":
-                    skip = fields.get("skip") is True
-                    state = writer.answer(
-                        text("question_id"), None if skip else text("answer") or None, skip=skip
-                    )
-                elif action == "confirm":
-                    state = writer.confirm(text("evidence_id"), text("statement_digest"))
-                elif action == "edit":
-                    state = writer.edit(
-                        text("evidence_id"), text("statement_digest"), text("statement")
-                    )
-                else:
-                    self.error_json(404, "not_found")
-                    return
-            except JobAgentError as error:
-                self.state_reply(409, writer.state(), error.code)
-                return
-            except (OSError, ValueError):
-                self.state_reply(503, writer.state(), "source_unavailable")
-                return
-            self.state_reply(200, state)
+        do_PUT = do_POST
+        do_PATCH = do_POST
+        do_DELETE = do_POST
+        do_OPTIONS = do_POST
 
         def do_GET(self) -> None:
             if not self.allowed():
@@ -186,8 +77,13 @@ def make_server(
                 return
             path = unquote(urlsplit(self.path).path)
             if path == "/api/onboarding":
-                state = onboarding_state(database, candidate_id, writable=writer is not None)
-                self.reply(200, dumps(state), "application/json; charset=utf-8")
+                # First use happens in the conversation; the page only shows where it stands.
+                state = onboarding_state(database, candidate_id).model_dump(mode="json")
+                self.reply(
+                    200,
+                    json.dumps(state, ensure_ascii=False).encode("utf-8"),
+                    "application/json; charset=utf-8",
+                )
                 return
             if path in {"/api/snapshot", "/api/definitions"}:
                 try:

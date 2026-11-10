@@ -19,6 +19,6 @@
 - 回答里说出的数字用 `candidate answer --metric 'name|value|unit'`(可重复)记为结构化指标;数值必须在回答原文中出现,否则拒绝。没有结构化指标的数字过不了 `assemble` 的指标门禁。
 - `CandidateReadinessService.evaluate` 报告描述完整度与证据就绪度。
 
-面向本地操作者的工作流,路由到 `jobagent candidate ingest`、`import-draft`、`question`、`answer`、`confirm` 与 `status`。这些命令输出 JSON,并通过 `--database` 使用 SQLite。
+面向本地操作者的工作流,路由到 `jobagent candidate ingest`、`onboard`、`start`、`import-draft`、`question`、`answer`、`revise`、`confirm` 与 `status`。这些命令输出 JSON,并通过 `--database` 使用 SQLite。首次引导在对话里进行,流程见 [first-use.md](first-use.md);确认时传 `--statement-digest` 绑定给本人看过的原文。只读进度用 `jobagent console onboarding`。
 
 不要把 PDF 文本抽取当作事实解读。若没有配置生产级推理提供方,请改用经人工评审的 `CandidateDraft` JSON 导入,而不是用启发式规则生成主张。

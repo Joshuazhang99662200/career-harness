@@ -10,7 +10,6 @@ export const readyProfile = (page: Page) =>
         candidate_id: "CAND_DEMO",
         source: "complete",
         message: null,
-        writable: false,
         stage: "ready",
         resumes: [],
         experiences: [],

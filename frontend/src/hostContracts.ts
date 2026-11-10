@@ -254,7 +254,6 @@ export interface OnboardingState {
   candidate_id: string;
   source: "complete" | "missing" | "unavailable";
   message: string | null;
-  writable: boolean;
   stage: "not_started" | "collecting" | "ready" | "unknown";
   resumes: Array<OnboardingResume>;
   experiences: Array<Experience>;

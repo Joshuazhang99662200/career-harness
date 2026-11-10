@@ -65,114 +65,27 @@ def test_missing_assets_reports_build_required(tmp_path):
         thread.join()
 
 
-def _serve(tmp_path, **options):
+def test_onboarding_state_is_readable_and_never_writable(tmp_path):
     from jobagent.console.server import make_server
 
-    assets = tmp_path / "dist"
-    assets.mkdir(exist_ok=True)
     database = tmp_path / ".jobagent" / "jobagent.sqlite3"
-    server = make_server(database, tmp_path, "CAND_SYNTHETIC", assets, port=0, **options)
+    server = make_server(database, tmp_path, "CAND_SYNTHETIC", tmp_path, port=0)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    return server, thread, database
-
-
-def _post(server, path, body=b"{}", kind="application/json", **extra):
-    host = f"127.0.0.1:{server.server_port}"
-    headers = {
-        "Host": host,
-        "Origin": f"http://{host}",
-        "Content-Type": kind,
-        "X-CareerHarness-Intent": "onboarding",
-        **extra,
-    }
-    client = http.client.HTTPConnection("127.0.0.1", server.server_port)
-    client.request("POST", path, body=body, headers=headers)
-    response = client.getresponse()
-    data = response.read()
-    client.close()
-    return response.status, json.loads(data)
-
-
-def test_onboarding_is_readable_but_not_writable_by_default(tmp_path):
-    server, thread, database = _serve(tmp_path)
     try:
         client = http.client.HTTPConnection("127.0.0.1", server.server_port)
         client.request("GET", "/api/onboarding")
         response = client.getresponse()
         state = json.loads(response.read())
         assert response.status == 200
-        assert (state["stage"], state["source"], state["writable"]) == (
-            "not_started",
-            "missing",
-            False,
-        )
+        assert (state["stage"], state["source"]) == ("not_started", "missing")
+        for path in ("/api/onboarding", "/api/onboarding/start"):
+            client.request("POST", path, body=b"{}", headers={"Content-Type": "application/json"})
+            response = client.getresponse()
+            assert response.status == 405
+            response.read()
         client.close()
-        status, _ = _post(server, "/api/onboarding/start")
-        assert status == 405 and not database.exists()
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
-
-
-def test_onboarding_writes_need_same_origin_and_the_intent_header(tmp_path):
-    server, thread, database = _serve(tmp_path, onboarding_writes=True)
-    try:
-        for extra in (
-            {"Origin": "https://evil.test"},
-            {"X-CareerHarness-Intent": "other"},
-            {"Sec-Fetch-Site": "cross-site"},
-            {"Host": "evil.test"},
-        ):
-            status, _ = _post(server, "/api/onboarding/start", **extra)
-            assert status == 403, extra
-        status, _ = _post(server, "/api/onboarding/start", kind="text/plain")
-        assert status == 400
         assert not database.exists()
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
-
-
-def test_onboarding_flow_over_http_reads_back_saved_state(tmp_path):
-    server, thread, database = _serve(tmp_path, onboarding_writes=True)
-    try:
-        status, body = _post(server, "/api/onboarding/start")
-        assert status == 200 and body["state"]["stage"] == "collecting"
-        status, body = _post(server, "/api/onboarding/question")
-        question = body["state"]["open_question"]
-        assert question["gap_id"] == "GAP_EXPERIENCE"
-        status, body = _post(
-            server,
-            "/api/onboarding/answer",
-            json.dumps(
-                {"question_id": question["question_id"], "answer": "Ran a synthetic pilot."}
-            ).encode(),
-        )
-        [fact] = body["state"]["facts"]
-        assert status == 200 and fact["confirmed"] is False
-        status, body = _post(
-            server,
-            "/api/onboarding/confirm",
-            json.dumps(
-                {"evidence_id": fact["evidence_id"], "statement_digest": "sha256:x"}
-            ).encode(),
-        )
-        assert status == 409 and body["error"]["code"] == "STALE_APPROVAL"
-        assert body["state"]["facts"][0]["confirmed"] is False
-        status, body = _post(
-            server,
-            "/api/onboarding/confirm",
-            json.dumps(
-                {"evidence_id": fact["evidence_id"], "statement_digest": fact["statement_digest"]}
-            ).encode(),
-        )
-        assert status == 200 and body["state"]["stage"] == "ready"
-        status, body = _post(server, "/api/onboarding/resume", b"not a pdf", kind="application/pdf")
-        assert status == 409 and body["error"]["code"] == "CONTRACT_VALIDATION_ERROR"
-        assert database.exists()
     finally:
         server.shutdown()
         server.server_close()

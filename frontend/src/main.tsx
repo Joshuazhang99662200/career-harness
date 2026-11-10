@@ -6,8 +6,8 @@ import type { OnboardingState } from "./hostContracts";
 import "./app.css";
 import { MuseSourcePanel } from "./muse/MusePanel";
 import "./muse/theme.css";
-import { OnboardingView } from "./onboarding/OnboardingView";
-import { createHttpOnboarding } from "./onboarding/source";
+import { FirstUse } from "./onboarding/FirstUse";
+import { readOnboarding } from "./onboarding/state";
 
 function LoadState({ title, error }: { title: string; error?: string }) {
   return (
@@ -55,38 +55,47 @@ function DemoApp() {
 }
 
 /**
- * The real entry: who the person is comes first. Without a profile or any
- * confirmed fact the first-use flow is shown, never an empty job board; a read
- * failure is shown as a failure and never falls back to the demo.
+ * The real entry. First use is a conversation with the agent; until the person
+ * has confirmed a fact, the page shows that progress instead of an empty job
+ * board. A read failure is shown as a failure and never falls back to the demo.
  */
 function LiveApp() {
-  const [onboarding] = useState(createHttpOnboarding);
   const [board] = useState(createHttpSource);
   const [first, setFirst] = useState<OnboardingState | null>(null);
-  const [view, setView] = useState<"onboarding" | "board">("onboarding");
+  const [view, setView] = useState<"profile" | "board">("profile");
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    const controller = new AbortController();
-    onboarding
-      .getState(controller.signal)
+  const load = (signal?: AbortSignal) => {
+    setRefreshing(true);
+    return readOnboarding(signal)
       .then((state) => {
         setFirst(state);
-        if (state.stage === "ready") setView("board");
+        setError("");
+        return state;
       })
       .catch(() => {
-        if (!controller.signal.aborted)
+        if (!signal?.aborted)
           setError(
             "本人资料状态读取失败。没有显示岗位看板，也没有进入演示；请确认本机服务已启动后刷新。",
           );
-      });
+        return null;
+      })
+      .finally(() => setRefreshing(false));
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal).then((state) => {
+      if (state?.stage === "ready") setView("board");
+    });
     return () => controller.abort();
-  }, [onboarding]);
+  }, []);
   if (error || !first) return <LoadState title="本人资料" error={error} />;
-  if (view === "onboarding")
+  if (view === "profile")
     return (
-      <OnboardingView
-        source={onboarding}
-        initial={first}
+      <FirstUse
+        state={first}
+        refreshing={refreshing}
+        onRefresh={() => void load()}
         onOpenBoard={() => setView("board")}
       />
     );
@@ -97,15 +106,7 @@ function LiveApp() {
           type="button"
           className="min-h-11 text-sm text-[var(--accent)]"
           onClick={() =>
-            void onboarding
-              .getState()
-              .then((state) => {
-                setFirst(state);
-                setView("onboarding");
-              })
-              .catch(() =>
-                setError("本人资料状态读取失败，未显示过期内容；请刷新重试。"),
-              )
+            void load().then((state) => state && setView("profile"))
           }
         >
           本人资料与就绪情况

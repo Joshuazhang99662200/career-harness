@@ -1,52 +1,36 @@
 # ruff: noqa: RUF001  -- The person reads these Chinese prompts with full-width punctuation.
-"""First-use onboarding over Candidate Core: one read-back projection and the panel's writes.
+"""First-use onboarding state, read back from Candidate Core.
 
-Reading never creates a file. Every write goes through the existing Candidate
-Core services and returns the state read back from storage afterwards, so the
-panel only ever shows what was saved. Resume extraction is delegated to the
-host agent through the standard reasoning handoff; confirming a fact still
-goes through `CandidateEvidenceService.confirm`, one evidence item at a time,
-bound to the exact statement the person saw.
+First use happens in the conversation: the host agent asks one question at a
+time and records answers and confirmations through the `candidate` commands.
+This read model lets the agent and the console see where it stands. Reading
+never creates or migrates a file; a missing source is "missing" and a broken
+one "unavailable", never an empty profile.
 """
 
-import json
 import re
 import sqlite3
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager, suppress
-from datetime import UTC, datetime
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 
 from pydantic import TypeAdapter, ValidationError
 
-from jobagent.candidate.evidence import CandidateEvidenceService
+from jobagent.candidate.evidence import statement_digest
 from jobagent.candidate.gaps import GapDetector
-from jobagent.candidate.interview_session import ask_next, open_question, record_answer
+from jobagent.candidate.interview_session import open_question
 from jobagent.candidate.readiness import CandidateReadinessService
-from jobagent.capabilities import ReasoningOutputT
-from jobagent.digest import bytes_digest, canonical_digest
 from jobagent.errors import (
-    AgentHandoffRequiredError,
-    ContractValidationError,
     JobAgentError,
-    MissingEvidenceError,
-    StaleApprovalError,
     StorageError,
 )
-from jobagent.parsing.pdf_resume import PdfResumeParser
-from jobagent.reasoning.candidate_extractor import PROMPT_ID, ReasoningCandidateDraftExtractor
-from jobagent.reasoning.handoff import AgentHandoffProvider
+from jobagent.reasoning.candidate_extractor import PROMPT_ID
 from jobagent.schemas.candidate import (
-    CandidateDraft,
     CandidateGap,
     CandidateId,
-    CandidateProfile,
     Confidence,
     EvidenceItem,
-    InterviewAnswer,
     InterviewEventType,
-    ParsedResume,
 )
 from jobagent.schemas.onboarding import (
     OnboardingConfiguration,
@@ -61,9 +45,7 @@ from jobagent.schemas.reasoning import ReasoningHandoffRequest
 from jobagent.storage.candidate_repository import SqliteCandidateRepository
 from jobagent.storage.database import LATEST_SCHEMA_VERSION, Database
 
-MAX_RESUME_BYTES = 10 * 1024 * 1024
 _RESUME_SOURCE = re.compile(r"^(RESUME_[A-Z0-9_]+):page:(\d+)$")
-_REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 
 _GAP_PROMPTS = {
     "GAP_EXPERIENCE": (
@@ -99,11 +81,6 @@ class _ReadOnlyDatabase(Database):
 
 def handoff_directory(database: Path) -> Path:
     return database.parent / "handoff"
-
-
-def statement_digest(evidence: EvidenceItem) -> str:
-    """Everything the person reads about a fact, without its confirmation flag."""
-    return canonical_digest(evidence.model_dump(mode="json", exclude={"user_confirmed"}))
 
 
 def _fact(evidence: EvidenceItem) -> OnboardingFact:
@@ -174,7 +151,7 @@ def _schema_version(database: Database) -> int:
         return int(connection.execute("PRAGMA user_version").fetchone()[0])
 
 
-def _read(database: Path, candidate_id: str, writable: bool) -> OnboardingState:
+def _read(database: Path, candidate_id: str) -> OnboardingState:
     store = _ReadOnlyDatabase(database)
     version = _schema_version(store)
     if not 1 <= version <= LATEST_SCHEMA_VERSION:
@@ -186,7 +163,6 @@ def _read(database: Path, candidate_id: str, writable: bool) -> OnboardingState:
         return OnboardingState(
             candidate_id=candidate_id,
             source="complete",
-            writable=writable,
             stage="not_started",
             configuration=configuration,
         )
@@ -238,7 +214,6 @@ def _read(database: Path, candidate_id: str, writable: bool) -> OnboardingState:
     return OnboardingState(
         candidate_id=candidate_id,
         source="complete",
-        writable=writable,
         stage="ready" if readiness.readiness.confirmed_evidence_count else "collecting",
         resumes=resumes,
         experiences=profile.experiences,
@@ -257,9 +232,7 @@ def _read(database: Path, candidate_id: str, writable: bool) -> OnboardingState:
     )
 
 
-def onboarding_state(
-    database: Path, candidate_id: str, *, writable: bool = False
-) -> OnboardingState:
+def onboarding_state(database: Path, candidate_id: str) -> OnboardingState:
     """Read the person's onboarding progress; a missing or broken source is never "empty"."""
     candidate_id = TypeAdapter(CandidateId).validate_python(candidate_id)
     if not database.exists():
@@ -267,201 +240,14 @@ def onboarding_state(
             candidate_id=candidate_id,
             source="missing",
             message="还没有本人资料记录；读取时未创建任何文件。",
-            writable=writable,
             stage="not_started",
         )
     try:
-        return _read(database, candidate_id, writable)
+        return _read(database, candidate_id)
     except (JobAgentError, sqlite3.Error, ValidationError, OSError, ValueError):
         return OnboardingState(
             candidate_id=candidate_id,
             source="unavailable",
             message="本人资料记录读取失败，未当作空资料处理。",
-            writable=writable,
             stage="unknown",
         )
-
-
-class _StoredOutput:
-    """Hand a host-written draft back to the extractor so its resume-binding checks run."""
-
-    def __init__(self, draft: CandidateDraft) -> None:
-        self._draft = draft
-
-    def generate(
-        self,
-        *,
-        prompt_id: str,
-        context: Mapping[str, Any],
-        output_type: type[ReasoningOutputT],
-    ) -> ReasoningOutputT:
-        if not isinstance(self._draft, output_type):
-            raise ContractValidationError("Unexpected extraction contract.")
-        return self._draft
-
-
-class OnboardingWriter:
-    """The panel's onboarding writes; each returns the state read back afterwards."""
-
-    def __init__(self, database: Path, candidate_id: str) -> None:
-        # The resume and its facts are personal data: keep them out of the repository.
-        parts = [part.casefold() for part in database.expanduser().resolve().parts]
-        if ".jobagent" not in parts and not any(
-            parts[i : i + 2] == ["candidate", "private"] for i in range(len(parts) - 1)
-        ):
-            raise ContractValidationError("Onboarding data must stay in a private directory.")
-        self.database = database
-        self.candidate_id = TypeAdapter(CandidateId).validate_python(candidate_id)
-
-    def _repository(self) -> SqliteCandidateRepository:
-        self.database.parent.mkdir(parents=True, exist_ok=True)
-        database = Database(self.database)
-        database.migrate()
-        return SqliteCandidateRepository(database)
-
-    def _profile(self, repository: SqliteCandidateRepository) -> CandidateProfile:
-        profile = repository.get_profile(self.candidate_id)
-        if profile is None:
-            raise ContractValidationError(
-                "Onboarding has not been started.", details={"candidate_id": self.candidate_id}
-            )
-        return profile
-
-    def state(self) -> OnboardingState:
-        return onboarding_state(self.database, self.candidate_id, writable=True)
-
-    def start(self) -> OnboardingState:
-        """Create an empty profile once; an existing profile is reused, never reset."""
-        repository = self._repository()
-        if repository.get_profile(self.candidate_id) is None:
-            repository.save_profile(CandidateProfile(id=self.candidate_id))
-        return self.state()
-
-    def add_resume(self, content: bytes, source_name: str) -> OnboardingState:
-        """Store and parse a PDF, then hand fact extraction to the host agent."""
-        if not content.startswith(b"%PDF-") or len(content) > MAX_RESUME_BYTES:
-            raise ContractValidationError(
-                "Resume must be a PDF of at most 10 MB.", details={"bytes": len(content)}
-            )
-        repository = self._repository()
-        self._profile(repository)
-        uploads = self.database.parent / "onboarding" / "uploads"
-        uploads.mkdir(parents=True, exist_ok=True)
-        stored = uploads / f"{bytes_digest(content).removeprefix('sha256:')}.pdf"
-        if not stored.exists():
-            stored.write_bytes(content)
-        parsed = PdfResumeParser().parse(stored, self.candidate_id)
-        name = re.split(r"[\\/]", source_name)[-1].strip()[:200] or stored.name
-        resume = ParsedResume.model_validate({**parsed.model_dump(), "source_name": name})
-        repository.save_resume(resume)
-        if resume.id not in _handoffs(handoff_directory(self.database), self.candidate_id):
-            provider = AgentHandoffProvider(
-                handoff_directory(self.database),
-                resume_argv=[
-                    "jobagent",
-                    "candidate",
-                    "import-draft",
-                    "{output_path}",
-                    "--database",
-                    str(self.database),
-                ],
-            )
-            # Waiting on the host agent is the expected outcome, not a failure.
-            with suppress(AgentHandoffRequiredError):
-                ReasoningCandidateDraftExtractor(provider).extract(resume)
-        return self.state()
-
-    def import_extraction(self, request_id: str) -> OnboardingState:
-        """Check the host's draft against the stored resume and save it, all unconfirmed."""
-        if not _REQUEST_ID.fullmatch(request_id):
-            raise ContractValidationError("Unknown extraction request.")
-        folder = handoff_directory(self.database).resolve() / request_id
-        try:
-            request = ReasoningHandoffRequest.model_validate_json(
-                (folder / f"{PROMPT_ID}.request.json").read_bytes()
-            )
-        except (OSError, ValidationError) as error:
-            raise ContractValidationError("Unknown extraction request.") from error
-        output = Path(request.output_path).resolve()
-        if request.context.get("candidate_id") != self.candidate_id or output.parent != folder:
-            raise ContractValidationError("Extraction request belongs elsewhere.")
-        repository = self._repository()
-        profile = self._profile(repository)
-        resume = repository.get_resume(str(request.context.get("resume_id", "")))
-        if resume is None or resume.candidate_id != self.candidate_id:
-            raise ContractValidationError("Extraction request resume was not found.")
-        if profile != CandidateProfile(id=self.candidate_id):
-            # save_draft replaces the profile; merging resumes is not supported here.
-            raise ContractValidationError(
-                "The profile already holds material; merge another resume with the host."
-            )
-        try:
-            draft = CandidateDraft.model_validate_json(output.read_bytes())
-        except OSError as error:
-            raise ContractValidationError("The host has not written the extraction yet.") from error
-        except ValidationError as error:
-            raise ContractValidationError(
-                "The host extraction violates the draft contract."
-            ) from error
-        checked = ReasoningCandidateDraftExtractor(_StoredOutput(draft)).extract(resume)
-        repository.save_draft(checked)
-        return self.state()
-
-    def ask(self) -> OnboardingState:
-        """Ask one question; an unanswered question is shown again instead of a new one."""
-        repository = self._repository()
-        self._profile(repository)
-        if open_question(repository.list_interview_events(self.candidate_id)) is None:
-            ask_next(repository, self.candidate_id, now=datetime.now(UTC))
-        return self.state()
-
-    def answer(self, question_id: str, answer: str | None, *, skip: bool) -> OnboardingState:
-        repository = self._repository()
-        current = open_question(repository.list_interview_events(self.candidate_id))
-        if current is None or current[0].id != question_id:
-            raise StaleApprovalError(
-                "That question is no longer the open one.", details={"question_id": question_id}
-            )
-        try:
-            reply = InterviewAnswer(question_id=question_id, answer=answer, skipped=skip)
-        except ValidationError as error:
-            raise ContractValidationError("Provide an answer or skip the question.") from error
-        record_answer(repository, self.candidate_id, reply, now=datetime.now(UTC))
-        return self.state()
-
-    def _current(
-        self, repository: SqliteCandidateRepository, evidence_id: str, digest: str
-    ) -> EvidenceItem:
-        evidence = repository.get_evidence(self.candidate_id, evidence_id)
-        if evidence is None:
-            raise MissingEvidenceError(
-                "Candidate evidence was not found.", details={"evidence_id": evidence_id}
-            )
-        if statement_digest(evidence) != digest:
-            raise StaleApprovalError(
-                "The fact changed after it was shown; read it again before confirming.",
-                details={"evidence_id": evidence_id},
-            )
-        return evidence
-
-    def confirm(self, evidence_id: str, digest: str) -> OnboardingState:
-        """Promote exactly the statement the person saw, through the one confirm path."""
-        repository = self._repository()
-        self._current(repository, evidence_id, digest)
-        CandidateEvidenceService(repository).confirm(self.candidate_id, evidence_id)
-        return self.state()
-
-    def edit(self, evidence_id: str, digest: str, statement: str) -> OnboardingState:
-        """Replace the wording with the person's own; the new statement starts unconfirmed."""
-        if not statement.strip():
-            raise ContractValidationError("A corrected statement cannot be empty.")
-        repository = self._repository()
-        self._current(repository, evidence_id, digest)
-        CandidateEvidenceService(repository).replace_with_user_edit(
-            self.candidate_id, evidence_id, statement.strip()
-        )
-        return self.state()
-
-
-def dumps(state: OnboardingState) -> bytes:
-    return json.dumps(state.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")

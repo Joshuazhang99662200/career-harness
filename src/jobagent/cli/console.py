@@ -113,8 +113,9 @@ def onboarding_command(
     candidate: Annotated[str, typer.Option("--candidate")],
     database: DatabaseOption = Path(".jobagent/jobagent.sqlite3"),
 ) -> None:
-    """Read-only first-use onboarding state: materials, facts, open question and readiness.
-    Reading never creates the database; a missing or unreadable source is reported as such."""
+    """Read-only first-use state for the conversation: materials, facts with sources and
+    digests, the open question, gaps and readiness. Never creates the database; a missing
+    or unreadable source is reported as such, never as an empty profile."""
     _output(lambda: onboarding_state(database, candidate).model_dump(mode="json"))
 
 
@@ -224,27 +225,9 @@ def serve(
     workspace: WorkspaceOption = Path("."),
     assets: Annotated[Path, typer.Option("--assets")] = Path("frontend/dist"),
     port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8765,
-    allow_onboarding_writes: Annotated[
-        bool,
-        typer.Option(
-            "--allow-onboarding-writes",
-            help="Let the local page start onboarding, add a resume, answer questions and "
-            "confirm facts one by one. Off by default; everything else stays read-only.",
-        ),
-    ] = False,
 ) -> None:
     try:
-        server = make_server(
-            database,
-            workspace,
-            candidate_id,
-            assets,
-            port=port,
-            onboarding_writes=allow_onboarding_writes,
-        )
-    except JobAgentError as error:
-        typer.echo(json.dumps({"error": {"code": error.code, "message": error.message}}))
-        raise typer.Exit(1) from None
+        server = make_server(database, workspace, candidate_id, assets, port=port)
     except (OSError, ValueError):
         typer.echo(
             json.dumps(
@@ -257,15 +240,7 @@ def serve(
             )
         )
         raise typer.Exit(1) from None
-    typer.echo(
-        json.dumps(
-            {
-                "url": f"http://127.0.0.1:{port}",
-                "read_only": not allow_onboarding_writes,
-                "writes": ["onboarding"] if allow_onboarding_writes else [],
-            }
-        )
-    )
+    typer.echo(json.dumps({"url": f"http://127.0.0.1:{port}", "read_only": True}))
     try:
         server.serve_forever()
     except KeyboardInterrupt:

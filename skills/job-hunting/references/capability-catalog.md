@@ -17,10 +17,10 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 |---|---|---|
 | `parse_resume` | 已落地 | `jobagent candidate ingest` · `PdfResumeParser.parse` |
 | `extract_draft` | 已落地 | `jobagent candidate onboard`(默认 `--provider agent`,由调用方智能体产出,无需凭证;`--provider claude` 走 API。证据仍未确认) |
-| `update_profile` | 已落地 | `jobagent candidate import-draft`(整份草稿写入;暂无字段级编辑) |
+| `update_profile` | 已落地 | `jobagent candidate import-draft`(整份草稿写入;暂无字段级编辑) · `jobagent candidate start`(无简历时建空档案;已有档案原样复用,不重置) |
 | `detect_gaps` | 已落地 | `jobagent candidate status` · `GapDetector.detect` |
 | `ask_question` | 已落地 | `jobagent candidate question` · `AdaptiveInterview.next_question` |
-| `add_evidence` | 已落地 | `jobagent candidate answer` · `jobagent candidate confirm` |
+| `add_evidence` | 已落地 | `jobagent candidate answer` · `jobagent candidate confirm`(可加 `--statement-digest` 绑定给本人看过的原文,内容已变即拒绝) · `jobagent candidate revise`(按本人原话改写,来源改为 user_edit 并退回未确认) |
 
 ## 统一记忆（P1）
 
@@ -390,8 +390,8 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 面板执行清单 | 已落地(只列已批准首条招呼) | `jobagent console batch-create` | 面板 createExecutionBatch：只列入已有绑定摘要人工批准的首条招呼，每项指向真实批准；未批准、材料已更新、已撤回、已发送或已联系、平台当天叫停、猎聘等分别写明排除原因。不发送 |
 | 面板执行确认 | 已落地(交给宿主) | `jobagent console batch-confirm` | 面板 confirmExecution：须带 `--actor`。只处理请求里明确选中的项，逐项重新核对材料版本、批准仍有效、尚未发送；每份清单只确认一次，同一操作键重放返回原回执。确认只把条目交给宿主按 `outreach lease` / `next` / `record` 节奏发送，仓库不发送 |
 | 面板执行进度 | 已落地(只读) | `jobagent console batch` | 面板 getBatch：每项状态只从真实记录推导。没有发送审计为 queued；审计为已发送且有绑定该审计的逐字回读（流水线 greeting_sent 或发送跟踪）才算 verified；失败、需要接手、已撤回为 failed 并保留原因；已发送但无回读为 unknown，先核验、不自动重试 |
-| 首次引导状态 | 已落地(只读) | `jobagent console onboarding` | 面板首次使用入口的读模型：本人档案是否存在、已导入简历及逐页原文、抽取请求是否在等宿主、逐条事实与来源和确认状态、当前唯一待答问题、尚缺信息、就绪度与首次配置是否已登记。读取不创建数据库；记录缺失为 missing，读取失败为 unavailable，均不当作空资料 |
-| 本地 React 控制台 | 已落地 | `jobagent console serve` | 默认仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示。显式加 `--allow-onboarding-writes` 后，只开放首次引导写入（开始、上传 PDF 简历、导入宿主抽取结果、提问、回答或跳过、逐条确认或改写事实），要求同源、意图头且数据库在私有目录；简历抽取交宿主 Agent 完成，确认只走 `CandidateEvidenceService.confirm` 并绑定所见原文摘要，每次写入后返回回读状态。不开放岗位、审批、发送或配置写入 |
+| 首次引导状态 | 已落地(只读) | `jobagent console onboarding` | 对话式首次引导的读模型：本人档案是否存在、已导入简历及逐页原文、整理请求是否在等宿主、逐条事实与来源、确认状态和原文摘要、当前唯一待答问题（中文表述）、尚缺信息、就绪度与首次配置是否已登记。读取不创建数据库；记录缺失为 missing，读取失败为 unavailable，均不当作空资料。控制台 `/api/onboarding` 同源只读 |
+| 本地 React 控制台 | 已落地 | `jobagent console serve` | 仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示。尚无已确认事实时根入口只显示首次引导进度并提示回到对话，不提供录入或确认 |
 
 ## 公开职位补充渠道
 

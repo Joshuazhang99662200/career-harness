@@ -82,8 +82,6 @@ class OnboardingState(ContractModel):
     candidate_id: CandidateId
     source: Literal["complete", "missing", "unavailable"]
     message: str | None = None
-    # Whether this server accepts onboarding writes; reading never needs it.
-    writable: bool
     stage: Literal["not_started", "collecting", "ready", "unknown"]
     resumes: list[OnboardingResume] = Field(default_factory=list)
     experiences: list[Experience] = Field(default_factory=list)

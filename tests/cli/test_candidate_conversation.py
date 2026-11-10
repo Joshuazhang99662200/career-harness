@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001  -- Synthetic Chinese answers keep full-width punctuation.
 """First use in the conversation: start, ask, answer, restate and confirm through the CLI."""
 
 import json

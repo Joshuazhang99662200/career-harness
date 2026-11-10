@@ -25,7 +25,8 @@ class CodexTextRecord(ContractModel):
 
 class CodexTextRequest(ContractModel):
     request_id: CodexRequestId
-    instruction: Annotated[str, Field(min_length=1, max_length=10000)]
+    # Room for a full writing method (the bundled greeting skill is ~34k characters).
+    instruction: Annotated[str, Field(min_length=1, max_length=64000)]
     records: list[CodexTextRecord] = Field(min_length=1, max_length=50)
 
     _no_images = field_validator("instruction")(_text_only)

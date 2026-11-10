@@ -2,6 +2,8 @@
 
 首条招呼统一采用完整 JD、已确认证据与本人适用偏好生成全文并独立复核，不再调用历史挑句结构或首招字数硬上限。
 
+默认写作方法是随包的 [jd-greeting v1.1.0](../greeting/SKILL.md)：宿主自己起草时按它的流程与参考执行，`greetings generate` 的起草与独立复核调用也会把它连同 [greeting-ai.md](greeting-ai.md) 一起交给模型。证据、审批与发送仍以本文件和 CareerHarness 规则为准；它的输出 JSON 与状态只作参考，实际契约是 GreetingDraft / GreetingReview。
+
 投递消息(打招呼语、求职信、邮件正文)与简历受同一套证据规则约束。求职信是最容易出现编造的地方,因为它的文体鼓励概括与自我评价。
 
 ## 证据规则

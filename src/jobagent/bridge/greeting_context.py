@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
+from jobagent.bridge.greeting_policy import greeting_policy
 from jobagent.digest import canonical_digest, text_digest
 from jobagent.errors import ContractValidationError
 from jobagent.outreach.service import policy_digest
@@ -20,7 +21,6 @@ from jobagent.schemas.greeting import (
 )
 from jobagent.schemas.jobs import NormalizedJob
 from jobagent.schemas.outreach import OutreachApproval, OutreachAsk, OutreachBatch, OutreachItem
-from jobagent.skill_resources import read_reference
 from jobagent.storage.feedback_repository import bound_feedback
 
 _INCOMPLETE = frozenset({
@@ -227,7 +227,7 @@ def load_greeting_request(
                 job=_job_view(job) if job is not None else None,
                 evidence=current_evidence, interests=interests, feedback=notes[:20],
                 guidance=settings.guidance, corrections=settings.corrections,
-                policy_digest=canonical_digest(read_reference("references/greeting-ai.md")),
+                policy_digest=canonical_digest(greeting_policy()),
             )
     except (sqlite3.Error, ValidationError, ValueError) as error:
         raise ContractValidationError(

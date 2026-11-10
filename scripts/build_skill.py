@@ -83,6 +83,7 @@ def build_skill(destination: Path, host: str) -> Path:
                 "SKILL.md",
                 "references",
                 "optimizer",
+                "greeting",
                 "scripts",
                 "agents",
                 "assets",
@@ -95,7 +96,7 @@ def build_skill(destination: Path, host: str) -> Path:
                 sources.append((path, relative_root / path.relative_to(source_root)))
     for name in (
         "LICENSE", "NOTICE", "COMMERCIAL_LICENSE.md", "LICENSES/Apache-2.0.txt",
-        "LICENSES/Career-Ops-MIT.txt",
+        "LICENSES/Career-Ops-MIT.txt", "LICENSES/JD-Greeting-MIT.txt",
     ):
         sources.append((ROOT / name, Path(name)))
     # Inspect the exact bytes that will be copied, before creating any destination.

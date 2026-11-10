@@ -59,7 +59,7 @@ pipeline 动态策略兼容性已在生产写入边界检查；MCP 搜索与查�
 - **简历优化、母版重构与按 JD 改写**统一进入 [optimizer/SKILL.md](optimizer/SKILL.md)：未明确本次模式时先询问三选一，已选沿用；按需加载 Writer 角色、写作与模板参考。完整原件出发、未改内容保留、删减可追溯，不能只交优化后的项目经历。草稿疑点局部继续，最终事实核验与本人逐份审批保留。
 - 正式定向链路与手改合并按 [references/resume-pipeline.md](references/resume-pipeline.md) 执行；常规证据接地按需读 [references/resume-grounding.md](references/resume-grounding.md)。
 - 渲染、模板或 ATS 覆盖按需读 [references/rendering-ats.md](references/rendering-ats.md)。使用本次选定制作路径，通用一页布局不覆盖锁定母版；下游渲染不替代证据契约与蕴含校验。专用 Agent 调度依赖宿主真实工具，没有接口如实说明未接入。
-- 首条招呼统一按 [references/message-generation.md](references/message-generation.md) 与 [references/greeting-writing.md](references/greeting-writing.md) 阅读完整 JD、已确认证据和适用偏好生成全文，再独立复核；不设置首招字数硬上限，不加载旧话术库或固定结构。
+- 首条招呼统一按 [references/message-generation.md](references/message-generation.md) 与 [references/greeting-writing.md](references/greeting-writing.md) 阅读完整 JD、已确认证据和适用偏好生成全文，再独立复核；不设置首招字数硬上限，不加载旧话术库或固定结构。写法默认采用随包的 [greeting/SKILL.md](greeting/SKILL.md)（jd-greeting v1.1.0，MIT）：理解 JD 真实需求 → 按机制选证据 → 一条主线成文 → 先核事实再查质量 → 不行就整篇重写；与本技能规则冲突时以本技能为准，它的示例只作演示、不作句库。
 - 已安装的 Codex 全文生成入口可按 [references/greeting-ai.md](references/greeting-ai.md) 调用 `jobagent greetings generate`；生成通过后仍走具体岗位与准确全文的本人审批。
 - 求职信或投递邮件继续按 [references/message-generation.md](references/message-generation.md) 的证据与内容要求处理。
 - **首条招呼之后的跟进**(读新消息、分级、回复、确认意向、发简历)时,阅读 [references/conversation.md](references/conversation.md):对方消息交给 `jobagent conversations inbound` 记录并推进阶段;回复一条一审,经 `reply-gate` 放行后才发;L3 与危险来信只摘要、交人。

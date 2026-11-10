@@ -36,10 +36,15 @@ test("a new user is pointed to the conversation, not an empty board or the demo"
   await expect(page.getByText("首次引导在对话里进行")).toBeVisible();
   await expect(page.getByRole("textbox")).toHaveCount(0);
   await expect(page.locator("input")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "查看岗位进展" })).toHaveCount(
-    0,
-  );
   await expect(page.getByText("合成演示")).toHaveCount(0);
+  // Fetch results and progress stay one click away.
+  await page.route("**/api/snapshot", (route) =>
+    route.fulfill({ status: 503, body: "{}" }),
+  );
+  await page.getByRole("button", { name: "查看岗位进展" }).click();
+  await expect(
+    page.getByRole("button", { name: "本人资料与就绪情况" }),
+  ).toBeVisible();
 });
 
 test("progress is shown read-only while the conversation is under way", async ({

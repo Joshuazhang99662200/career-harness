@@ -163,11 +163,10 @@ export function FirstUse({
         >
           {refreshing ? "正在读取…" : "刷新进度"}
         </button>
-        {state.stage === "ready" && (
-          <button type="button" className={button} onClick={onOpenBoard}>
-            查看岗位进展
-          </button>
-        )}
+        {/* Fetch results and job progress stay visible whatever the profile stage. */}
+        <button type="button" className={button} onClick={onOpenBoard}>
+          查看岗位进展
+        </button>
       </div>
     </main>
   );

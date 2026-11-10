@@ -176,3 +176,43 @@ def test_resolve_unknown_clears_one_answered_gap(tmp_path):
     assert any("education" in label for label in labels)
     code, missing = invoke(database, "candidate", "resolve-unknown", CANDIDATE, "nope")
     assert code == 1 and missing["error"]["code"] == "CONTRACT_VALIDATION_ERROR"
+
+
+def test_agent_follow_ups_are_saved_verbatim_and_answered_one_at_a_time(tmp_path):
+    database = tmp_path / ".jobagent" / "jobagent.sqlite3"
+    invoke(database, "candidate", "start", CANDIDATE)
+    _, first = invoke(database, "candidate", "question", CANDIDATE)
+    invoke(database, "candidate", "answer", CANDIDATE, first["id"], "--answer", "做过评测集。")
+    [fact] = state(database)["facts"]
+    layer_one = "我理解你搭了一套评测集：它用来评什么，你负责哪一部分？"
+    code, asked = invoke(
+        database,
+        "candidate",
+        "ask",
+        CANDIDATE,
+        "--text",
+        layer_one,
+        "--about",
+        fact["evidence_id"],
+    )
+    assert code == 0 and asked["text"] == layer_one
+    assert state(database)["open_question"]["text"] == layer_one
+    code, busy = invoke(database, "candidate", "ask", CANDIDATE, "--text", "另一个问题？")
+    assert code == 1 and busy["error"]["code"] == "CONTRACT_VALIDATION_ERROR"
+    invoke(
+        database,
+        "candidate",
+        "answer",
+        CANDIDATE,
+        asked["id"],
+        "--answer",
+        "评问答准确率，用例由我设计。",
+    )
+    layer_two = "用例是怎么设计的，最后怎么判断准确率达标？"
+    code, deeper = invoke(database, "candidate", "ask", CANDIDATE, "--text", layer_two)
+    assert code == 0 and deeper["id"] != asked["id"]
+    invoke(database, "candidate", "answer", CANDIDATE, deeper["id"], "--skip")
+    after = state(database)
+    assert after["open_question"] is None and after["skipped_count"] == 1
+    assert [f["source_type"] for f in after["facts"]] == ["interview", "interview"]
+    assert not any(f["confirmed"] for f in after["facts"])

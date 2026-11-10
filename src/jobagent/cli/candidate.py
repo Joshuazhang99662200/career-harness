@@ -10,7 +10,7 @@ import typer
 from pydantic import ValidationError
 
 from jobagent.candidate.evidence import CandidateEvidenceService
-from jobagent.candidate.interview_session import ask_next, record_answer
+from jobagent.candidate.interview_session import ask_follow_up, ask_next, record_answer
 from jobagent.candidate.readiness import CandidateReadinessService
 from jobagent.capabilities import ReasoningProvider
 from jobagent.cli.private_io import fail
@@ -200,6 +200,26 @@ def question(
                 candidate_id,
                 now=datetime.now(UTC),
                 target_role=target_role,
+            )
+        )
+    except JobAgentError as error:
+        fail(error)
+
+
+@candidate_app.command("ask")
+def ask(
+    candidate_id: str,
+    text: Annotated[str, typer.Option("--text", help="The exact question the agent asks.")],
+    database: DatabaseOption = DEFAULT_DATABASE,
+    about: Annotated[
+        str | None, typer.Option("--about", help="EVID_... the follow-up digs into.")
+    ] = None,
+) -> None:
+    """Save the agent's own follow-up question verbatim; answer it with `candidate answer`."""
+    try:
+        _emit(
+            ask_follow_up(
+                _repository(database), candidate_id, text, now=datetime.now(UTC), about=about
             )
         )
     except JobAgentError as error:

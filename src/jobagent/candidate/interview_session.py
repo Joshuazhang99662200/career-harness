@@ -89,6 +89,58 @@ def ask_next(
     return selected
 
 
+def ask_follow_up(
+    repository: CandidateRepository,
+    candidate_id: str,
+    text: str,
+    *,
+    now: datetime,
+    about: str | None = None,
+) -> InterviewQuestion:
+    """Record the agent's own follow-up question word for word, one open question at a time.
+
+    The answer then goes through record_answer like any interview answer: it becomes
+    unconfirmed draft evidence, and a skip leaves the point unknown.
+    """
+    if repository.get_profile(candidate_id) is None:
+        raise ContractValidationError(
+            "Candidate profile was not found.", details={"candidate_id": candidate_id}
+        )
+    if not text.strip():
+        raise ContractValidationError("A follow-up question cannot be empty.")
+    events = repository.list_interview_events(candidate_id)
+    if open_question(events) is not None:
+        raise ContractValidationError(
+            "Answer or skip the open question before asking another.",
+            details={"candidate_id": candidate_id},
+        )
+    if about is not None and repository.get_evidence(candidate_id, about) is None:
+        raise ContractValidationError(
+            "The fact this follow-up is about was not found.", details={"evidence_id": about}
+        )
+    key = uuid4().hex[:16].upper()
+    question = InterviewQuestion(
+        id=f"QUESTION_FOLLOWUP_{key}",
+        candidate_id=candidate_id,
+        primary_gap_id=f"GAP_FOLLOWUP_{key}",
+        text=text.strip(),
+        reason=f"Agent follow-up on {about}." if about else "Agent follow-up.",
+        expected_information="Verified detail for an experience",
+        score=0.5,
+    )
+    repository.append_interview_event(
+        InterviewEvent(
+            id=f"EVENT_{uuid4().hex.upper()}",
+            candidate_id=candidate_id,
+            event_type=InterviewEventType.QUESTION,
+            question_id=question.id,
+            payload={"question": question.model_dump(mode="json")},
+            created_at=now,
+        )
+    )
+    return question
+
+
 def find_question(
     repository: CandidateRepository, candidate_id: str, question_id: str
 ) -> InterviewQuestion:

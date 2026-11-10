@@ -4,15 +4,13 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Annotated, Any, Never
-from uuid import uuid4
+from typing import Annotated, Never
 
 import typer
 from pydantic import ValidationError
 
 from jobagent.candidate.evidence import CandidateEvidenceService
-from jobagent.candidate.gaps import GapDetector
-from jobagent.candidate.interview import AdaptiveInterview
+from jobagent.candidate.interview_session import ask_next, record_answer
 from jobagent.candidate.readiness import CandidateReadinessService
 from jobagent.capabilities import ReasoningProvider
 from jobagent.cli.private_io import fail
@@ -25,9 +23,6 @@ from jobagent.schemas.candidate import (
     CandidateDraft,
     CandidateProfile,
     InterviewAnswer,
-    InterviewEvent,
-    InterviewEventType,
-    InterviewQuestion,
     MetricFact,
 )
 from jobagent.schemas.common import ContractModel
@@ -190,36 +185,14 @@ def question(
 ) -> None:
     """Select and record at most one adaptive interview question."""
     try:
-        repository = _repository(database)
-        profile = _required_profile(repository, candidate_id)
-        evidence = repository.list_evidence(candidate_id)
-        gaps = GapDetector().detect(profile, evidence, target_role=target_role)
-        events = repository.list_interview_events(candidate_id)
-        recent_gap_ids = {
-            str(event.payload["question"]["primary_gap_id"])
-            for event in events[-5:]
-            if event.event_type is InterviewEventType.QUESTION
-            and isinstance(event.payload.get("question"), dict)
-            and "primary_gap_id" in event.payload["question"]
-        }
-        selected = AdaptiveInterview().next_question(
-            candidate_id,
-            gaps,
-            target_role=target_role,
-            recent_gap_ids=recent_gap_ids,
-        )
-        if selected is not None:
-            repository.append_interview_event(
-                InterviewEvent(
-                    id=f"EVENT_{uuid4().hex.upper()}",
-                    candidate_id=candidate_id,
-                    event_type=InterviewEventType.QUESTION,
-                    question_id=selected.id,
-                    payload={"question": selected.model_dump(mode="json")},
-                    created_at=datetime.now(UTC),
-                )
+        _emit(
+            ask_next(
+                _repository(database),
+                candidate_id,
+                now=datetime.now(UTC),
+                target_role=target_role,
             )
-        _emit(selected)
+        )
     except JobAgentError as error:
         fail(error)
 
@@ -244,23 +217,15 @@ def answer(
         _input_error("Provide exactly one of --answer or --skip.")
     metrics = [_parse_metric(raw) for raw in metric or []]
     try:
-        repository = _repository(database)
-        _required_profile(repository, candidate_id)
-        selected = _find_question(repository, candidate_id, question_id)
         interview_answer = InterviewAnswer(
             question_id=question_id,
             answer=answer_text,
             skipped=skip,
             metrics=metrics,
         )
-        outcome = AdaptiveInterview().record_answer(
-            selected,
-            interview_answer,
-            evidence_id=f"EVID_INTERVIEW_{uuid4().hex[:16].upper()}",
-            event_id=f"EVENT_{uuid4().hex.upper()}",
-            created_at=datetime.now(UTC),
+        outcome = record_answer(
+            _repository(database), candidate_id, interview_answer, now=datetime.now(UTC)
         )
-        repository.save_interview_outcome(outcome)
         _emit(outcome)
     except (JobAgentError, ValidationError) as error:
         if isinstance(error, JobAgentError):
@@ -304,25 +269,3 @@ def status(
     except JobAgentError as error:
         fail(error)
 
-
-def _find_question(
-    repository: SqliteCandidateRepository,
-    candidate_id: str,
-    question_id: str,
-) -> InterviewQuestion:
-    events = repository.list_interview_events(candidate_id)
-    for event in reversed(events):
-        if event.event_type is not InterviewEventType.QUESTION or event.question_id != question_id:
-            continue
-        payload: Any = event.payload.get("question")
-        try:
-            return InterviewQuestion.model_validate(payload)
-        except ValidationError as error:
-            raise ContractValidationError(
-                "Stored interview question is invalid.",
-                details={"candidate_id": candidate_id, "question_id": question_id},
-            ) from error
-    raise ContractValidationError(
-        "Interview question was not found.",
-        details={"candidate_id": candidate_id, "question_id": question_id},
-    )

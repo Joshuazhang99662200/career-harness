@@ -3,7 +3,7 @@
 ## 未发布 — 对话式事实提取与找岗方式
 
 - 事实提取改为先复述理解、再基于本人回答至少追问两层；新增 `candidate ask` 逐字保存 Agent 自己的追问，答复仍经 `candidate answer` 形成未确认事实，同一时间只有一个待答问题。
-- 抓取前必须登记找岗方式 `SOURCING_METHODS`（`mcp` / `browser_gui` / `agent_proposed` / `user_specified`，各写明站点与具体做法）；寻源任务的 `rules prepare` 要求它，已初始化而从未决定过的档案只单独问这一题。
+- 抓取前先选平台 `SOURCING_PLATFORMS`（`boss` / `liepin` / `linkedin` / `zhaopin` / `51job` / `ats_boards` / `other:<名称>`），再为每个平台登记登录或抓取方式 `SOURCING_METHODS`（`mcp` / `browser_gui` / `agent_proposed` / `user_specified`，写明具体做法）；寻源任务的 `rules prepare` 按顺序要求两项，平台没覆盖或方式写到未选平台即阻塞。
 - **不兼容**：页面只显示岗位进度。没有岗位或运行记录时只写“还没有岗位进来”；移除本人资料页与 `/api/onboarding`，Agent 继续用 `console onboarding` 读取。
 
 ## 未发布 — 首次引导提速与默认招呼方法

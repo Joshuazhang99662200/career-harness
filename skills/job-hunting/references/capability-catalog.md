@@ -212,7 +212,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 能力 | 状态 | 入口 |
 |---|---|---|
 | 变量定义与消费状态 | 已落地 | `jobagent rules definitions`：类型、用户参数/平台参考/不变量及实际消费者；不带个人默认值 |
-| 首次表单与普通运行准备 | 已落地 | `jobagent rules prepare`：首次或本人主动修改才返回配置问题；普通运行跨轮次/任务类型/会话只读复用，缺值与冲突只报阻塞，不重开交互、不占额度；寻源任务另需找岗方式 `SOURCING_METHODS`，从未决定过时在基线完整后单独问这一题 |
+| 首次表单与普通运行准备 | 已落地 | `jobagent rules prepare`：首次或本人主动修改才返回配置问题；普通运行跨轮次/任务类型/会话只读复用，缺值与冲突只报阻塞，不重开交互、不占额度；寻源任务另需先选平台 `SOURCING_PLATFORMS`、再定各平台方式 `SOURCING_METHODS`，从未决定过时在基线完整后按顺序各问一题；有平台没有方式或方式写到未选平台即 `blocked_by_conflict` |
 | 登记首次初始化 | 已落地 | `jobagent rules initialize`：核对当前版本及必需确认值后保存初始化身份，不再请求相同参数确认；已有确认档升级保留身份 |
 | 单变量修改提问 | 已落地 | `jobagent rules propose`：绑定候选人、来源、旧版本与一项新值；初始化后还需匹配的本人主动调整记录；只保存提问，不生效 |
 | 参数确认与激活 | 已落地 | `jobagent rules approve`：原提问摘要与本人明确答复；旧版本冲突拒绝，事务内只更新指定变量；不授予外部动作权限 |

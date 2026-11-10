@@ -60,12 +60,12 @@ def test_initialized_marker_is_stable_and_readonly_across_sessions(tmp_path):
             preparation("initial_setup").model_copy(update={"task_type": kind}),
         )
         assert result.ready and result.initialized and not result.ask_user
-    # Sourcing reuses the baseline and asks only the never-decided search method.
+    # Sourcing reuses the baseline and asks only the never-decided platform choice.
     sourcing = SqliteConfigurationRepository(db).prepare(
         preparation("initial_setup").model_copy(update={"task_type": "sourcing"}),
     )
     assert sourcing.initialized and sourcing.ask_user and not sourcing.ready
-    assert sourcing.reasons == ["SOURCING_METHODS"] and len(sourcing.questions) == 1
+    assert len(sourcing.questions) == 1 and "SOURCING_PLATFORMS" in sourcing.questions[0]
     assert db.path.read_bytes() == before
     again = configuration.initialize("CAND_SYNTHETIC", snapshot.version,
                                      now=NOW + timedelta(seconds=5))

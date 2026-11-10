@@ -14,8 +14,9 @@ BASE_CONFIGURATION_NAMES = (
     "DETAIL_ATTEMPTS_PER_SITE_PER_ROUND",
     "DETAIL_CAP_PER_DAY",
 )
-# Asked before a fetch: how to search is the person's choice, not a host default.
-TASK_CONFIGURATION_NAMES = {"sourcing": ("SOURCING_METHODS",)}
+# Asked before a fetch, in order: which platforms, then how to reach each one.
+# Both are the person's choice, never a host default.
+TASK_CONFIGURATION_NAMES = {"sourcing": ("SOURCING_PLATFORMS", "SOURCING_METHODS")}
 ConfigurationMode = Literal["initial_setup", "ordinary_run", "owner_requested_change"]
 ConfigurationFieldStatus = Literal["confirmed", "missing", "unsupported", "change_requested"]
 ConfigurationPreparationStatus = Literal[

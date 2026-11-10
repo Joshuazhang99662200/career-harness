@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from typer.testing import CliRunner
 
+from jobagent.bridge.preference_memory import MarkdownPreferenceStore
 from jobagent.bridge.roleplay import (
     RoleplayPaths,
     build_report,
@@ -55,10 +56,16 @@ class StandInModel:
                     "scope": "general", "condition": "任何岗位", "text": text,
                     "source_event_ids": [event["event_id"]], "updated_at": event["occurred_at"],
                 })
-            return PreferenceEditSet(
-                input_digest=context["input_digest"],
-                edits=[{"op": "add", "rule": rule} for rule in rules],
-            )
+            edits = [{"op": "add", "rule": rule} for rule in rules]
+            # Like the real model: a confirmed skip widens the jobs rule it cited.
+            current = {r["rule_id"]: r for r in context["memory"]["rules"]}
+            for answer in context["direction_answers"]:
+                for rule_id in answer["rule_ids"]:
+                    if rule_id in current:
+                        widened = {**current[rule_id], "source_event_ids": [
+                            *current[rule_id]["source_event_ids"], answer["answer_id"]]}
+                        edits.append({"op": "edit", "replaces": [rule_id], "rule": widened})
+            return PreferenceEditSet(input_digest=context["input_digest"], edits=edits)
         if output_contract is DirectionCheck:
             title = context["context"]
             matched = [r["rule_id"] for r in context["memory"]["rules"]]
@@ -292,9 +299,18 @@ def test_a_learned_jobs_rule_proposes_a_skip_instead_of_a_draft(workspace):
         run_round(workspace, model, now=NOW + timedelta(hours=8))
     with pytest.raises(ContractValidationError, match="skip"):
         decide(workspace, 8, "approve")
-    assert decide(workspace, 8, "confirm_skip")["grants_send"] is False
+    answered = decide(workspace, 8, "confirm_skip")
+    assert answered["grants_send"] is False and answered["answer_id"].startswith("ODIR_")
+    with pytest.raises(ContractValidationError, match="no open"):
+        decide(workspace, 8, "confirm_skip")
     ninth = run_round(workspace, model, now=NOW + timedelta(hours=8))
     assert ninth.title == "智能体平台产品经理"
+    # The confirmation is feedback on the cited jobs rule: the next refresh consumes it.
+    summaries = [p for p in model.seen if answered["answer_id"] in p]
+    assert summaries and '"direction_answers"' in summaries[0]
+    memory = MarkdownPreferenceStore(workspace.memory, "CAND_ROLEPLAY").load()
+    assert answered["answer_id"] in memory.consumed_event_ids
+    assert any(answered["answer_id"] in rule.source_event_ids for rule in memory.rules)
     report = build_report(workspace)
     assert report.actions["confirm_skip"] == 1
     assert all(check.passed for check in report.checks), report.checks

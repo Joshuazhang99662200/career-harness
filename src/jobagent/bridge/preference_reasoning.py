@@ -16,6 +16,7 @@ from jobagent.outreach.preference_memory import (
 )
 from jobagent.schemas.coordinator import CodexTextRecord, CodexTextRequest
 from jobagent.schemas.preference_memory import (
+    DirectionAnswer,
     DirectionCheck,
     PreferenceApplication,
     PreferenceEditSet,
@@ -41,7 +42,7 @@ class CodexPreferenceProvider:
             DIRECTION_PROMPT: DirectionCheck,
         }
         keys = {
-            SUMMARIZE_PROMPT: {"memory", "events", "input_digest"},
+            SUMMARIZE_PROMPT: {"memory", "events", "direction_answers", "input_digest"},
             SELECT_PROMPT: {"memory", "task", "job_id", "context", "input_digest"},
             DIRECTION_PROMPT: {"memory", "job_id", "context", "input_digest"},
         }.get(prompt_id, set())
@@ -54,14 +55,18 @@ class CodexPreferenceProvider:
         try:
             memory = PreferenceMemory.model_validate(context["memory"])
             if prompt_id == SUMMARIZE_PROMPT:
-                if not isinstance(context["events"], list) or not context["events"]:
+                if (not isinstance(context["events"], list)
+                        or not isinstance(context["direction_answers"], list)
+                        or not (context["events"] or context["direction_answers"])):
                     raise ValueError("summary needs new events")
                 events = [SourcingFeedback.model_validate(item) for item in context["events"]]
-                if any(
-                    event.candidate_id != memory.candidate_id
-                    or event.event_id in memory.consumed_event_ids
-                    for event in events
-                ) or len({event.event_id for event in events}) != len(events):
+                answers = [DirectionAnswer.model_validate(item)
+                           for item in context["direction_answers"]]
+                ids = [e.event_id for e in events] + [a.answer_id for a in answers]
+                owners = [e.candidate_id for e in events] + [a.candidate_id for a in answers]
+                if any(owner != memory.candidate_id for owner in owners) or (
+                    set(ids) & set(memory.consumed_event_ids) or len(set(ids)) != len(ids)
+                ):
                     raise ValueError("foreign or previously consumed events")
                 task = (
                     "Turn the new owner feedback into the smallest set of edits to the current "
@@ -73,9 +78,16 @@ class CodexPreferenceProvider:
                     "Generalize first: when the same preference appears in feedback on two or "
                     "more different jobs, merge it into one general rule. Use role only for a "
                     "category or feature of jobs, never a job title or company name; use job "
-                    "only when the feedback points at this posting. Keep each rule short; at "
-                    "most 24 rules in total. Do not invent candidate facts, permissions or "
-                    "fixed message sentences."
+                    "only when the feedback points at this posting. direction_answers are the "
+                    "person's answers to skip proposals: confirm_skip means the cited jobs rules "
+                    "rightly cover that posting (widen their condition to describe it if they do "
+                    "not yet), override_skip means they reached too far (narrow them). Answers "
+                    "only shape jobs rules. When a revision removed exact wording from the "
+                    "original greeting, such as a self-introduction or a closing formula, the "
+                    "greetings rule may list those exact substrings in forbidden_phrases (each "
+                    "must appear in that event's original_text and not in its revised_text). "
+                    "Keep each rule short; at most 24 rules in total. Do not invent candidate "
+                    "facts, permissions or fixed message sentences."
                 )
             elif prompt_id == DIRECTION_PROMPT:
                 if not isinstance(context["context"], str) or not isinstance(

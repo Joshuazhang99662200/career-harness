@@ -30,9 +30,6 @@ class GeminiCliConfig(ContractModel):
     # Per output contract (for example "PreferenceEditSet"), a different argv or timeout,
     # such as a lower thinking tier for the memory steps.
     steps: dict[NonEmptyString, "GeminiStepOverride"] = Field(default_factory=dict)
-    # When set, the output JSON Schema is written to a file outside the working
-    # directory and passed as this flag's value, so the CLI can enforce it.
-    json_schema_flag: NonEmptyString | None = None
     # One more attempt after invalid JSON, an output-token limit or an interrupted
     # stream. Contract violations and tool activity are never retried.
     repair_retries: Literal[0, 1] = 0

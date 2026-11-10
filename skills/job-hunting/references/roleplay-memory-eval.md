@@ -13,6 +13,9 @@
 - 起草前有方向判断：学到的岗位规则覆盖当前 JD 时，本轮不起草，状态为 `skip_proposed`。
 - 每次模型调用写入 `.jobagent/roleplay/calls.jsonl`，不再需要外部透传包装。
 - 记忆历史备份改名为 `history/<版本>.md`，路径更短。
+- 跳过答复（`confirm_skip`、`override_skip`）会学进 memory，修正方向判断同一类岗位时准时不准。
+- 规则可以带 `forbidden_phrases`：本人改写时删掉的原文片段（例如自报姓名、结尾客套）。稿子里再出现就由程序直接退回重写，不经复核模型判断。
+- 去掉了 `json_schema_flag`：agy 的 `--json-schema` 会多跑一个 `finish` 工具步骤，在纯文本边界下每次都失败关闭。
 
 ## 分工
 
@@ -54,8 +57,7 @@ agy 每次调用实测要 1 到 3 分钟，一轮要调用多次；超时设到 
 | 键 | 作用 |
 |---|---|
 | `repair_retries` | 设为 `1` 时，只对三类机械失败各重试一次：JSON 语法错误、超出输出 token 上限、流中断；重试提示要求输出更短。契约不符和工具活动仍直接失败，不重试 |
-| `json_schema_flag` | 例如 `"--json-schema"`：把输出 schema 写到工作目录之外的文件，作为该参数的值传给 CLI，让 CLI 强制结构化输出。agy 是否支持、参数名是否如此需实测 |
-| `steps` | 按输出契约名覆盖 argv 或超时，例如 `{"PreferenceEditSet": {"argv": [...低档模型...], "timeout_seconds": 300}, "PreferenceApplication": {"timeout_seconds": 120}}`；契约名还有 `GreetingDraft`、`GreetingReview` |
+| `steps` | 按输出契约名覆盖 argv 或超时，例如 `{"PreferenceEditSet": {"argv": [...低档模型...], "timeout_seconds": 300}, "PreferenceApplication": {"timeout_seconds": 120}}`；契约名还有 `DirectionCheck`、`GreetingDraft`、`GreetingReview` |
 
 每次调用都追加一行到 `.jobagent/roleplay/calls.jsonl`：步骤、第几次尝试、状态或失败类别、耗时、模型耗时、token 用量与回复长度，不记录提示词和回复原文。
 
@@ -74,7 +76,7 @@ Gemini CLI 指定模型时在 argv 里加 `"-m", "<模型名>"`；agy 用 `agy m
    - `approve`：完全满足偏好；
    - `revise`：岗位可以但文字不行，`revised_text` 写本人改好的全文；
    - `decline`：岗位方向不要，`reason_category` 选 `direction`。
-   - 如果 `generation_status` 是 `skip_proposed`：说明已学到的岗位规则建议跳过这个岗位，没有起草。看 `direction_rule_ids` 和 `direction_reason`，按人设决定 `confirm_skip`（确认跳过）或 `override_skip`（仍要联系，下一轮会对同一岗位不经方向判断直接起草）。这两种决定目前不会学进 memory，只计入报告。
+   - 如果 `generation_status` 是 `skip_proposed`：说明已学到的岗位规则建议跳过这个岗位，没有起草。看 `direction_rule_ids` 和 `direction_reason`，按人设决定 `confirm_skip`（确认跳过）或 `override_skip`（仍要联系，下一轮会对同一岗位不经方向判断直接起草）。这两种答复都会登记为对所引岗位规则的反馈，下一轮刷新 memory 时学进去：确认说明规则覆盖得对（条件可以放宽到这类岗位），推翻说明规则管得太宽。`note` 照样要写一句理由，严格本人模式同样检查全称词。
 3. 写决定文件 `.jobagent/roleplay/decisions/R<轮次>.json`（目录不存在时先创建），再执行 `jobagent roleplay decide <轮次> <文件>`：
 
 ```json

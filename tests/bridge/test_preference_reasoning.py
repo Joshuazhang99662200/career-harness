@@ -41,6 +41,7 @@ def context():
             mode="json"
         ),
         "events": [event.model_dump(mode="json")],
+        "direction_answers": [],
     }
     return {**payload, "input_digest": canonical_digest(payload)}
 

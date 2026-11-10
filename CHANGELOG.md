@@ -1,5 +1,11 @@
 # 版本记录
 
+## 未发布 — 对话式事实提取与找岗方式
+
+- 事实提取改为先复述理解、再基于本人回答至少追问两层；新增 `candidate ask` 逐字保存 Agent 自己的追问，答复仍经 `candidate answer` 形成未确认事实，同一时间只有一个待答问题。
+- 抓取前必须登记找岗方式 `SOURCING_METHODS`（`mcp` / `browser_gui` / `agent_proposed` / `user_specified`，各写明站点与具体做法）；寻源任务的 `rules prepare` 要求它，已初始化而从未决定过的档案只单独问这一题。
+- **不兼容**：页面只显示岗位进度。没有岗位或运行记录时只写“还没有岗位进来”；移除本人资料页与 `/api/onboarding`，Agent 继续用 `console onboarding` 读取。
+
 ## 未发布 — 首次引导提速与默认招呼方法
 
 - 首次引导改为一张事实表一次核对、按例外答复；新增 `candidate confirm-many`（逐行绑定摘要，任一行过期、缺失或较弱则整批不确认）。

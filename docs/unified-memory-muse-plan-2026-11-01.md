@@ -19,7 +19,7 @@
 | 转化指标、诊断、规则效果复核 | [pipeline_metrics.py](../src/jobagent/storage/pipeline_metrics.py)、[pipeline_rules.py](../src/jobagent/storage/pipeline_rules.py) | 复用实际事实计算与回滚提案，补“使用了哪版规则”的关联证据 |
 | 本地偏好预加载 | [greetings.py](../src/jobagent/cli/greetings.py)、[jobs.py](../src/jobagent/cli/jobs.py) | 保留可选启用与旧调用兼容，迁入统一服务适配；不能要求 Muse 必须运行本机 Codex |
 
-第一期已补齐统一来源状态、快照与按任务取上下文；统一记录实际注入、连接后续结果的服务仍未实现。Muse 的主动读写和真实联调仍需接线。现有简历优化也不能直接视为已经接入偏好记忆。已完成的受控模型实验及保留失败见 [原型验证说明](unified-memory-validation-2026-11-03.md)，实验不代表生产接入。
+第一期已补齐统一来源状态、快照与按任务取上下文；统一记录实际注入、连接后续结果的服务仍未实现。Muse 的主动读写和真实联调仍需接线。现有简历优化也不能直接视为已经接入偏好记忆。
 
 ## 二、统一结构与责任边界
 

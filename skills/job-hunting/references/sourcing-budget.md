@@ -4,7 +4,7 @@
 
 ## 薪资
 
-私有 CandidateFilterContext 默认 compensation_comparison=upper_bound：薪资区间与本人 minimum_compensation.minimum 及以上有重叠即可通过。以18k底线为合成示例，15–25k、15–18k、20–25k均接受，15–17k拒绝；金额来自本人配置，不设公共18k常量。区间下限低于底线不会单独导致拒绝。
+私有 CandidateFilterContext 默认 compensation_comparison=upper_bound：薪资区间与本人 minimum_compensation.minimum 及以上有重叠即可通过。例如底线为 F 时，只要区间上限不低于 F 就接受，上限低于 F 才拒绝；F 来自本人配置，没有公共常量。区间下限低于底线不会单独导致拒绝。
 
 只公布上限且达到底线可通过；只公布下限且已达到底线也可通过。只知道低于底线的下限、没有可确认的上限时保持 REVIEW。币种或周期不可比、周期缺失、薪资未知均待核查，不猜汇率或额外薪数。
 

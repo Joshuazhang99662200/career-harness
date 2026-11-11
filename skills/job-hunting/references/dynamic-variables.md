@@ -15,7 +15,7 @@
 
 ## 首次配置一次，后续只加载
 
-先读取私有初始化状态与已有确认档。只有首次尚未初始化时，才把运行方式和未确定数字整理成表单给本人裁定；已经初始化的档案直接加载。后续轮次、任务类型切换和会话恢复都不重复问数字、不要求重新确认。缺值、歧义、冲突或消费者不支持只阻塞相关步骤并报告，不自动转成首次配置，也不回退默认值。
+先读取私有初始化状态与已有确认档。只有首次尚未初始化时，才把运行方式和未确定数字逐项问本人裁定：一条消息一道选择题，字段带 `choices` 的照用其选项，数字题可给出建议值但不预选，最后总留“其他：自己填”；已经初始化的档案直接加载。后续轮次、任务类型切换和会话恢复都不重复问数字、不要求重新确认。缺值、歧义、冲突或消费者不支持只阻塞相关步骤并报告，不自动转成首次配置，也不回退默认值。
 
 用 `jobagent rules prepare <私有请求.json> --database <私有库>` 读取准备结果。此命令不创建数据库、不启动采集、不预留或消耗额度。首次交互的合成请求如下，实际候选人与任务标识必须来自自己的私有工作区：
 
@@ -28,7 +28,7 @@
 }
 ```
 
-表单始终区分每站每轮查询组合数 `QUERIES_PER_SITE_PER_ROUND`、每查询取数 `TOP_PER_QUERY`、每站每轮详情尝试数 `DETAIL_ATTEMPTS_PER_SITE_PER_ROUND` 和每站每日详情额度 `DETAIL_CAP_PER_DAY`，回显单位、已有值、来源和消费者。查询组合数与岗位条数不能混为一项，实际日剩余量也不能覆盖本人配置的额度。
+提问始终区分每站每轮查询组合数 `QUERIES_PER_SITE_PER_ROUND`、每查询取数 `TOP_PER_QUERY`、每站每轮详情尝试数 `DETAIL_ATTEMPTS_PER_SITE_PER_ROUND` 和每站每日详情额度 `DETAIL_CAP_PER_DAY`，回显单位、已有值、来源和消费者。查询组合数与岗位条数不能混为一项，实际日剩余量也不能覆盖本人配置的额度。
 
 首次只对未确定字段使用既有 propose/approve 链逐项确认，完整后 prepare 返回 `ready_to_initialize` 与 `can_initialize=true`。执行 `jobagent rules initialize CAND_* --expected-version <当前版本> --database <私有库>` 登记初始化并回读，不再让本人对相同参数确认一次。已确认数字成为可复用配置，不随轮次或任务类型重置。
 
@@ -36,7 +36,7 @@
 
 ## 找岗平台与方式：`SOURCING_PLATFORMS` → `SOURCING_METHODS`
 
-每次寻源前，`rules prepare`（`task_type=sourcing`）按顺序要求两项，先定平台，再定每个平台怎么登录或抓取。没有登记时，Agent 按下面两步问，每步一条消息。
+每次寻源前，`rules prepare`（`task_type=sourcing`）按顺序要求两项，先定平台，再定每个平台怎么登录或抓取。没有登记时，Agent 按下面两步问，每步一道选择题（选项取自 prepare 返回的 `choices`，`multiple=true` 即多选）。
 
 ### 第一步：选平台 `SOURCING_PLATFORMS`
 

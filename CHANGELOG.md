@@ -1,5 +1,10 @@
 # 版本记录
 
+## 未发布 — 精简仓库
+
+- **不兼容**：移除记忆角色扮演评测工具（`jobagent roleplay`、Gemini CLI 文本运行器、合成人设场景与 `roleplay-memory-eval.md`）和 `jobagent memory simulate`。它们只用于我们验证记忆系统，不是使用功能；`memory effect` / `memory usage` 保留。跳过提案的答复目前没有登记命令。
+- 移除测试、交付、核验与评审记录（`docs/superpowers`、`docs/reviews` 及带日期的过程稿），需要时从 Git 历史回查；当前使用与接入文档保留。
+
 ## 未发布 — 对话式事实提取与找岗方式
 
 - 求职设置与首次配置改为按顺序逐题的选择题（方向 → 年限 → 薪资 → 城市 → 排除项 → 平台 → 各平台方式 → 额度 → 通知），不再一次给出填空表；`rules prepare` 的字段新增 `choices` / `multiple`，平台、方式种类与薪资比较模式带选项，数字字段不带，避免建议值被当成默认。

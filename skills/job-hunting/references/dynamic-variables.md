@@ -36,7 +36,7 @@
 
 ## 找岗平台与方式：`SOURCING_PLATFORMS` → `SOURCING_METHODS`
 
-每次寻源前，`rules prepare`（`task_type=sourcing`）按顺序要求两项，先定平台，再定每个平台怎么登录或抓取。没有登记时，Agent 按下面两步问，每步一道选择题（选项取自 prepare 返回的 `choices`，`multiple=true` 即多选）。
+每次寻源前，`rules prepare`（`task_type=sourcing`）按顺序要求两项，先定平台，再定每个平台怎么登录或抓取。没有登记时，Agent 按下面两步问，每步一道选择题（选项取自 prepare 返回的 `choices`）。两步都是多选：平台可以选多个，每个平台也可以选多种方式；`multiple=true` 的字段必须打开多选控件，文本提问时写明“可多选”。
 
 ### 第一步：选平台 `SOURCING_PLATFORMS`
 

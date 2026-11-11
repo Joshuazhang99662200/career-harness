@@ -23,7 +23,7 @@
 机器可读的登记表是[技能上下文的源清单](../skills/job-hunting/references/oss/source-manifest.yaml)。
 
 
-2026-11-02：Muse 移植采用用户提供的 zip 与用户指定分享页，来源摘要见 `frontend/src/muse/provenance.json`，复用范围见 [还原记录](muse-source-template-2026-11-02.md)。用户明确要求复用，不额外声称该输入具有第三方开源许可证。新依赖的锁定版本、MIT 许可证及通知已登记，未引入私有 SDK、简历附件或服务器数据。
+2026-11-02：Muse 移植采用用户提供的 zip 与用户指定分享页，来源摘要见 `frontend/src/muse/provenance.json`。用户明确要求复用，不额外声称该输入具有第三方开源许可证。新依赖的锁定版本、MIT 许可证及通知已登记，未引入私有 SDK、简历附件或服务器数据。
 
 ## Career Ops 参考移植（2026-11-03）
 

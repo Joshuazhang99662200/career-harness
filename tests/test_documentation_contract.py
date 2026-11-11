@@ -77,8 +77,7 @@ def test_active_documentation_links_resolve() -> None:
             target = (source.parent / path).resolve()
             assert target.is_relative_to(ROOT), (source.relative_to(ROOT), link)
             assert target.exists(), (source.relative_to(ROOT), link)
-            historical = any(part in {"superpowers", "reviews"} for part in target.parts)
-            if target.suffix == ".md" and not historical:
+            if target.suffix == ".md":
                 pending.append(target)
 
 

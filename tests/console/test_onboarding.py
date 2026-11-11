@@ -53,7 +53,7 @@ def test_resume_handoff_is_visible_until_the_host_draft_is_imported(tmp_path):
     database = private_db(tmp_path)
     pdf = tmp_path / "synthetic.pdf"
     canvas = Canvas(str(pdf))
-    canvas.drawString(72, 720, "Synthetic Person - built an evaluation set")
+    canvas.drawString(72, 720, "Synthetic Person - planned warehouse shifts")
     canvas.save()
     handoff = database.parent / "handoff"
     paused = cli(
@@ -91,7 +91,7 @@ def test_resume_handoff_is_visible_until_the_host_draft_is_imported(tmp_path):
             EvidenceItem(
                 id="EVID_ONE",
                 type=EvidenceType.EXPERIENCE,
-                statement="Built an evaluation set for a synthetic QA product.",
+                statement="Planned weekly shifts for a synthetic warehouse.",
                 source=SourceReference(
                     type=SourceType.RESUME, reference=f"{resume.resume_id}:page:1"
                 ),

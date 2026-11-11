@@ -86,7 +86,6 @@ CAPTCHA != Retry
 - 面向人的文档(README、`docs/` 顶层、`skills/job-hunting/**/*.md`)用**中文**。
 - 代码、注释、docstring、测试名、提交信息主题行之外的标识符用**英文**。
 - 技术标识符在中文行文中保持原样:`L0`–`L3`、`EVID_*`、`PASS`/`REVIEW`/`REJECT`、schema 类名、CLI 命令等。
-- `docs/superpowers/` 下的 specs 与 plans 是带 commit 哈希的历史评审记录,**保持英文原样,不要翻译**。
 - 两个 `SKILL.md` 的 frontmatter `description` 采用中英并列,以兼顾中英文查询的技能命中率。
 
 ## 提交与 PR

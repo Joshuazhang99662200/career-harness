@@ -44,4 +44,3 @@ CAPTCHA != Retry
 
 先有 mock 连接器,再有真实平台连接器。第一条纵向工作流必须能离线跑通:从候选人知识出发,经匹配、优化器校验、评审、审批、mock 投递、兼容性、批量审批,直到审计。
 
-完整阶段图见[基础设计文档](superpowers/specs/2026-08-21-jobagent-foundation-design.md)。

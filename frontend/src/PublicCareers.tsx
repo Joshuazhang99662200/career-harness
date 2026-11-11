@@ -35,9 +35,7 @@ export function PublicCareers({
   return (
     <section className="public-careers">
       <h2>公开职位补充</h2>
-      <p>
-        企业官网与公开招聘接口的补充岗位，地区条件仍需结合完整职位说明核对。
-      </p>
+      <p>来自企业官网与公开招聘接口；地区以完整职位说明为准。</p>
       {state === "missing" ? (
         <p role="status">公开职位补充尚未接入。</p>
       ) : state === "invalid" ? (

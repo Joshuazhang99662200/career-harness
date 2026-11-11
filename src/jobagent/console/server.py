@@ -9,7 +9,6 @@ from urllib.parse import unquote, urlsplit
 
 from pydantic import TypeAdapter
 
-from jobagent.console.onboarding import onboarding_state
 from jobagent.console.projection import definitions, snapshot
 from jobagent.schemas.candidate import CandidateId
 
@@ -76,15 +75,6 @@ def make_server(
                 self.error_json(403, "local_origin_required")
                 return
             path = unquote(urlsplit(self.path).path)
-            if path == "/api/onboarding":
-                # First use happens in the conversation; the page only shows where it stands.
-                state = onboarding_state(database, candidate_id).model_dump(mode="json")
-                self.reply(
-                    200,
-                    json.dumps(state, ensure_ascii=False).encode("utf-8"),
-                    "application/json; charset=utf-8",
-                )
-                return
             if path in {"/api/snapshot", "/api/definitions"}:
                 try:
                     data = (

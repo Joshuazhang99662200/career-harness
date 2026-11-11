@@ -12,7 +12,6 @@ from jobagent.schemas.console_host import (
     HostSelectionRequest,
     HostState,
 )
-from jobagent.schemas.onboarding import OnboardingState
 
 OUTPUT = Path(__file__).resolve().parents[1] / "frontend/src/hostContracts.ts"
 
@@ -37,7 +36,7 @@ def generate() -> str:
     models = {}
     for model in (
         HostState, HostDecisionRequest, HostExecutionRequest, HostSelectionRequest,
-        HostSelectionReceipt, OnboardingState,
+        HostSelectionReceipt,
     ):
         schema = model.model_json_schema()
         models.update(schema.pop("$defs", {}))

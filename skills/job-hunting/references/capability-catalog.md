@@ -19,7 +19,7 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | `extract_draft` | 已落地 | `jobagent candidate onboard`(默认 `--provider agent`,由调用方智能体产出,无需凭证;`--provider claude` 走 API。证据仍未确认) |
 | `update_profile` | 已落地 | `jobagent candidate import-draft`(整份草稿写入;暂无字段级编辑) · `jobagent candidate start`(无简历时建空档案;已有档案原样复用,不重置) · `jobagent candidate resolve-unknown`(本人答复或跳过后清除一条抽取留下的未知项;不产生、不确认证据) |
 | `detect_gaps` | 已落地 | `jobagent candidate status` · `GapDetector.detect` |
-| `ask_question` | 已落地 | `jobagent candidate question` · `AdaptiveInterview.next_question` |
+| `ask_question` | 已落地 | `jobagent candidate question` · `AdaptiveInterview.next_question` · `jobagent candidate ask`(逐字保存 Agent 自己的追问,可用 `--about` 关联事实;同一时间只有一个待答问题,答复仍经 `candidate answer` 形成未确认事实) |
 | `add_evidence` | 已落地 | `jobagent candidate answer` · `jobagent candidate confirm`(可加 `--statement-digest` 绑定给本人看过的原文,内容已变即拒绝) · `jobagent candidate confirm-many`(一次确认本人对整张事实表的答复;逐条绑定摘要,任一条过期、缺失或较弱则全部不确认) · `jobagent candidate revise`(按本人原话改写,来源改为 user_edit 并退回未确认) |
 
 ## 统一记忆（P1）
@@ -212,7 +212,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 能力 | 状态 | 入口 |
 |---|---|---|
 | 变量定义与消费状态 | 已落地 | `jobagent rules definitions`：类型、用户参数/平台参考/不变量及实际消费者；不带个人默认值 |
-| 首次表单与普通运行准备 | 已落地 | `jobagent rules prepare`：首次或本人主动修改才返回配置问题；普通运行跨轮次/任务类型/会话只读复用，缺值与冲突只报阻塞，不重开交互、不占额度 |
+| 首次表单与普通运行准备 | 已落地 | `jobagent rules prepare`：首次或本人主动修改才返回配置问题；普通运行跨轮次/任务类型/会话只读复用，缺值与冲突只报阻塞，不重开交互、不占额度；寻源任务另需先选平台 `SOURCING_PLATFORMS`、再定各平台方式 `SOURCING_METHODS`，从未决定过时在基线完整后按顺序各问一题；有平台没有方式或方式写到未选平台即 `blocked_by_conflict` |
 | 登记首次初始化 | 已落地 | `jobagent rules initialize`：核对当前版本及必需确认值后保存初始化身份，不再请求相同参数确认；已有确认档升级保留身份 |
 | 单变量修改提问 | 已落地 | `jobagent rules propose`：绑定候选人、来源、旧版本与一项新值；初始化后还需匹配的本人主动调整记录；只保存提问，不生效 |
 | 参数确认与激活 | 已落地 | `jobagent rules approve`：原提问摘要与本人明确答复；旧版本冲突拒绝，事务内只更新指定变量；不授予外部动作权限 |
@@ -390,8 +390,8 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 面板执行清单 | 已落地(只列已批准首条招呼) | `jobagent console batch-create` | 面板 createExecutionBatch：只列入已有绑定摘要人工批准的首条招呼，每项指向真实批准；未批准、材料已更新、已撤回、已发送或已联系、平台当天叫停、猎聘等分别写明排除原因。不发送 |
 | 面板执行确认 | 已落地(交给宿主) | `jobagent console batch-confirm` | 面板 confirmExecution：须带 `--actor`。只处理请求里明确选中的项，逐项重新核对材料版本、批准仍有效、尚未发送；每份清单只确认一次，同一操作键重放返回原回执。确认只把条目交给宿主按 `outreach lease` / `next` / `record` 节奏发送，仓库不发送 |
 | 面板执行进度 | 已落地(只读) | `jobagent console batch` | 面板 getBatch：每项状态只从真实记录推导。没有发送审计为 queued；审计为已发送且有绑定该审计的逐字回读（流水线 greeting_sent 或发送跟踪）才算 verified；失败、需要接手、已撤回为 failed 并保留原因；已发送但无回读为 unknown，先核验、不自动重试 |
-| 首次引导状态 | 已落地(只读) | `jobagent console onboarding` | 对话式首次引导的读模型：本人档案是否存在、已导入简历及逐页原文、整理请求是否在等宿主、逐条事实与来源、确认状态和原文摘要、当前唯一待答问题（中文表述）、尚缺信息、就绪度与首次配置是否已登记。读取不创建数据库；记录缺失为 missing，读取失败为 unavailable，均不当作空资料。控制台 `/api/onboarding` 同源只读 |
-| 本地 React 控制台 | 已落地 | `jobagent console serve` | 仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示。尚无已确认事实时根入口默认显示首次引导进度并提示回到对话，岗位进展始终可一键打开；页面不提供录入或确认 |
+| 首次引导状态 | 已落地(只读) | `jobagent console onboarding` | 对话式首次引导的读模型：本人档案是否存在、已导入简历及逐页原文、整理请求是否在等宿主、逐条事实与来源、确认状态和原文摘要、当前唯一待答问题（中文表述）、尚缺信息、就绪度与首次配置是否已登记。读取不创建数据库；记录缺失为 missing，读取失败为 unavailable，均不当作空资料。只供对话中的 Agent 使用，页面不读取 |
+| 本地 React 控制台 | 已落地 | `jobagent console serve` | 仅本机 GET，显式加载前端构建；缺阶段时间不补造；无法归属到候选人的旧外联条目不显示。根入口只显示岗位进度：有岗位或运行记录时显示岗位进展，还没有时只写“还没有岗位进来”；本人资料与事实不在页面展示或确认 |
 
 ## 公开职位补充渠道
 

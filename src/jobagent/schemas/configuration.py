@@ -14,6 +14,9 @@ BASE_CONFIGURATION_NAMES = (
     "DETAIL_ATTEMPTS_PER_SITE_PER_ROUND",
     "DETAIL_CAP_PER_DAY",
 )
+# Asked before a fetch, in order: which platforms, then how to reach each one.
+# Both are the person's choice, never a host default.
+TASK_CONFIGURATION_NAMES = {"sourcing": ("SOURCING_PLATFORMS", "SOURCING_METHODS")}
 ConfigurationMode = Literal["initial_setup", "ordinary_run", "owner_requested_change"]
 ConfigurationFieldStatus = Literal["confirmed", "missing", "unsupported", "change_requested"]
 ConfigurationPreparationStatus = Literal[
@@ -34,6 +37,11 @@ class ConfigurationPreparationRequest(ContractModel):
     code_revision: NonEmptyString | None = None
 
 
+class ConfigurationChoice(ContractModel):
+    value: NonEmptyString
+    label: NonEmptyString
+
+
 class ConfigurationField(ContractModel):
     name: NonEmptyString
     label: NonEmptyString
@@ -42,6 +50,10 @@ class ConfigurationField(ContractModel):
     status: ConfigurationFieldStatus
     consumer: NonEmptyString
     provenance: RuleProvenance | None = None
+    # The options to ask as a choice question; empty for numbers and free text,
+    # which the person decides without a suggested default.
+    choices: list[ConfigurationChoice] = Field(default_factory=list)
+    multiple: bool = False
 
 
 class ConfigurationPreparationResult(ContractModel):

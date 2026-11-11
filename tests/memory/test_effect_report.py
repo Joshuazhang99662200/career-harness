@@ -89,15 +89,3 @@ def test_ledger_sends_link_to_replies_through_the_cli(tmp_path):
     report = json.loads(result.stdout)
     assert report["groups"] == [] and report["pending"] == 0
     assert report["assignment"] == "observational"
-
-
-def test_cli_simulation_is_seeded_and_reproducible():
-    args = [
-        "memory", "simulate", "--trials", "200", "--sample-size", "100", "--base-rate", "0.2",
-        "--lift", "0.1", "--min-sample", "30", "--seed", "5",
-    ]
-    first = CliRunner().invoke(app, args)
-    second = CliRunner().invoke(app, args)
-    assert first.exit_code == 0, first.stdout
-    assert first.stdout == second.stdout
-    assert 0 < json.loads(first.stdout)["detection_rate"] < 1

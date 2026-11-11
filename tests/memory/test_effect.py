@@ -10,7 +10,6 @@ from jobagent.memory.effect import (
     reply_outcomes,
     wilson_interval,
 )
-from jobagent.memory.simulation import simulate
 from jobagent.schemas.conversation import (
     Conversation,
     ConversationEvent,
@@ -84,26 +83,3 @@ def test_wilson_and_newcombe_intervals_match_known_values():
 )
 def test_verdicts_need_minimum_samples_and_an_interval_excluding_zero(treated, baseline, verdict):
     assert compare_rates(treated, baseline, min_sample=30).verdict == verdict
-
-
-def test_simulation_without_a_true_effect_rarely_claims_one():
-    result = simulate(
-        trials=2000, sample_size=200, base_rate=0.2, lift=0.0, min_sample=30, seed=7,
-    )
-    assert result.false_claim_rate <= 0.07
-    assert result.detection_rate == 0.0 and result.wrong_direction_rate == 0.0
-
-
-def test_simulation_detects_a_real_lift_with_enough_samples():
-    result = simulate(
-        trials=1000, sample_size=400, base_rate=0.2, lift=0.1, min_sample=30, seed=11,
-    )
-    assert result.detection_rate >= 0.85
-    assert result.wrong_direction_rate <= 0.001
-
-
-def test_simulation_with_small_samples_reports_insufficient_instead_of_guessing():
-    result = simulate(
-        trials=200, sample_size=20, base_rate=0.2, lift=0.3, min_sample=30, seed=3,
-    )
-    assert result.insufficient_rate == 1.0 and result.detection_rate == 0.0

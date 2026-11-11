@@ -13,7 +13,6 @@ from jobagent.cli.private_io import fail, open_database, read_model
 from jobagent.errors import ContractValidationError, JobAgentError
 from jobagent.memory.effect import memory_effect_report, reply_outcomes, sent_from_ledger
 from jobagent.memory.service import MemoryService
-from jobagent.memory.simulation import simulate as run_simulation
 from jobagent.memory.usage import summarize_memory_usage
 from jobagent.schemas.common import ContractModel
 from jobagent.schemas.memory import MemoryConfig
@@ -143,24 +142,5 @@ def effect(
             window=window, min_sample=min_sample, observed_at=now,
         )
         typer.echo(report.model_dump_json(indent=2))
-    except JobAgentError as error:
-        fail(error)
-
-
-@memory_app.command("simulate")
-def simulate(
-    trials: Annotated[int, typer.Option("--trials", min=1)],
-    sample_size: Annotated[int, typer.Option("--sample-size", min=1, help="Sends per arm.")],
-    base_rate: Annotated[float, typer.Option("--base-rate", min=0, max=1)],
-    lift: Annotated[float, typer.Option("--lift", min=-1, max=1)],
-    min_sample: Annotated[int, typer.Option("--min-sample", min=1)],
-    seed: Annotated[int, typer.Option("--seed")] = 0,
-) -> None:
-    """Synthetic check: how often `memory effect` would claim or detect a difference."""
-    try:
-        typer.echo(run_simulation(
-            trials=trials, sample_size=sample_size, base_rate=base_rate, lift=lift,
-            min_sample=min_sample, seed=seed,
-        ).model_dump_json(indent=2))
     except JobAgentError as error:
         fail(error)

@@ -37,6 +37,11 @@ class ConfigurationPreparationRequest(ContractModel):
     code_revision: NonEmptyString | None = None
 
 
+class ConfigurationChoice(ContractModel):
+    value: NonEmptyString
+    label: NonEmptyString
+
+
 class ConfigurationField(ContractModel):
     name: NonEmptyString
     label: NonEmptyString
@@ -45,6 +50,10 @@ class ConfigurationField(ContractModel):
     status: ConfigurationFieldStatus
     consumer: NonEmptyString
     provenance: RuleProvenance | None = None
+    # The options to ask as a choice question; empty for numbers and free text,
+    # which the person decides without a suggested default.
+    choices: list[ConfigurationChoice] = Field(default_factory=list)
+    multiple: bool = False
 
 
 class ConfigurationPreparationResult(ContractModel):

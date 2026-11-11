@@ -271,3 +271,22 @@ def test_a_search_method_must_name_a_known_kind_sites_and_a_concrete_how():
     ):
         with pytest.raises(ContractValidationError):
             validate_value("SOURCING_METHODS", bad)
+
+
+def test_enumerable_fields_carry_their_choices_and_numbers_get_none():
+    from jobagent.rules.preparation import prepare_configuration
+    from jobagent.rules.registry import SOURCING_METHOD_KINDS, SOURCING_PLATFORM_IDS
+
+    request = preparation("initial_setup", required_names=["SALARY_COMPARE_MODE"])
+    by_name = {f.name: f for f in prepare_configuration(request, None, initialized=False).fields}
+    platforms = by_name["SOURCING_PLATFORMS"]
+    assert platforms.multiple and {c.value for c in platforms.choices} == SOURCING_PLATFORM_IDS
+    assert all(c.label for c in platforms.choices)
+    assert {c.value for c in by_name["SOURCING_METHODS"].choices} == SOURCING_METHOD_KINDS
+    assert {c.value for c in by_name["SALARY_COMPARE_MODE"].choices} == {
+        "upper_bound",
+        "lower_bound",
+    }
+    assert not by_name["SALARY_COMPARE_MODE"].multiple
+    # Numbers are the person's to decide: no option list that could pass as a default.
+    assert by_name["TOP_PER_QUERY"].choices == []

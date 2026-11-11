@@ -9,6 +9,7 @@ from jobagent.rules.service import validate_snapshot
 from jobagent.schemas.configuration import (
     BASE_CONFIGURATION_NAMES,
     TASK_CONFIGURATION_NAMES,
+    ConfigurationChoice,
     ConfigurationField,
     ConfigurationFieldStatus,
     ConfigurationPreparationRequest,
@@ -30,6 +31,28 @@ _LABELS = {
         "各平台的登录或抓取方式",
         "mcp / browser_gui / agent_proposed / user_specified; 各写明站点与具体做法",
     ),
+}
+
+
+_CHOICES: dict[str, tuple[bool, tuple[tuple[str, str], ...]]] = {
+    "SOURCING_PLATFORMS": (True, (
+        ("boss", "BOSS 直聘"),
+        ("liepin", "猎聘"),
+        ("linkedin", "LinkedIn"),
+        ("zhaopin", "智联招聘"),
+        ("51job", "前程无忧"),
+        ("ats_boards", "企业招聘看板 (Greenhouse、Ashby 等公开 ATS 接口)"),
+    )),
+    "SOURCING_METHODS": (True, (
+        ("mcp", "平台 MCP 接口"),
+        ("browser_gui", "内置浏览器, 本人登录后操作"),
+        ("agent_proposed", "Agent 提出的具体方法"),
+        ("user_specified", "本人指定的方法"),
+    )),
+    "SALARY_COMPARE_MODE": (False, (
+        ("upper_bound", "薪资区间上限达到即可"),
+        ("lower_bound", "薪资区间下限也要达到"),
+    )),
 }
 
 
@@ -110,10 +133,13 @@ def prepare_configuration(
             else "confirmed" if name in values else "missing"
         )
         label, unit = _LABELS.get(name, (name, "按变量契约"))
+        multiple, options = _CHOICES.get(name, (False, ()))
         fields.append(ConfigurationField(
             name=name, label=label, unit=unit, value=values.get(name), status=field_status,
             consumer=definition.consumer if definition else "Unknown consumer",
             provenance=provenance.get(name),
+            choices=[ConfigurationChoice(value=v, label=text) for v, text in options],
+            multiple=multiple,
         ))
     missing = [field for field in fields if field.status == "missing"]
     unsupported = [field for field in fields if field.status == "unsupported"]

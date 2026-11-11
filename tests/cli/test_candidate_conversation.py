@@ -43,7 +43,7 @@ def test_answer_then_confirm_only_the_wording_that_was_shown(tmp_path):
         CANDIDATE,
         question["id"],
         "--answer",
-        "我在合成项目里搭过评测集。",
+        "我在合成仓库排过班表。",
     )
     [fact] = state(database)["facts"]
     assert fact["source_type"] == "interview" and fact["confirmed"] is False
@@ -56,7 +56,7 @@ def test_answer_then_confirm_only_the_wording_that_was_shown(tmp_path):
         CANDIDATE,
         fact["evidence_id"],
         "--statement",
-        "我在合成项目里搭过 300 条用例的评测集。",
+        "我在合成仓库排过 300 人的班表。",
         "--statement-digest",
         shown,
     )
@@ -94,7 +94,7 @@ def test_revise_refuses_an_empty_statement(tmp_path):
     database = tmp_path / ".jobagent" / "jobagent.sqlite3"
     invoke(database, "candidate", "start", CANDIDATE)
     _, question = invoke(database, "candidate", "question", CANDIDATE)
-    invoke(database, "candidate", "answer", CANDIDATE, question["id"], "--answer", "做过评测。")
+    invoke(database, "candidate", "answer", CANDIDATE, question["id"], "--answer", "排过班。")
     [fact] = state(database)["facts"]
     code, _ = invoke(
         database,
@@ -112,7 +112,7 @@ def test_revise_refuses_an_empty_statement(tmp_path):
 
 def _two_facts(database: Path) -> list[dict]:
     invoke(database, "candidate", "start", CANDIDATE)
-    for answer in ("做过合成评测集。", "带过两人的合成项目小组。"):
+    for answer in ("排过合成仓库的班表。", "带过两人的合成拣货小组。"):
         _, question = invoke(database, "candidate", "question", CANDIDATE)
         invoke(database, "candidate", "answer", CANDIDATE, question["id"], "--answer", answer)
     return state(database)["facts"]
@@ -183,9 +183,9 @@ def test_agent_follow_ups_are_saved_verbatim_and_answered_one_at_a_time(tmp_path
     database = tmp_path / ".jobagent" / "jobagent.sqlite3"
     invoke(database, "candidate", "start", CANDIDATE)
     _, first = invoke(database, "candidate", "question", CANDIDATE)
-    invoke(database, "candidate", "answer", CANDIDATE, first["id"], "--answer", "做过评测集。")
+    invoke(database, "candidate", "answer", CANDIDATE, first["id"], "--answer", "排过班表。")
     [fact] = state(database)["facts"]
-    layer_one = "我理解你搭了一套评测集：它用来评什么，你负责哪一部分？"
+    layer_one = "我理解你给仓库排班：排的是哪些岗位，你负责哪一部分？"
     code, asked = invoke(
         database,
         "candidate",
@@ -207,9 +207,9 @@ def test_agent_follow_ups_are_saved_verbatim_and_answered_one_at_a_time(tmp_path
         CANDIDATE,
         asked["id"],
         "--answer",
-        "评问答准确率，用例由我设计。",
+        "排拣货和打包岗，规则由我定。",
     )
-    layer_two = "用例是怎么设计的，最后怎么判断准确率达标？"
+    layer_two = "规则是怎么定的，最后怎么判断排得好不好？"
     code, deeper = invoke(database, "candidate", "ask", CANDIDATE, "--text", layer_two)
     assert code == 0 and deeper["id"] != asked["id"]
     invoke(database, "candidate", "answer", CANDIDATE, deeper["id"], "--skip")

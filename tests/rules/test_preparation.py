@@ -290,3 +290,40 @@ def test_enumerable_fields_carry_their_choices_and_numbers_get_none():
     assert not by_name["SALARY_COMPARE_MODE"].multiple
     # Numbers are the person's to decide: no option list that could pass as a default.
     assert by_name["TOP_PER_QUERY"].choices == []
+
+
+def test_display_task_asks_the_person_which_front_ends_to_show():
+    from jobagent.rules.preparation import prepare_configuration
+    from jobagent.rules.registry import DISPLAY_FRONTEND_IDS
+
+    request = preparation("initial_setup").model_copy(update={"task_type": "display"})
+    first = prepare_configuration(request, None, initialized=False)
+    [field] = [f for f in first.fields if f.name == "DISPLAY_FRONTENDS"]
+    assert field.multiple and {c.value for c in field.choices} == DISPLAY_FRONTEND_IDS
+    assert {"react", "feishu_bitable"} <= DISPLAY_FRONTEND_IDS
+    assert any("DISPLAY_FRONTENDS" in q for q in first.questions)
+    # Initialized before the variable existed: asked once, nothing else reopens.
+    later = prepare_configuration(
+        preparation().model_copy(update={"task_type": "display"}),
+        profile(BASE_VALUES), initialized=True,
+    )
+    assert later.status == "needs_user_decision"
+    assert len(later.questions) == 1 and "DISPLAY_FRONTENDS" in later.questions[0]
+    chosen = prepare_configuration(
+        preparation().model_copy(update={"task_type": "display"}),
+        profile(BASE_VALUES | {"DISPLAY_FRONTENDS": ["feishu_bitable"]}), initialized=True,
+    )
+    assert chosen.ready and not chosen.ask_user
+
+
+def test_front_ends_are_known_ids_or_any_named_other():
+    import pytest
+
+    from jobagent.errors import ContractValidationError
+    from jobagent.rules.registry import validate_value
+
+    validate_value("DISPLAY_FRONTENDS", ["react", "muse", "feishu_bitable"])
+    validate_value("DISPLAY_FRONTENDS", ["other:Notion 数据库", "feishu_bitable"])
+    for bad in ([], ["slack"], ["other:"], ["react", "react"], ["other:a\nb"]):
+        with pytest.raises(ContractValidationError):
+            validate_value("DISPLAY_FRONTENDS", bad)

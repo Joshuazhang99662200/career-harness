@@ -287,34 +287,44 @@ def test_a_feishu_bitable_panel_still_cannot_approve_edited_or_stale_text(tmp_pa
     ]
 
 
-def test_cli_names_the_panel_and_refuses_an_unknown_one(tmp_path):
+@pytest.mark.parametrize(
+    ("panel", "label"),
+    [("feishu_bitable", "飞书多维表格"), ("other:Notion 数据库", "Notion 数据库")],
+)
+def test_cli_records_any_front_end_the_person_chose(tmp_path, panel, label):
     path, _ = setup(tmp_path)
     request_path = tmp_path / "decision.json"
     request_path.write_text(
         decision(path, "approve_material").model_dump_json(), encoding="utf-8"
     )
-    unknown = CliRunner().invoke(app, [
-        "console", "decide", str(request_path), "--actor", "OWNER_SYNTHETIC",
-        "--panel", "slack", "--database", str(path),
-    ])
-    assert unknown.exit_code != 0
-    assert [b.batch_id for b in SqliteOutreachRepository(Database(path)).list_batches()] == [
-        "OBATCH_FIXTURE"
-    ]
-
     decided = CliRunner().invoke(app, [
         "console", "decide", str(request_path), "--actor", "OWNER_SYNTHETIC",
-        "--panel", "feishu_bitable", "--database", str(path),
+        "--panel", panel, "--database", str(path),
     ])
     assert decided.exit_code == 0, decided.stdout
     store = SqliteOutreachRepository(Database(path))
     [child] = [b for b in store.list_batches() if b.batch_id != "OBATCH_FIXTURE"]
     approval = store.get_approval(child.batch_id)
-    assert approval is not None and "飞书多维表格" in approval.attestation
+    assert approval is not None and f"本人在{label}批准" in approval.attestation
 
 
-def test_cli_panel_names_match_the_recorded_panels():
+@pytest.mark.parametrize("panel", ["slack", "other:", "other: ", "other:a\nb"])
+def test_an_unnamed_or_malformed_front_end_is_refused_before_anything_is_stored(
+    tmp_path, panel
+):
+    path, _ = setup(tmp_path)
+    receipt = record_panel_decision(
+        path, decision(path, "approve_material"), actor_id="OWNER_SYNTHETIC", now=LATER,
+        panel=panel,
+    )
+    assert receipt.status == "rejected" and receipt.event_id is None
+    assert [b.batch_id for b in SqliteOutreachRepository(Database(path)).list_batches()] == [
+        "OBATCH_FIXTURE"
+    ]
+
+
+def test_panel_ids_follow_the_front_end_choices():
     from jobagent.bridge.panel_decisions import PANELS
-    from jobagent.cli.console import PanelName
+    from jobagent.rules.registry import DISPLAY_FRONTEND_IDS
 
-    assert {name.value for name in PanelName} == set(PANELS)
+    assert set(PANELS) == DISPLAY_FRONTEND_IDS

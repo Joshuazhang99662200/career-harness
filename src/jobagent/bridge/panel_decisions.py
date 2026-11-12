@@ -16,6 +16,7 @@ from jobagent.bridge.greeting_freshness import verify_greeting_sources
 from jobagent.digest import canonical_digest, text_digest
 from jobagent.errors import JobAgentError
 from jobagent.outreach.service import OutreachService, contacted_job_ids, policy_digest
+from jobagent.rules.registry import is_frontend_id
 from jobagent.schemas.console_host import (
     HostDecisionRequest,
     HostEvent,
@@ -41,11 +42,19 @@ from jobagent.storage.pipeline_repository import PipelineRepository
 
 # The front end the person decided in. Each is a panel over the same stored record:
 # its decisions only count once relayed here, on the exact asked text and revision.
+# Not a closed list: any front end the person chose is `other:<name>`.
 PANELS: dict[str, str] = {
     "muse": "Muse 面板",
-    "react": "React 面板",
+    "react": "React 控制台",
     "feishu_bitable": "飞书多维表格",
 }
+
+
+def panel_label(panel: str) -> str | None:
+    """How the approval names the front end, or None for an unnamed or malformed one."""
+    if not is_frontend_id(panel):
+        return None
+    return PANELS.get(panel) or panel.removeprefix("other:").strip()
 # Same meaning as the panel transport everywhere else: approve_material approves the
 # exact material; approve_text only says the wording is fine and never approves.
 _ACTIONS = {"approve_material": "approve", "save_draft": "revise", "decline": "decline"}
@@ -288,8 +297,9 @@ def record_panel_decision(
     def rejected(message: str) -> HostReceipt:
         return HostReceipt(operation_key=request.operation_key, status="rejected", message=message)
 
-    if panel not in PANELS:
-        return rejected("这个面板还没有接入，没有保存。")
+    label = panel_label(panel)
+    if label is None:
+        return rejected("面板名称须是已知前端或 other:<名称>，没有保存。")
 
     db = Database(database)
     db.migrate()
@@ -341,7 +351,7 @@ def record_panel_decision(
             raise _Rejected("修改后的文字不能直接批准；请先保存修改，重新生成并复核后再审批。")
         if action == "revise" and request.body.strip() == item.text.strip():
             raise _Rejected("文字没有变化；如果接受原文请直接批准。")
-        return _commit(db, request, batch, ask, item, action, event_id, actor_id, now, panel)
+        return _commit(db, request, batch, ask, item, action, event_id, actor_id, now, label)
     except _Rejected as error:
         return rejected(str(error))
     except JobAgentError as error:
@@ -518,7 +528,7 @@ def _approval(
     child = report.batch
     ask = service.ask(child, asked_at=now)
     attestation = (
-        f"本人在{PANELS[panel]}批准第 {item.number} 条最终原文：{item.text}"
+        f"本人在{panel}批准第 {item.number} 条最终原文：{item.text}"
         f"（{actor_id}；操作 {request.operation_key}；联系 {request.contact_id}）"
     )
     approval = service.approve(child, ask=ask, numbers=[1], attestation=attestation,

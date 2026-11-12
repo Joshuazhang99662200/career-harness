@@ -252,3 +252,69 @@ def test_liepin_contacts_get_their_own_refusal_not_greeting_wording(tmp_path, ki
     assert "猎聘" in receipt.message and "在线简历" in receipt.message
     assert "这条招呼" not in receipt.message
     assert panel_materials(path, "CAND_TEST", "LIEPIN_CONTACT") == []
+
+
+def test_a_feishu_bitable_panel_approves_through_the_same_gate_and_is_named(tmp_path):
+    """A Feishu Bitable front end is a panel like React: same exact-text gate, honest name."""
+    path, _ = setup(tmp_path)
+    request = decision(path, "approve_material")
+    receipt = record_panel_decision(
+        path, request, actor_id="OWNER_SYNTHETIC", now=LATER, panel="feishu_bitable"
+    )
+
+    assert receipt.status == "saved"
+    store = SqliteOutreachRepository(Database(path))
+    [child] = [b for b in store.list_batches() if b.batch_id != "OBATCH_FIXTURE"]
+    approval = store.get_approval(child.batch_id)
+    assert approval is not None and approval.channel.value == "agent_relay"
+    assert "飞书多维表格" in approval.attestation and "Muse" not in approval.attestation
+    assert TEXT in approval.attestation and "OWNER_SYNTHETIC" in approval.attestation
+
+
+def test_a_feishu_bitable_panel_still_cannot_approve_edited_or_stale_text(tmp_path):
+    path, _ = setup(tmp_path)
+    edited = record_panel_decision(
+        path, decision(path, "approve_material", body="Edited words."),
+        actor_id="OWNER_SYNTHETIC", now=LATER, panel="feishu_bitable",
+    )
+    stale = record_panel_decision(
+        path, decision(path, "approve_material", key="OP_2", revision="sha256:" + "0" * 64),
+        actor_id="OWNER_SYNTHETIC", now=LATER, panel="feishu_bitable",
+    )
+    assert edited.status == stale.status == "rejected"
+    assert [b.batch_id for b in SqliteOutreachRepository(Database(path)).list_batches()] == [
+        "OBATCH_FIXTURE"
+    ]
+
+
+def test_cli_names_the_panel_and_refuses_an_unknown_one(tmp_path):
+    path, _ = setup(tmp_path)
+    request_path = tmp_path / "decision.json"
+    request_path.write_text(
+        decision(path, "approve_material").model_dump_json(), encoding="utf-8"
+    )
+    unknown = CliRunner().invoke(app, [
+        "console", "decide", str(request_path), "--actor", "OWNER_SYNTHETIC",
+        "--panel", "slack", "--database", str(path),
+    ])
+    assert unknown.exit_code != 0
+    assert [b.batch_id for b in SqliteOutreachRepository(Database(path)).list_batches()] == [
+        "OBATCH_FIXTURE"
+    ]
+
+    decided = CliRunner().invoke(app, [
+        "console", "decide", str(request_path), "--actor", "OWNER_SYNTHETIC",
+        "--panel", "feishu_bitable", "--database", str(path),
+    ])
+    assert decided.exit_code == 0, decided.stdout
+    store = SqliteOutreachRepository(Database(path))
+    [child] = [b for b in store.list_batches() if b.batch_id != "OBATCH_FIXTURE"]
+    approval = store.get_approval(child.batch_id)
+    assert approval is not None and "飞书多维表格" in approval.attestation
+
+
+def test_cli_panel_names_match_the_recorded_panels():
+    from jobagent.bridge.panel_decisions import PANELS
+    from jobagent.cli.console import PanelName
+
+    assert {name.value for name in PanelName} == set(PANELS)

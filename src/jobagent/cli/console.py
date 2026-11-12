@@ -3,6 +3,7 @@
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -37,6 +38,14 @@ from jobagent.schemas.console_host import (
 console_app = typer.Typer(help="Read-only console and explicit host observations.")
 DatabaseOption = Annotated[Path, typer.Option("--database")]
 WorkspaceOption = Annotated[Path, typer.Option("--workspace")]
+
+
+class PanelName(StrEnum):
+    """Keys of `PANELS` in jobagent.bridge.panel_decisions."""
+
+    MUSE = "muse"
+    REACT = "react"
+    FEISHU_BITABLE = "feishu_bitable"
 
 
 def _output(action: Callable[[], object]) -> None:
@@ -124,16 +133,22 @@ def decide(
     path: Annotated[Path, typer.Argument(help="HostDecisionRequest JSON from the panel.")],
     actor: Annotated[str, typer.Option("--actor", help="Who acted in the panel.")],
     database: DatabaseOption = Path(".jobagent/jobagent.sqlite3"),
+    panel: Annotated[
+        PanelName, typer.Option("--panel", help="The front end the person decided in.")
+    ] = PanelName.MUSE,
 ) -> None:
     """Record a panel decision (recordDecision). Approval goes through the outreach gate on
-    the exact asked words; edits become revision feedback; nothing is sent."""
+    the exact asked words; edits become revision feedback; nothing is sent. Any listed
+    front end (Muse, React, Feishu Bitable) is a panel over the same record."""
     try:
         request = HostDecisionRequest.model_validate_json(path.read_bytes())
     except (OSError, ValueError):
         typer.echo(json.dumps({"error": {"code": "CONSOLE_INPUT_UNAVAILABLE",
                                          "message": "Decision request unavailable or invalid."}}))
         raise typer.Exit(1) from None
-    _receipt(record_panel_decision(database, request, actor_id=actor, now=datetime.now(UTC)))
+    _receipt(record_panel_decision(
+        database, request, actor_id=actor, now=datetime.now(UTC), panel=panel.value
+    ))
 
 
 @console_app.command("operation")

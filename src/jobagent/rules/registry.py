@@ -46,6 +46,7 @@ _RUNTIME = {
     "LIEPIN_DELIVERY_SPACING_SEC": "positive_number",
     "SOURCING_PLATFORMS": "sourcing_platforms",
     "SOURCING_METHODS": "sourcing_methods",
+    "DISPLAY_FRONTENDS": "display_frontends",
 }
 _HOST = {
     "FIRST_LAUNCH_MIN_JD": "positive_integer",
@@ -149,6 +150,12 @@ def _consumer(name: str) -> str:
             "rules prepare task_type=sourcing (required before a fetch round; the host "
             "carries out the chosen method; grants no login, captcha or rate-limit bypass)"
         )
+    if name == "DISPLAY_FRONTENDS":
+        return (
+            "rules prepare task_type=display (asked as a choice question; the host connects "
+            "and renders the chosen front ends; console decide --panel names the one used; "
+            "grants no approval or send)"
+        )
     if name == "QUERIES_PER_SITE_PER_ROUND":
         return "jobs search-plan --rules-file"
     if name == "PENDING_BACKLOG_ASK_THRESHOLD":
@@ -198,6 +205,34 @@ def is_platform_id(value: JsonValue) -> bool:
     if value in SOURCING_PLATFORM_IDS:
         return True
     return value.startswith("other:") and bool(value.removeprefix("other:").strip())
+
+
+# Front ends the repo has met. Any other is the person's own `other:<name>`: the list is
+# a starting point for the choice question, never a limit on where results are shown.
+DISPLAY_FRONTEND_IDS = {"react", "muse", "feishu_bitable"}
+_FRONTEND_NAME = re.compile(r"[^\x00-\x1f\x7f]{1,40}")
+
+
+def is_frontend_id(value: JsonValue) -> bool:
+    """A known front end, or `other:<name>` for one the person names."""
+    if not isinstance(value, str):
+        return False
+    if value in DISPLAY_FRONTEND_IDS:
+        return True
+    name = value.removeprefix("other:")
+    return (
+        value.startswith("other:") and bool(name.strip())
+        and _FRONTEND_NAME.fullmatch(name) is not None
+    )
+
+
+def _display_frontends(value: JsonValue) -> bool:
+    return (
+        isinstance(value, list)
+        and 1 <= len(value) <= 8
+        and all(is_frontend_id(item) for item in value)
+        and len(set(map(str, value))) == len(value)
+    )
 
 
 def _sourcing_platforms(value: JsonValue) -> bool:
@@ -302,6 +337,8 @@ def validate_value(name: str, value: JsonValue) -> None:
         valid = _sourcing_methods(value)
     elif kind == "sourcing_platforms":
         valid = _sourcing_platforms(value)
+    elif kind == "display_frontends":
+        valid = _display_frontends(value)
     if not valid:
         raise ContractValidationError(
             "Invalid dynamic variable value/type/unit.", details={"name": name, "expected": kind}

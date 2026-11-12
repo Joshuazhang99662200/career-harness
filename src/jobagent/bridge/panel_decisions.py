@@ -16,6 +16,7 @@ from jobagent.bridge.greeting_freshness import verify_greeting_sources
 from jobagent.digest import canonical_digest, text_digest
 from jobagent.errors import JobAgentError
 from jobagent.outreach.service import OutreachService, contacted_job_ids, policy_digest
+from jobagent.rules.registry import is_frontend_id
 from jobagent.schemas.console_host import (
     HostDecisionRequest,
     HostEvent,
@@ -39,7 +40,21 @@ from jobagent.storage.job_repository import SqliteJobRepository
 from jobagent.storage.outreach_repository import SqliteOutreachRepository
 from jobagent.storage.pipeline_repository import PipelineRepository
 
-CHANNEL = "Muse 面板"
+# The front end the person decided in. Each is a panel over the same stored record:
+# its decisions only count once relayed here, on the exact asked text and revision.
+# Not a closed list: any front end the person chose is `other:<name>`.
+PANELS: dict[str, str] = {
+    "muse": "Muse 面板",
+    "react": "React 控制台",
+    "feishu_bitable": "飞书多维表格",
+}
+
+
+def panel_label(panel: str) -> str | None:
+    """How the approval names the front end, or None for an unnamed or malformed one."""
+    if not is_frontend_id(panel):
+        return None
+    return PANELS.get(panel) or panel.removeprefix("other:").strip()
 # Same meaning as the panel transport everywhere else: approve_material approves the
 # exact material; approve_text only says the wording is fine and never approves.
 _ACTIONS = {"approve_material": "approve", "save_draft": "revise", "decline": "decline"}
@@ -276,10 +291,15 @@ _MESSAGES = {
 
 
 def record_panel_decision(
-    database: Path, request: HostDecisionRequest, *, actor_id: str, now: datetime
+    database: Path, request: HostDecisionRequest, *, actor_id: str, now: datetime,
+    panel: str = "muse",
 ) -> HostReceipt:
     def rejected(message: str) -> HostReceipt:
         return HostReceipt(operation_key=request.operation_key, status="rejected", message=message)
+
+    label = panel_label(panel)
+    if label is None:
+        return rejected("面板名称须是已知前端或 other:<名称>，没有保存。")
 
     db = Database(database)
     db.migrate()
@@ -331,7 +351,7 @@ def record_panel_decision(
             raise _Rejected("修改后的文字不能直接批准；请先保存修改，重新生成并复核后再审批。")
         if action == "revise" and request.body.strip() == item.text.strip():
             raise _Rejected("文字没有变化；如果接受原文请直接批准。")
-        return _commit(db, request, batch, ask, item, action, event_id, actor_id, now)
+        return _commit(db, request, batch, ask, item, action, event_id, actor_id, now, label)
     except _Rejected as error:
         return rejected(str(error))
     except JobAgentError as error:
@@ -415,6 +435,7 @@ def _answer(
 def _commit(
     db: Database, request: HostDecisionRequest, batch: OutreachBatch, ask: OutreachAsk,
     item: OutreachItem, action: str, event_id: str, actor_id: str, now: datetime,
+    panel: str,
 ) -> HostReceipt:
     feedback_store = SqliteFeedbackRepository(db)
     state = feedback_store.state(_state_id(ask.ask_id))
@@ -435,7 +456,7 @@ def _commit(
         revised.drafts[key] = request.body
     bundle = None
     if action == "approve":
-        bundle = _approval(db, batch, item, request, actor_id, now)
+        bundle = _approval(db, batch, item, request, actor_id, now, panel)
         revised.approved_batches[key] = bundle[0].batch_id
     revised.closed = all(str(i.number) in revised.decisions for i in batch.items)
     job = SqliteJobRepository(db).get_job(item.job_id)
@@ -474,7 +495,7 @@ def _commit(
 
 def _approval(
     db: Database, batch: OutreachBatch, item: OutreachItem, request: HostDecisionRequest,
-    actor_id: str, now: datetime,
+    actor_id: str, now: datetime, panel: str,
 ) -> tuple[OutreachBatch, OutreachAsk, OutreachApproval]:
     """A single-item list from the asked item, approved through the outreach gate."""
     verify_greeting_sources(db, [item], candidate_id=request.candidate_id)
@@ -507,7 +528,7 @@ def _approval(
     child = report.batch
     ask = service.ask(child, asked_at=now)
     attestation = (
-        f"本人在{CHANNEL}批准第 {item.number} 条最终原文：{item.text}"
+        f"本人在{panel}批准第 {item.number} 条最终原文：{item.text}"
         f"（{actor_id}；操作 {request.operation_key}；联系 {request.contact_id}）"
     )
     approval = service.approve(child, ask=ask, numbers=[1], attestation=attestation,

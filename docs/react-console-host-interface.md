@@ -30,7 +30,7 @@ import '@jobagent/polling-console/muse/styles.css';
 
 ## 后端入口（首条招呼逐条决定）
 
-Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删除的飞书卡片：
+Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删除的飞书卡片。前端不限于 React：飞书多维表格或本人选择的其他前端都可以作为同级前端接入（本人在首次配置中选定 `DISPLAY_FRONTENDS`）。宿主把本人在该前端写下的决定按同一 `HostDecisionRequest` 提交，并加 `--panel <所选前端>`（`react`、`muse`、`feishu_bitable` 或 `other:<名称>`，默认 `muse`），批准记录会写明来自哪个前端。前端只负责展示和留痕，决定经 CLI 写入私有库后才生效：
 
 | 面板接口 | CLI | 行为 |
 |---|---|---|

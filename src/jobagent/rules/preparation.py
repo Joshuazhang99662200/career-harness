@@ -27,6 +27,10 @@ _LABELS = {
         "找岗平台",
         "boss / liepin / linkedin / zhaopin / 51job / ats_boards / other:<名称>",
     ),
+    "DISPLAY_FRONTENDS": (
+        "前端展示方式",
+        "react / muse / feishu_bitable / other:<名称>",
+    ),
     "SOURCING_METHODS": (
         "各平台的登录或抓取方式",
         "mcp / browser_gui / agent_proposed / user_specified; 各写明站点与具体做法",
@@ -48,6 +52,11 @@ _CHOICES: dict[str, tuple[bool, tuple[tuple[str, str], ...]]] = {
         ("browser_gui", "内置浏览器, 本人登录后操作"),
         ("agent_proposed", "Agent 提出的具体方法"),
         ("user_specified", "本人指定的方法"),
+    )),
+    "DISPLAY_FRONTENDS": (True, (
+        ("react", "React 控制台"),
+        ("muse", "Muse 面板"),
+        ("feishu_bitable", "飞书多维表格"),
     )),
     "SALARY_COMPARE_MODE": (False, (
         ("upper_bound", "薪资区间上限达到即可"),

@@ -124,16 +124,23 @@ def decide(
     path: Annotated[Path, typer.Argument(help="HostDecisionRequest JSON from the panel.")],
     actor: Annotated[str, typer.Option("--actor", help="Who acted in the panel.")],
     database: DatabaseOption = Path(".jobagent/jobagent.sqlite3"),
+    panel: Annotated[str, typer.Option(
+        "--panel",
+        help="The front end the person decided in: react, muse, feishu_bitable or other:<name>.",
+    )] = "muse",
 ) -> None:
     """Record a panel decision (recordDecision). Approval goes through the outreach gate on
-    the exact asked words; edits become revision feedback; nothing is sent."""
+    the exact asked words; edits become revision feedback; nothing is sent. Any front end the
+    person chose (React, Muse, Feishu Bitable or their own) is a panel over the same record."""
     try:
         request = HostDecisionRequest.model_validate_json(path.read_bytes())
     except (OSError, ValueError):
         typer.echo(json.dumps({"error": {"code": "CONSOLE_INPUT_UNAVAILABLE",
                                          "message": "Decision request unavailable or invalid."}}))
         raise typer.Exit(1) from None
-    _receipt(record_panel_decision(database, request, actor_id=actor, now=datetime.now(UTC)))
+    _receipt(record_panel_decision(
+        database, request, actor_id=actor, now=datetime.now(UTC), panel=panel
+    ))
 
 
 @console_app.command("operation")

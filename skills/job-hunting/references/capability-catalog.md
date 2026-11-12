@@ -212,7 +212,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 能力 | 状态 | 入口 |
 |---|---|---|
 | 变量定义与消费状态 | 已落地 | `jobagent rules definitions`：类型、用户参数/平台参考/不变量及实际消费者；不带个人默认值 |
-| 首次表单与普通运行准备 | 已落地 | `jobagent rules prepare`：首次或本人主动修改才返回配置问题；普通运行跨轮次/任务类型/会话只读复用，缺值与冲突只报阻塞，不重开交互、不占额度；寻源任务另需先选平台 `SOURCING_PLATFORMS`、再定各平台方式 `SOURCING_METHODS`，从未决定过时在基线完整后按顺序各问一题；有平台没有方式或方式写到未选平台即 `blocked_by_conflict` |
+| 首次表单与普通运行准备 | 已落地 | `jobagent rules prepare`：首次或本人主动修改才返回配置问题；普通运行跨轮次/任务类型/会话只读复用，缺值与冲突只报阻塞，不重开交互、不占额度；寻源任务另需先选平台 `SOURCING_PLATFORMS`、再定各平台方式 `SOURCING_METHODS`，从未决定过时在基线完整后按顺序各问一题；有平台没有方式或方式写到未选平台即 `blocked_by_conflict`；`task_type=display` 以多选题询问前端展示 `DISPLAY_FRONTENDS`（已知前端或 `other:<名称>`），只问一次，宿主负责接通与渲染 |
 | 登记首次初始化 | 已落地 | `jobagent rules initialize`：核对当前版本及必需确认值后保存初始化身份，不再请求相同参数确认；已有确认档升级保留身份 |
 | 单变量修改提问 | 已落地 | `jobagent rules propose`：绑定候选人、来源、旧版本与一项新值；初始化后还需匹配的本人主动调整记录；只保存提问，不生效 |
 | 参数确认与激活 | 已落地 | `jobagent rules approve`：原提问摘要与本人明确答复；旧版本冲突拒绝，事务内只更新指定变量；不授予外部动作权限 |
@@ -382,7 +382,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 控制台统一清单 | 已落地 | `jobagent console list` | 候选人隔离，完整 job/meta/history 与运行及来源诊断；`approvals` 列出按已确认证据或来源绑定归属本人的首条招呼及其状态（待答、已批准及来源、未选中、改写、回绝、撤回）、批准原话与发送结果，任何对话与面板读到同一份；不迁移数据库、不授予任何权限 |
 | 宿主阶段观察 | 已落地 | `jobagent console event` | 仅私有宿主观察，关联已有运行；不授予审批、发送或修改岗位状态权限 |
 | 面板待审材料 | 已落地 | `jobagent console materials` | 面板 getMaterials：按候选人与流水线联系返回仍待本人决定的首条招呼准确全文，版本即条目摘要；已决定、已批准或已撤回的不再出现 |
-| 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`；`--panel` 写明本人在哪个前端决定（`muse` 默认、`react`、`feishu_bitable`），未列出的面板拒绝，各面板走同一门禁。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。待办回答 `answer_todo` 只接受暂缓（hold）与要求重写（revise），只登记操作，不批准、不发送、不进偏好记忆，条目保持可决定。不发送；文案意见 `approve_text` 等其他种类明确拒绝 |
+| 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`；`--panel` 写明本人在哪个前端决定（`react`、`muse` 默认、`feishu_bitable` 或 `other:<名称>`，不限平台；空名称或含控制字符时拒绝），各前端走同一门禁。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。待办回答 `answer_todo` 只接受暂缓（hold）与要求重写（revise），只登记操作，不批准、不发送、不进偏好记忆，条目保持可决定。不发送；文案意见 `approve_text` 等其他种类明确拒绝 |
 | 面板宿主状态 | 已落地(只读) | `jobagent console host-state` | 面板 getHostState：按候选人列出各流水线联系的首条招呼材料（revision 与 `console materials` 一致，待决定的排在最后）、已保存的面板操作（event_id 与回执一致），以及每条已提问首条招呼的个人待办（处理或回答后为已处理）。渠道由宿主提供；sync 为 unknown，说明未做平台同步核对 |
 | 面板操作回读 | 已落地 | `jobagent console operation` | 面板 getOperation：按操作键回读真实保存结果（决定、待办回答或执行确认），不重复执行；无记录即未保存 |
 | 面板选择队列 | 已落地(只读) | `jobagent console selection` | 面板 getSelectionQueue：按候选人读取已选岗位与版本。选择不代表批准、不授予发送权；只有选中之后发生、经逐字回读核实的发送才让岗位离开选择，排队、失败与结果未知的都留下 |

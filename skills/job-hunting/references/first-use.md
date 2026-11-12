@@ -66,7 +66,7 @@
 
 ### 怎么问
 
-- 一条消息只问一题，标出进度，例如“（3/10）”。
+- 一条消息只问一题，标出进度，例如“（3/11）”。
 - 每题给 2～5 个编号选项；有把握时把一个标为“（推荐）”并附一句理由；最后总有“其他：自己填”。本人只回编号也算答复。
 - 宿主有选择题工具时（例如 Claude Code 的 AskUserQuestion）就用它，没有就用编号文本。
 - 选项来源：`rules prepare` 返回的字段带 `choices` 时照用，`multiple=true` 即多选；方向、城市、排除项的选项由你依据已确认事实推断。不从固定的行业或岗位清单里挑。
@@ -84,14 +84,15 @@
 7. **平台**（多选，`SOURCING_PLATFORMS` 的 `choices`）。
 8. **每个平台的登录或抓取方式**（每个已选平台一题，`SOURCING_METHODS` 的 `choices`）：每个选项写清具体做法，见 [dynamic-variables.md](dynamic-variables.md)。
 9. **采集额度**：`QUERIES_PER_SITE_PER_ROUND`、`TOP_PER_QUERY`、`DETAIL_ATTEMPTS_PER_SITE_PER_ROUND`、`DETAIL_CAP_PER_DAY` 各一题，回显单位。
-10. **通知**（单选，见下节）。
+10. **前端展示**（多选，`DISPLAY_FRONTENDS` 的 `choices`，`rules prepare` 用 `task_type=display`）：在哪里看岗位进展、做逐条决定，例如 React 控制台、Muse 面板、飞书多维表格；本人说的其他前端或 Agent 平台记为 `other:<名称>`，不因不在列表里就拒绝。
+11. **通知**（单选，见下节）。
 
 已经登记过的题跳过，不重复问。
 
 ### 记录到哪里
 
 - 方向写入私有筛选配置 `CandidateFilterContext` 的 `preferred_search_terms`，不考虑的方向写入 `excluded_role_terms`，城市写入 `allowed_locations` / `remote_allowed`；文件放在 `candidate/private/`。
-- 薪资、平台、方式和额度是动态变量，按 [dynamic-variables.md](dynamic-variables.md) 先保存准确提问（含选项原文），再登记本人的选择。
+- 薪资、平台、方式、额度和前端展示是动态变量，按 [dynamic-variables.md](dynamic-variables.md) 先保存准确提问（含选项原文），再登记本人的选择。
 - 工作年限是事实，不是偏好：推算依据就是已确认的经历；本人补充的年限按“事实提取”的方式记为回答。
 
 ## 通知

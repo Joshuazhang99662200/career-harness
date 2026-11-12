@@ -35,6 +35,7 @@ pipeline 动态策略兼容性已在生产写入边界检查；MCP 搜索与查�
 
 - 采集状态、面板全文、真实读取预算、追加观察历史与整轮对账，先读 [references/sourcing-reliability.md](references/sourcing-reliability.md)。适用于所有岗位方向；宿主必须先预留再读取，未声明完整性或未绑定读取尝试的真实浏览器观察不能进入正式链路。
 - **开始抓取岗位之前**，先确认找岗平台 `SOURCING_PLATFORMS`（BOSS、猎聘、LinkedIn、智联、企业招聘看板等，本人多选），再确认每个平台的登录或抓取方式 `SOURCING_METHODS`（MCP 接口、内置浏览器、你想到的具体方法或本人指定方法，写清做法）。按 [references/dynamic-variables.md](references/dynamic-variables.md) 依次登记；已登记就复用。
+- **前端展示由本人选。** 首次配置时用多选题确认 `DISPLAY_FRONTENDS`（React 控制台、Muse 面板、飞书多维表格，或本人点名的其他前端 `other:<名称>`），不预设平台、不因不在列表里而拒绝；已登记就复用。本人在所选前端里的决定经 `console decide --panel <所选前端>` 走原审批门禁。
 - 实际使用 MCP 搜索或查看时，加载 [references/mcp-runtime.md](references/mcp-runtime.md)，绑定已配置的寻源轮次与当前版本，通过网关执行。准备不扣额，实际派发才计量；缺参数、未支持工具、未知结果与停站按该协议处理，不能绕回裸 MCP 调用。
 - 需要后段九态表单、静默核对、累计指标/诊断、规则优化复核或候选人状态权威切换时，优先加载 [references/pipeline.md](references/pipeline.md)。先核对已确认动态策略与生产消费者的兼容性；缺值或冲突只阻塞，不自动重问或退回固定值。旧tracking在authority切换后只读，pipeline不授予发送权。
 

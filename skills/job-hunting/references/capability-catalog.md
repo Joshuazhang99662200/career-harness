@@ -382,7 +382,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 控制台统一清单 | 已落地 | `jobagent console list` | 候选人隔离，完整 job/meta/history 与运行及来源诊断；`approvals` 列出按已确认证据或来源绑定归属本人的首条招呼及其状态（待答、已批准及来源、未选中、改写、回绝、撤回）、批准原话与发送结果，任何对话与面板读到同一份；不迁移数据库、不授予任何权限 |
 | 宿主阶段观察 | 已落地 | `jobagent console event` | 仅私有宿主观察，关联已有运行；不授予审批、发送或修改岗位状态权限 |
 | 面板待审材料 | 已落地 | `jobagent console materials` | 面板 getMaterials：按候选人与流水线联系返回仍待本人决定的首条招呼准确全文，版本即条目摘要；已决定、已批准或已撤回的不再出现 |
-| 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。待办回答 `answer_todo` 只接受暂缓（hold）与要求重写（revise），只登记操作，不批准、不发送、不进偏好记忆，条目保持可决定。不发送；文案意见 `approve_text` 等其他种类明确拒绝 |
+| 面板逐条决定 | 已落地(首条招呼) | `jobagent console decide` | 面板 recordDecision：须带 `--actor`；`--panel` 写明本人在哪个前端决定（`muse` 默认、`react`、`feishu_bitable`），未列出的面板拒绝，各面板走同一门禁。批准只接受提问时的准确原文，在单条清单上走原审批门禁并留下面板操作原话；保存修改记为改写反馈、待重新生成复核；回绝记为反馈。同一清单逐条决定完即撤回原清单，之后批量审批不能再批已决定的条目。待办回答 `answer_todo` 只接受暂缓（hold）与要求重写（revise），只登记操作，不批准、不发送、不进偏好记忆，条目保持可决定。不发送；文案意见 `approve_text` 等其他种类明确拒绝 |
 | 面板宿主状态 | 已落地(只读) | `jobagent console host-state` | 面板 getHostState：按候选人列出各流水线联系的首条招呼材料（revision 与 `console materials` 一致，待决定的排在最后）、已保存的面板操作（event_id 与回执一致），以及每条已提问首条招呼的个人待办（处理或回答后为已处理）。渠道由宿主提供；sync 为 unknown，说明未做平台同步核对 |
 | 面板操作回读 | 已落地 | `jobagent console operation` | 面板 getOperation：按操作键回读真实保存结果（决定、待办回答或执行确认），不重复执行；无记录即未保存 |
 | 面板选择队列 | 已落地(只读) | `jobagent console selection` | 面板 getSelectionQueue：按候选人读取已选岗位与版本。选择不代表批准、不授予发送权；只有选中之后发生、经逐字回读核实的发送才让岗位离开选择，排队、失败与结果未知的都留下 |

@@ -30,7 +30,7 @@ import '@jobagent/polling-console/muse/styles.css';
 
 ## 后端入口（首条招呼逐条决定）
 
-Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删除的飞书卡片：
+Muse 等宿主的适配器可把三项接口接到同版本 CLI，替代已删除的飞书卡片。飞书多维表格也可以作为同级前端接入：宿主把表中本人写下的决定按同一 `HostDecisionRequest` 提交，并加 `--panel feishu_bitable`，批准记录会写明来自飞书多维表格（默认 `--panel muse`，React 面板用 `react`）。表格只是展示和留痕的前端，决定经 CLI 写入私有库后才生效：
 
 | 面板接口 | CLI | 行为 |
 |---|---|---|

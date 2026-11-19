@@ -9,6 +9,15 @@
 - **未开始** —— 连 schema 都还没有。
 - **委托外部技能** —— 本项目不实现,由一个外部 Agent Skill 承担;该技能是下游消费者,消费本项目已校验的产物,**不替代任何契约或门禁**。上游边界见 [oss/source-manifest.yaml](oss/source-manifest.yaml)。
 
+## 共享飞书适配（最小接入）
+
+| 能力 | 状态 | 入口 |
+|---|---|---|
+| 实时字段映射 | 已落地 | `jobagent feishu schema`：私有配置指定字段 ID，读取实时 Schema；不修改表结构 |
+| 按条件读取待办 | 已落地 | `jobagent feishu query`：生成侧/执行侧共用字段映射与原生 AND 条件；显式取数上限和 offset，续页核对 expected_table_revision；has_more 不等于已完成遍历，不授予外发权 |
+| 单条来源与版本 | 已落地 | `jobagent feishu get`：准确记录及所映射内容摘要；摘要不是飞书原生记录版本，不能证明人工批准 |
+| 最小字段回写 | 已落地 | `jobagent feishu patch`：显式角色白名单、写前内容比对与写后正向回读；不写本人决定，不发送，不创建业务库；只支持 text/select，不提供原子 CAS，未知结果不重试 |
+
 ## 候选人(Candidate)
 
 Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)。GitHub 读取、私有持久记忆、网页、定时和通知委托实际宿主，需逐项验收；公开代码可用不代表 Muse 真实账号已接通。旧本地桥接不是新入口的前置条件。

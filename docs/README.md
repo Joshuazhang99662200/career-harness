@@ -15,6 +15,14 @@
 | 理解岗位后段与运营 | [Pipeline 工程说明](pipeline-flywheel.md)、[执行协议](../skills/job-hunting/references/pipeline.md)、[旧政策退役说明](pipeline-policy-retirement.md) |
 | 核对授权与第三方来源 | [项目许可](licensing.md)、[商业授权](../COMMERCIAL_LICENSE.md)、[上游复用评审](oss-review.md) |
 
+工作流与 Memory 改造的待实施目标见[实施任务单](workflow-memory-implementation-plan-2026-11-19.md)，当前本地/远端差异、审查覆盖及已知缺口见[审查记录](reviews/2026-11-19-workflow-memory-audit.md)。执行前须重新核验版本与门禁；任务单不替代能力目录，也不表示真实飞书、调度或 Dream 已接通。
+
+共享多维表格的权威、联合状态消费与结果回写的代码差异见[专项审查](reviews/2026-11-19-shared-state-code-audit.md)，运行责任见 [Agent 约定](../AGENTS.md) 和[宿主任务协议](../hosts/personal-ai/tasks.md)。
+
+最小飞书适配器、生成/执行侧共用协议及真实合成记录回读结果见[接入验收](feishu-integration-2026-11-19.md)。其中已验证的读写能力与尚未验收的事件/独立宿主联动分别列明。
+
+在生成侧和执行宿主中开始独立验收，使用[宿主交接](../hosts/personal-ai/feishu-acceptance.md)，固定发布 SHA 并逐项返回真实结果。
+
 `superpowers/` 与 `reviews/` 保存历史设计和审核记录，按其当时版本理解，不作为当前宿主的执行清单。其他设计稿也不能代替能力目录或宣布尚未接入的能力已落地。被替代的独立修订稿、旧图和一次性渲染脚本可从 Git 历史回查，当前目录只保留仍有用途的材料。
 
 岗位、JD、消息和记忆中的“快照”可能是业务证据或版本依据，不能因为文件名像缓存就删除。真实资料留在私有工作区；公开配图的数据仅为[合成示例](assets/shared/README.md)，不会成为本人事实或批准。

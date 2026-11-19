@@ -40,6 +40,7 @@ from jobagent.jobs.ports import JobDiscoverySource, JobListingSource
 from jobagent.jobs.query_derivation import SearchQueryDeriver
 from jobagent.jobs.ranking import JobRanker
 from jobagent.jobs.search_learning import learn_search
+from jobagent.jobs.search_memory_apply import apply_search_memory
 from jobagent.jobs.search_plan import plan_searches
 from jobagent.jobs.workflow import JobIntelligenceWorkflow
 from jobagent.outreach.preference_memory import PreferenceLearner
@@ -70,6 +71,7 @@ from jobagent.schemas.jobs import (
     JobRequirementProfile,
     NormalizedJob,
 )
+from jobagent.schemas.memory_signal import PublishedMemoryFile, SearchParameters
 from jobagent.schemas.search_learning import SearchLearningRequest
 from jobagent.schemas.sourcing import (
     ReadOutcome,
@@ -706,6 +708,10 @@ def search_plan(
     ] = 120,
     codex_executable: Annotated[Path | None, typer.Option("--codex-executable")] = None,
     rules_file: Annotated[Path | None, typer.Option("--rules-file")] = None,
+    search_memory: Annotated[
+        Path | None,
+        typer.Option("--search-memory", help="Published search memory from signal-compile."),
+    ] = None,
 ) -> None:
     """Which preferred search terms each board should run next, with each term's record."""
     try:
@@ -727,6 +733,11 @@ def search_plan(
         if rules is not None and raw.get("candidate_id") != candidate:
             raise ContractValidationError("Dynamic filter context belongs to another candidate.")
         chosen_count = bind_query_count(rules, explicit=per_site) if rules else per_site or 3
+        published = None
+        if search_memory is not None:
+            if candidate is None:
+                raise ContractValidationError("Search memory requires an explicit candidate.")
+            published = read_model(search_memory, PublishedMemoryFile).memories
         memory = None
         learner = None
         if memory_settings is not None:
@@ -756,6 +767,7 @@ def search_plan(
         )
         plans = {}
         selections = {}
+        search_memory_by_board: dict[str, object] = {}
         for board in site or ["boss", "liepin", "zhaopin"]:
             planned_terms = terms
             if memory is not None and learner is not None:
@@ -767,6 +779,16 @@ def search_plan(
                 selections[board] = selection.model_dump(mode="json")
                 if selection.search_queries:
                     planned_terms = selection.search_queries
+            if published is not None:
+                assert candidate is not None
+                keywords = [term.strip() for term in planned_terms if term.strip()]
+                applied_memory = apply_search_memory(
+                    SearchParameters(keywords=keywords),
+                    published,
+                    candidate_id=candidate,
+                )
+                planned_terms = list(applied_memory.after.keywords)
+                search_memory_by_board[board] = applied_memory.model_dump(mode="json")
             plans[board] = plan_searches(
                 planned_terms,
                 board,
@@ -785,6 +807,11 @@ def search_plan(
                                for board, plan in plans.items()},
                 **({"memory_version": memory.version, "selections": selections} if memory else {}),
             }
+        if search_memory_by_board:
+            if isinstance(result, dict) and "plans" in result:
+                result = {**result, "search_memory": search_memory_by_board}
+            else:
+                result = {"plans": plans, "search_memory": search_memory_by_board}
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     except JobAgentError as error:
         fail(error)

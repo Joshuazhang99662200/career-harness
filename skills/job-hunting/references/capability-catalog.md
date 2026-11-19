@@ -41,6 +41,10 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | 记忆实际使用核验 | 已落地(招呼) | `jobagent memory usage`：从外联账本统计各偏好记忆版本、偏好规则与动态规则版本实际进入起草、批准、发送的条目数；`greetings generate` 产出的定向稿在来源绑定中记录生成输入摘要、记忆版本与所选规则。无记录的旧稿或手写稿计为未归因，不推测；回复结果见 `memory effect`，不代表因果结论 |
 | 记忆效果对比 | 已落地(观察性) | `jobagent memory effect`：须显式给出 `--window-days` 观察窗口与 `--min-sample` 最小样本，把有正向发送记录的招呼按岗位与渠道关联到窗口内的招聘方来信；窗口未结束的计为待定、不进任何分母。各记忆版本与规则对比未使用记忆的招呼，用 Wilson / Newcombe 95% 区间，样本不足报 insufficient_sample，区间跨 0 报 no_clear_difference。非随机分配，只是相关性 |
 | 效果判定模拟 | 已落地 | `jobagent memory simulate`：在已知真实效果的合成数据上重复判定，给出检出率、误报率与反向误判率，用于估计需要多少样本；固定种子可复现 |
+| 三字段人工信号 | 已落地 | `jobagent memory signal-receive`：读取本地 `drive.file.bitable_record_changed_v1` fixture，只保留配置的匹配档位、处理进度、招呼语；Bot 不进入人工信号，操作者或前后值无法区分时为 unknown。可选 `--receipt` 只存事件摘要做去重。不订阅、不连网、不发送 |
+| 信号归因发布 | 已落地 | `jobagent memory signal-compile`：校验宿主已写好的归因是否引用本次 JD 与原稿摘要，并发布 search / matching / greeting / workflow 记忆。进度变化不能带搜索参数。不调用模型、不写飞书 |
+| 搜索记忆消费 | 已落地 | `jobagent memory apply-search`：只把 search 记忆加到关键词、岗位方向或排除项，并逐项给出记忆与事件原因；招呼和进度记忆不改变搜索参数。不执行搜索、不发送 |
+| 未批准不发送 | 已落地 | `jobagent memory send-gate`：读取当前投影的处理进度与批准状态。未批准或不存在批准时拒绝；批准值即使匹配，该命令也不发送 |
 | 角色扮演工作区 | 已落地(仅合成) | `jobagent roleplay init`：在当前目录 `.jobagent/roleplay` 建立独立合成工作区：合成候选人、经 `confirm` 确认的合成证据与合成岗位；已存在即拒绝。`--memory-mode full|notes_only|off` 建立对照臂，`--strict-owner` 拒绝反馈中的全称词 |
 | 模拟本人人设 | 已落地(仅合成) | `jobagent roleplay persona`：只给扮演本人的会话看人设与隐藏偏好；生成方的任何请求都不包含这些内容 |
 | 角色扮演一轮生成 | 已落地(仅合成) | `jobagent roleplay round`：须带私有 `--gemini-config`。刷新偏好记忆、选规则，由本机 Gemini CLI 起草并独立复核招呼，入清单并提问；上一轮未决定时拒绝。Gemini 回执须证明没有工具调用（Gemini CLI 报告次数为 0，或 agy 事件流中无工具步骤），否则失败不重试 |
@@ -67,7 +71,7 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | 读取结果 | 已落地 | `jobagent jobs sourcing-result`（追加结果；gate 停该站当天预占；不授予发送权） |
 | 每查询取数与精确去重 | 已落地 | `jobagent jobs sourcing-take`（绑定真实查询尝试与冻结 TOP_PER_QUERY，回显期望/实际/不足/重复，只按同来源平台 ID 跨查询去重；不证明已遍历全部页面） |
 | `search_log` | 已落地 | `jobagent jobs search-log`(每次搜索都记一笔:站、检索词、列出几条、其中新职位几条;零结果也记) |
-| `search_plan` | 已落地 | `jobagent jobs search-plan`(按站给出这一轮该用的检索词:多数名额轮换最久没搜过的词,一个名额给历史上带出强匹配/可能匹配最多的词;附每个词的搜索次数、新增、命中与匹配产出) |
+| `search_plan` | 已落地 | `jobagent jobs search-plan`(按站给出这一轮该用的检索词:多数名额轮换最久没搜过的词,一个名额给历史上带出强匹配/可能匹配最多的词;附每个词的搜索次数、新增、命中与匹配产出)。可选 `--search-memory` 把已发布的 search 记忆应用到检索词、方向和排除项，并在结果里给出原因；不传则与原来一致，不搜索、不发送 |
 | `fetch_jd` | 已落地 | `jobagent jobs fetch-jd`(读公开详情页,把 `JobListing` 补齐为 `SourceJobRecord`) |
 | `fetch` | 已落地 | `jobagent jobs fetch` |
 | `normalize` | 已落地 | `jobagent jobs normalize` |

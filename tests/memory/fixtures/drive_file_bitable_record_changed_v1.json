@@ -1,0 +1,56 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_id": "evt_grade_b_to_a",
+    "event_type": "drive.file.bitable_record_changed_v1",
+    "create_time": "1608725989000",
+    "token": "fixture_event_token",
+    "app_id": "cli_fixture",
+    "tenant_key": "tenant_fixture"
+  },
+  "event": {
+    "file_type": "bitable",
+    "file_token": "bas_fixture",
+    "table_id": "tbl_jobs_fixture",
+    "revision": 41,
+    "operator_id": {
+      "union_id": "on_human_fixture",
+      "user_id": "user_fixture",
+      "open_id": "ou_human_fixture"
+    },
+    "action_list": [
+      {
+        "record_id": "rec_job_data",
+        "action": "record_edited",
+        "before_value": [
+          {
+            "field_id": "fld_match_grade",
+            "field_value": "B"
+          }
+        ],
+        "after_value": [
+          {
+            "field_id": "fld_match_grade",
+            "field_value": "A",
+            "field_identity_value": {
+              "users": [
+                {
+                  "name": "not-an-operator",
+                  "en_name": "Ignored"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "subscriber_id_list": [
+      {
+        "union_id": "on_subscriber_fixture",
+        "user_id": "subscriber_fixture",
+        "open_id": "ou_subscriber_fixture"
+      }
+    ],
+    "update_time": 1717040601
+  }
+}

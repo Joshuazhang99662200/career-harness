@@ -31,6 +31,8 @@ pipeline 动态策略兼容性已在生产写入边界检查；MCP 搜索与查�
 
 ## 上下文路由
 
+- 生成侧/执行侧需要共同读取飞书待办、按角色回填或回写结果时，加载 [references/feishu-shared-source.md](references/feishu-shared-source.md)。按真实 Schema 联合查询阶段与批准，共用轻量接口；不建本地业务账本，事件只提示刷新。当前只验证最小读写与回读，不能宣称宿主事件联动或真实发送已接通。
+
 - 首次配置、加载已确认配置，或本人明确要求调整时间、阈值、次数、比例与写作偏好时，先读 [references/dynamic-variables.md](references/dynamic-variables.md)。先核对初始化身份；只有首次或主动变更才生成问题，普通任务只准备只读计划。用私有单变量提问、本人确认与版本快照，不把外部表格、宿主猜测或平台参考自动激活。
 
 - 采集状态、面板全文、真实读取预算、追加观察历史与整轮对账，先读 [references/sourcing-reliability.md](references/sourcing-reliability.md)。适用于所有岗位方向；宿主必须先预留再读取，未声明完整性或未绑定读取尝试的真实浏览器观察不能进入正式链路。

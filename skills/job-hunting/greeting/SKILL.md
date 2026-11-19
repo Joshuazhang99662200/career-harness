@@ -8,7 +8,7 @@ metadata:
 
 # JD Greeting
 
-Write the first message a candidate sends about one specific job: short, true, clearly about *this* job, and in the candidate's own voice. Every JD is read fresh and every message is written fresh. Past drafts are feedback material, never templates.
+围绕一个具体岗位，用一条完整、真实的经历证明相关能力，以候选人自己的口吻写首条消息。简洁服务于理解，不以更短为胜。每份JD重新阅读、每篇重新组织；旧稿只作反馈，不作模板。
 
 The skill is **host-agnostic and stateless**. It contains no occupation taxonomy, no résumé facts, no job-to-experience mapping, no phrase bank and no personal preferences. Those come from the host (the app, agent or person running the skill) for each request.
 
@@ -35,11 +35,17 @@ See [host-contract.md](references/host-contract.md) for the full input and outpu
 
 ## Workflow (for each JD)
 
+**Evidence Selection Counterfactual（Evidence Fit内）。** 选材时暂时禁用当前主案例，比较源材料中其他真实经历的任务相关性、个人贡献、验证结果和表达成本，再选择综合证明力更强者。允许保留原案例、跨岗位复用最佳案例，不为多样性换弱证据，也不强制同篇展示多个案例。另查具有独特证明力的专业背景是否被过度单案例聚焦误删；必要时简短保留，不捏造连接。比较依据留在正文外。详见[evidence-reasoning.md](references/evidence-reasoning.md)。
+
 **1. Understand: find the real need.** Read the whole JD. Identify the problem the hire must solve, the results they will own, who they work with, the constraints and how success is judged. Separate hard requirements, core abilities, nice-to-haves and marketing copy. Do not label a job from its title or keywords. Form a short internal note: `core goal → key work → how success is judged`. See [jd-understanding.md](references/jd-understanding.md).
 
 **2. Retrieve and reason: choose facts dynamically.** Search only the evidence provided for this request. For each candidate fact, compare the problem, the task, the action taken, the result and how strong the evidence is. Cross-domain transfer is allowed, but say *which* capability or method transfers. Never present transfer potential as a result already achieved in the target domain. See [evidence-reasoning.md](references/evidence-reasoning.md).
 
 **3. Compose: write this message for this JD.** Choose the opening, the experience, the result, the vocabulary, the order and the close for this message. Do not fill fixed slots or reuse old sentences. Build one clear line of cause and effect around one experience or capability. Add supporting evidence only if it serves that same line. Describe the candidate's work in the recipient's terms; drop source-industry detail and internal jargon that don't help the recipient see the transfer. Write *to* the recipient, never *about* "this role / this JD". Show concrete actions and relevant results instead of claiming to be a "strong match". Use technical detail, credentials and numbers only when they help and are supported. See [message-composition.md](references/message-composition.md).
+
+**First-contact restraint (required).** JD用于选择候选人的既有证据，不是要求替用人方设计产品。内部可以深入理解，正文不得输出对未知业务的诊断、路线图猜测，或把JD愿景换词当作个人洞察。首招可以完全没有未来产品方案。非必要观点应直接删除，不要求换一个洞察或补足篇幅；删后通读整篇，确保身份、真实经历、贡献和收尾属于一条连贯主线。局部句子各自优秀不等于整篇成立。详见[成稿](references/message-composition.md)和[复核](references/quality-review.md)。
+
+**证据深度（必查）。** 用真实用户任务、候选人的关键判断/行动及可核实产出证明贡献；技术机制只保留有解释增量的部分，不靠术语、职责或指标数量凑深度。Evidence Substance Check：暂去技术名词后，是否仍能理解实际任务和个人贡献？Causal Grounding Check：事实之间的因果、归属及成果连接是否也有证据？两端真实不证明连接真实，时间顺序不证明直接促成立项。缺连接就去除该断言、收窄范围或重选主线，不编动机。输入只有职责时说明缺口，不补造细节；L1 Claim、L2 Mechanism、L3 Validation仅作可选理解层次。见[evidence-reasoning.md](references/evidence-reasoning.md)及[复核](references/quality-review.md)。
 
 **4. Review: check facts, then quality.** Verify every checkable claim: who did it, lead or contribute, dates, how much a tool was actually used, who owns the result, what a metric means, sample, launch status and disclosure limits. Then check relevance to the core need, the evidence logic, narrative flow, human voice, redundancy and the host's preferences. A JD keyword appearing in the message is not proof of fit. Use an independent reviewer if the host provides one. Otherwise label the review `self_check` and never claim independent review. See [quality-review.md](references/quality-review.md).
 

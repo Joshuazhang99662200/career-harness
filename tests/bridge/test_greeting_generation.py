@@ -4,7 +4,12 @@ from typing import Any
 import pytest
 
 from jobagent.bridge.greeting_generation import CodexGreetingProvider
-from jobagent.bridge.greeting_policy import DEFAULT_METHOD, POLICY_REFERENCES, PRECEDENCE
+from jobagent.bridge.greeting_policy import (
+    DEFAULT_METHOD,
+    POLICY_REFERENCES,
+    PRECEDENCE,
+    greeting_policy,
+)
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.greeting import GreetingDraft, GreetingRequest, GreetingReview
@@ -173,3 +178,44 @@ def test_large_source_context_is_chunked_without_altering_text(monkeypatch):
     assert len(model_request.records) > 1
     assert max(len(record.text) for record in model_request.records) <= 48000
     assert json.loads("".join(record.text for record in model_request.records)) == context
+
+
+@pytest.mark.parametrize("reviewing", [False, True])
+def test_actual_draft_and_review_prompts_load_first_contact_guards(reviewing):
+    payload = source_request().model_dump(mode="json")
+    policy = greeting_policy()
+    payload["policy_digest"] = canonical_digest(policy)
+    context = {"request": payload, "input_digest": canonical_digest(payload)}
+    runner = Runner()
+    provider = CodexGreetingProvider(runner)
+    draft = provider.generate(
+        prompt_id="greeting.ai.draft.v1", context=context, output_type=GreetingDraft
+    )
+    if reviewing:
+        provider.generate(
+            prompt_id="greeting.ai.review.v1",
+            output_type=GreetingReview,
+            context={
+                **context,
+                "draft_digest": canonical_digest(draft.model_dump(mode="json")),
+                "draft": draft.model_dump(mode="json", exclude={"angle"}),
+            },
+        )
+    instruction = runner.calls[-1][0].instruction
+    assert policy in instruction
+    assert "**First-contact restraint (required).**" in instruction
+    assert "whole-message coherence gate" in instruction
+    assert "style_ok=false" in instruction
+    assert "target_relevant=false" in instruction
+    assert "evidence_collapse" in instruction
+    assert "unsupported_target_projection" in instruction
+    assert "narrative_collage" in instruction
+    assert "L1 Claim" in instruction and "L2 Mechanism" in instruction
+    assert "L3 Validation" in instruction
+    assert "Evidence Substance Check" in instruction
+    assert "Causal Grounding Check" in instruction
+    assert "evidence_substance" in instruction
+    assert "unsupported_causal_link" in instruction
+    assert "Evidence Selection Counterfactual" in instruction
+    assert "evidence_selection" in instruction
+    assert "独特证明力" in instruction

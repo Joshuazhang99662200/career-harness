@@ -8,6 +8,7 @@ from jobagent.cli.applications import applications_app
 from jobagent.cli.candidate import candidate_app
 from jobagent.cli.console import console_app
 from jobagent.cli.conversations import conversations_app
+from jobagent.cli.feishu import feishu_app
 from jobagent.cli.greetings import greetings_app
 from jobagent.cli.harness import harness_app
 from jobagent.cli.host import host_app
@@ -69,6 +70,7 @@ app.add_typer(rules_app, name="rules")
 app.add_typer(roleplay_app, name="roleplay")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(memory_app, name="memory")
+app.add_typer(feishu_app, name="feishu")
 
 
 if __name__ == "__main__":

@@ -211,3 +211,157 @@ def test_claims_must_be_unique_exact_nonoverlapping_spans():
             data["claims"] *= 2
     with pytest.raises(InvalidProviderOutputError):
         GreetingGenerator(Provider(change=change)).generate(request())
+
+
+@pytest.mark.parametrize("field", ["style_ok", "target_relevant"])
+def test_supported_claims_do_not_override_first_contact_quality_veto(field):
+    def change(prompt_id, data):
+        if "review" in prompt_id:
+            data[field] = False
+            data["issues"] = ["Delete the needless proposal; reread the whole greeting."]
+
+    result = GreetingGenerator(Provider(change=change)).generate(request(targeted=True))
+    assert result.status == "rejected"
+    assert result.outreach_draft is None
+    assert result.approval_granted is False
+    assert field in result.attempts[0].problems
+    assert result.attempts[0].review.full_text_supported is True
+    assert all(c.verdict == "supported" for c in result.attempts[0].review.claims)
+
+
+def test_quality_revision_can_delete_a_proposal_without_replacing_it():
+    proposal = "I would redesign your whole product strategy. "
+    core = "Hello, I built research report agents. Can we talk?"
+    drafts = 0
+
+    def change(prompt_id, data):
+        nonlocal drafts
+        if "draft" in prompt_id:
+            drafts += 1
+            data["text"] = proposal + core if drafts == 1 else core
+            data["claims"] = [{
+                "text": "I built research report agents", "evidence_ids": ["EVID_REPORT"],
+            }]
+        elif drafts == 1:
+            data["style_ok"] = False
+            data["issues"] = [f'Delete "{proposal.strip()}" and reread the entire greeting.']
+
+    result = GreetingGenerator(Provider(change=change)).generate(request(targeted=True))
+    assert result.status == "passed"
+    assert len(result.attempts) == 2
+    assert "style_ok" in result.attempts[0].problems
+    assert result.attempts[-1].draft.text == core
+    assert result.outreach_draft.text == core
+    assert result.approval_granted is False
+
+
+def test_evidence_depth_revision_can_restore_supplied_same_project_detail():
+    core = "I built research report agents"
+    detail = "I linked each report conclusion to its source for analyst verification"
+    data = request(targeted=True).model_dump(mode="json")
+    data["evidence"][0]["statement"] += (
+        " Linked each report conclusion to its source for analyst verification."
+    )
+    drafts = 0
+
+    def change(prompt_id, result):
+        nonlocal drafts
+        if "draft" in prompt_id:
+            drafts += 1
+            result["text"] = (
+                f"Hello, {core}. Can we talk?" if drafts == 1
+                else f"Hello, {core}. {detail}. Can we talk?"
+            )
+            result["claims"] = [{"text": core, "evidence_ids": ["EVID_REPORT"]}]
+            if drafts > 1:
+                result["claims"].append({"text": detail, "evidence_ids": ["EVID_REPORT"]})
+        elif drafts == 1:
+            result["style_ok"] = False
+            result["issues"] = [
+                f'evidence_collapse: "{core}" omits the supplied verification mechanism.'
+            ]
+
+    result = GreetingGenerator(Provider(change=change)).generate(
+        GreetingRequest.model_validate(data)
+    )
+    assert result.status == "passed" and len(result.attempts) == 2
+    assert "style_ok" in result.attempts[0].problems
+    assert result.attempts[0].review.full_text_supported is True
+    assert detail in result.outreach_draft.text
+    assert len(result.attempts[-1].draft.claims) == 2
+    assert result.approval_granted is False
+
+
+@pytest.mark.parametrize("missing_relation_claim", [False, True])
+def test_true_endpoint_facts_do_not_override_an_unsupported_relation(missing_relation_claim):
+    """A recorded semantic rejection must block even when endpoint facts are supported."""
+    survey = "I conducted an earlier survey"
+    endpoint = "I built research report agents"
+    relation = "The survey directly led me to launch the report agent project"
+    source = request(targeted=True).model_dump(mode="json")
+    source["evidence"].append({
+        "id": "EVID_SURVEY", "type": "project", "statement": "Conducted an earlier survey.",
+        "confidence": "explicit", "user_confirmed": True,
+        "source": {"type": "interview", "reference": "CHAT_SYNTHETIC_SURVEY"},
+    })
+
+    def change(prompt_id, data):
+        if "draft" in prompt_id:
+            data["text"] = f"Hello, {survey}. {endpoint}. {relation}. Can we talk?"
+            data["claims"] = [
+                {"text": survey, "evidence_ids": ["EVID_SURVEY"]},
+                {"text": endpoint, "evidence_ids": ["EVID_REPORT"]},
+            ]
+            if not missing_relation_claim:
+                data["claims"].append({
+                    "text": relation, "evidence_ids": ["EVID_SURVEY", "EVID_REPORT"],
+                })
+        else:
+            data["full_text_supported"] = False
+            data["no_missing_claims"] = not missing_relation_claim
+            data["issues"] = [f'unsupported_causal_link: "{relation}" has no source.']
+            if not missing_relation_claim:
+                data["claims"][-1].update(
+                    verdict="unsupported", reason="Endpoint facts do not establish causation."
+                )
+
+    result = GreetingGenerator(Provider(change=change)).generate(
+        GreetingRequest.model_validate(source)
+    )
+    assert result.status == "rejected" and result.outreach_draft is None
+    assert all(c.verdict == "supported" for c in result.attempts[0].review.claims[:2])
+    assert "full_text_supported" in result.attempts[0].problems
+    if missing_relation_claim:
+        assert "no_missing_claims" in result.attempts[0].problems
+    assert result.approval_granted is False
+
+
+def test_supported_metric_cannot_override_a_better_evidence_selection_veto():
+    source = request(targeted=True).model_dump(mode="json")
+    source["evidence"].append({
+        "id": "EVID_MARKET", "type": "project",
+        "statement": "Led marketplace matching with 95% offline precision.",
+        "confidence": "explicit", "user_confirmed": True,
+        "source": {"type": "interview", "reference": "CHAT_SYNTHETIC_MARKET"},
+    })
+    claim = "I led marketplace matching with 95% offline precision"
+
+    def change(prompt_id, data):
+        if "draft" in prompt_id:
+            data["text"] = f"Hello, {claim}. Can we talk?"
+            data["claims"] = [{"text": claim, "evidence_ids": ["EVID_MARKET"]}]
+        else:
+            data["target_relevant"] = False
+            data["issues"] = [
+                'evidence_selection: the supplied report-agent work directly proves the core task.'
+            ]
+
+    provider = Provider(change=change)
+    result = GreetingGenerator(provider).generate(GreetingRequest.model_validate(source))
+    assert result.status == "rejected" and result.outreach_draft is None
+    assert result.attempts[0].review.full_text_supported is True
+    assert all(c.verdict == "supported" for c in result.attempts[0].review.claims)
+    assert "target_relevant" in result.attempts[0].problems
+    reviewer_sources = provider.calls[1][1]["request"]["evidence"]
+    assert {e["id"] for e in reviewer_sources} == {"EVID_REPORT", "EVID_MARKET"}
+    assert result.approval_granted is False

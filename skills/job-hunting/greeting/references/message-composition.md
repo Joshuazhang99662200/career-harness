@@ -47,6 +47,19 @@ Avoid empty self-praise, ingratiating declarations, abstract skill lists and lec
 - Length follows the platform, the user's preferences and the information density. Without explicit limits, aim for one screen with nothing redundant.
 - Use only forms of address you actually know. Don't infer the recipient's name, gender, age or internal company information.
 
+## Enterprise AI productivity and collaboration framing
+
+For an employer whose JD is about **B2B AI applications, enterprise collaboration, employee productivity or internal workflow adoption**, lead with the **business-facing tool and user task**, not a generic "Agent platform" identity. Infer this route from the JD's concrete user, workflow, deployment and outcome; a company label or an isolated "AI" keyword is not sufficient.
+
+- First answer: who uses the tool (employees, business teams, enterprise customers), what work it helps them finish (knowledge retrieval, document work, cross-team handoff, task automation) and how product quality is actually checked.
+- When confirmed candidate evidence and current user guidance support it, use a business-readable term such as **「企业级 AI 平台工具」**, **「企业内部 AI 效率工具」** or **「企业协同工作流产品」**. Treat these as **ways to describe the same verified work**, not proof of a new employer, category of customer, enterprise suite or company-wide deployment.
+- RAG, Skills, Agent, MCP, prompt engineering and evaluation are supporting implementation details. Mention them when they make the candidate's contribution credible or when the JD specifically asks for their design; otherwise prefer the task, user's experience and grounded result.
+- Keep source-industry scope intact. If the candidate previously built a finance-specific tool, do not say they already deployed a generic enterprise office platform or improved a whole company's productivity. Say what work was actually done and which capability transfers to the prospective workplace.
+- If the JD primarily hires an **Agent runtime / model strategy / infrastructure** specialist, retain Agent/Harness/Tool Calling technical depth. Do not blunt that fit with an office-product label.
+- The candidate's exact preferred phrase is host-supplied guidance, never a global skill default. Avoid stock openings, keyword stuffing and repeated fixed sentences.
+
+**Illustrative contrast, not copy:** A weaker opening says 「我负责多 Agent 平台，熟悉 RAG / Tool / Skill。」 For a collaboration-oriented role, a more useful evidence-grounded angle is 「我做过面向专业团队的 AI 工作工具，把资料检索、文档处理和结果核验整合到同一工作流，并用真实业务样本评估交付质量。」 The final wording must reflect the **specific candidate's supported facts** and this JD, not these examples.
+
 ## 5. Keep plans and past results apart
 
 The candidate's views on future product directions, methods or target markets can be expressed as ideas or interests. They must not read as launched, validated or customer-proven past results. Past work keeps its real scope and outcome.

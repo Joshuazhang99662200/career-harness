@@ -8,15 +8,19 @@ import hashlib
 import sqlite3
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from typing import Protocol
 from uuid import uuid4
 
 from jobagent.bridge.greeting_freshness import verify_greeting_sources
 from jobagent.connectors.observations import check_observation
-from jobagent.digest import spaced_json_digest
+from jobagent.digest import canonical_digest, spaced_json_digest
 from jobagent.errors import ApprovalRequiredError, ContractValidationError, JobAgentError
 from jobagent.jobs.normalization import JobNormalizer
+from jobagent.jobs.shared_send_gate import current_work_decision
 from jobagent.outreach.service import OutreachService, contacted_job_ids
+from jobagent.schemas.applications import ApprovalChannel
 from jobagent.schemas.common import ContractModel
+from jobagent.schemas.feishu import FeishuRecord, SharedSendPolicy, SharedWorkDecision
 from jobagent.schemas.job_intelligence import (
     ImportedObservation,
     JobSearchHit,
@@ -56,6 +60,12 @@ def _event_id(task_id: str) -> str:
     return "WEVT_" + hashlib.sha256(task_id.encode()).hexdigest()[:24].upper()
 
 
+class SharedJobReader(Protocol):
+    """Re-read one current shared record. Implementations must not serve a stale copy."""
+
+    def current(self, record_id: str) -> FeishuRecord: ...
+
+
 class WorkerGateway:
     def __init__(
         self,
@@ -63,6 +73,9 @@ class WorkerGateway:
         *,
         manifests: Sequence[SourceManifest] | None = None,
         clock: Callable[[], datetime] | None = None,
+        shared: SharedJobReader | None = None,
+        shared_record_id: str | None = None,
+        send_policy: SharedSendPolicy | None = None,
     ) -> None:
         self.database = database
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -73,6 +86,11 @@ class WorkerGateway:
         self.jobs = SqliteJobRepository(database)
         self.outreach = SqliteOutreachRepository(database)
         self.service = OutreachService()
+        self.shared = shared
+        self.shared_record_id = shared_record_id
+        self.send_policy = None
+        if send_policy is not None:
+            self.send_policy = SharedSendPolicy.model_validate(send_policy.model_dump())
 
     def ingest(self, request: WorkerFetchRequest) -> WorkerFetchReceipt:
         digest = _digest(request)
@@ -160,55 +178,92 @@ class WorkerGateway:
             )
         return receipt
 
-    def _batch(self, batch_id: str) -> tuple[OutreachBatch, OutreachApproval]:
+    def _read_shared(self) -> SharedWorkDecision:
+        if self.shared is None or not self.shared_record_id or self.send_policy is None:
+            raise ApprovalRequiredError(
+                "Worker send requires a current shared-table read.",
+                details={"send_dispatched": False},
+            )
+        record = self.shared.current(self.shared_record_id)
+        if record.record_id != self.shared_record_id:
+            raise ContractValidationError("Shared read returned a different record.")
+        return current_work_decision(record, self.send_policy)
+
+    def _execution_batch(self, batch_id: str) -> OutreachBatch:
+        """Load the greeting payload. Local approval rows are not consulted."""
         batch = self.outreach.get_batch(batch_id)
-        approval = self.outreach.get_approval(batch_id)
         if batch is None:
             raise ContractValidationError("Outreach batch was not found.")
-        if approval is None:
-            raise ApprovalRequiredError("This batch has no human approval.")
-        ask = self.outreach.get_ask(approval.ask_id) if approval.ask_id else None
-        if ask is None or approval.approved_at < ask.asked_at:
-            raise ApprovalRequiredError("The original human approval question is missing or later.")
-        self.service.approve(
-            batch,
-            ask=ask,
-            numbers=approval.approved_numbers,
-            attestation=approval.attestation,
-            approved_at=approval.approved_at,
-        )
-        if self.outreach.is_withdrawn(batch_id):
-            raise ContractValidationError("Outreach batch was withdrawn.")
-        found = {i.job_id: self.jobs.get_job(i.job_id) for i in batch.items}
+        found = {item.job_id: self.jobs.get_job(item.job_id) for item in batch.items}
         self.service.verify_current_batch(batch, {k: v for k, v in found.items() if v is not None})
         verify_greeting_sources(self.database, batch.items)
-        return batch, approval
+        return batch
+
+    def _match_item(
+        self, batch: OutreachBatch, decision: SharedWorkDecision, platform: str
+    ) -> OutreachItem:
+        greeting = decision.greeting
+        matches = [
+            item for item in batch.items if item.platform == platform and item.text == greeting
+        ] if greeting else []
+        if len(matches) != 1:
+            raise ContractValidationError(
+                "Current shared greeting does not match one execution item.",
+                details={"send_dispatched": False},
+            )
+        return matches[0]
+
+    def _observed_approval(
+        self, batch: OutreachBatch, item: OutreachItem, decision: SharedWorkDecision
+    ) -> OutreachApproval:
+        """In-memory view for pacing only. It is not written to the outreach ledger."""
+        if decision.approval is None:
+            raise ApprovalRequiredError("Shared approval is missing.")
+        identity = canonical_digest({"record_id": decision.record_id, "batch_id": batch.batch_id})
+        return OutreachApproval(
+            approval_id="OAPPROVAL_SHARED_" + identity[7:27].upper(),
+            batch_id=batch.batch_id,
+            batch_digest=batch.batch_digest,
+            policy_digest=batch.policy_digest,
+            approved_numbers=[item.number],
+            channel=ApprovalChannel.SHARED_TABLE,
+            attestation=decision.approval,
+            approved_at=self.clock(),
+        )
 
     def _next(
         self, batch_id: str, platform: str, session_id: str
-    ) -> tuple[OutreachBatch, OutreachApproval, OutreachItem]:
-        batch, approval = self._batch(batch_id)
+    ) -> tuple[OutreachBatch, OutreachApproval, OutreachItem, SharedWorkDecision]:
+        decision = self._read_shared()
+        if not decision.business_allowed:
+            raise ApprovalRequiredError(
+                "Shared table does not currently approve this send.",
+                details={"reason": decision.reason, "send_dispatched": False},
+            )
+        batch = self._execution_batch(batch_id)
+        item = self._match_item(batch, decision, platform)
+        observed = self._observed_approval(batch, item, decision)
         audits = self.outreach.list_audits()
-        decision = self.service.next_item(
+        paced = self.service.next_item(
             batch,
-            approval,
+            observed,
             platform=platform,
             audits=audits,
             lease_held=self.outreach.holds_lease(platform, session_id, now=self.clock()),
             now=self.clock(),
         )
-        if not decision.allowed or decision.item is None:
+        if not paced.allowed or paced.item != item:
             raise ContractValidationError(
-                "Greeting gate refused: " + (decision.reason or "no_item"),
-                details={"reason": decision.reason},
+                "Greeting gate refused: " + (paced.reason or "no_item"),
+                details={"reason": paced.reason, "send_dispatched": False},
             )
-        if decision.item.job_id in contacted_job_ids(audits):
+        if item.job_id in contacted_job_ids(audits):
             raise ContractValidationError("Greeting gate refused: already_contacted")
-        return batch, approval, decision.item
+        return batch, observed, item, decision
 
     def claim_greeting(self, batch_id: str, platform: str, session_id: str) -> WorkerSendClaim:
         with self.store.transaction() as connection:
-            batch, approval, item = self._next(batch_id, platform, session_id)
+            batch, approval, item, decision = self._next(batch_id, platform, session_id)
             if (
                 connection.execute(
                     "SELECT 1 FROM worker_send_claims WHERE platform = ? AND status != 'completed'",
@@ -225,6 +280,8 @@ class WorkerGateway:
                 policy_digest=batch.policy_digest,
                 approval_id=approval.approval_id,
                 approval_channel=approval.channel,
+                shared_record_id=decision.record_id,
+                shared_content_digest=decision.content_digest,
                 item=item,
                 claimed_at=self.clock(),
             )
@@ -255,7 +312,9 @@ class WorkerGateway:
         return row
 
     def _verify_claim(self, claim: WorkerSendClaim) -> None:
-        batch, approval, item = self._next(
+        if claim.shared_record_id != self.shared_record_id:
+            raise ContractValidationError("Worker claim belongs to a different shared record.")
+        batch, _approval, item, decision = self._next(
             claim.batch_id,
             claim.item.platform,
             claim.worker_id,
@@ -263,10 +322,12 @@ class WorkerGateway:
         if (
             batch.batch_digest != claim.batch_digest
             or batch.policy_digest != claim.policy_digest
-            or approval.approval_id != claim.approval_id
+            or decision.content_digest != claim.shared_content_digest
             or item != claim.item
         ):
-            raise ContractValidationError("Worker claim no longer matches approved content.")
+            raise ContractValidationError(
+                "Worker claim no longer matches the current shared record."
+            )
 
     def authorize_greeting(self, task_id: str, session_id: str) -> WorkerSendClaim:
         with self.store.transaction() as connection:

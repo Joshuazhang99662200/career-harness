@@ -277,7 +277,7 @@ Cowork 前端通过本地 MCP 桥 `jobagent`(`python -m jobagent.bridge.mcp_serv
 | 能力 | 状态 | 入口 |
 |---|---|---|
 | 观察入库与完成回执 | 已落地 | `jobagent worker ingest`（复用来源校验；职位、请求回执与完成事件在同一事务提交，同号同输入幂等） |
-| 单项获批任务领取 | 已落地 | `jobagent worker claim-greeting`（复核审批原问题、当前正文与职位、站点租约及节奏；并发领取去重） |
+| 单项获批任务领取 | 已落地 | `jobagent worker claim-greeting`：发送决定只看本次重读的共享表批准状态与处理进度；本地 SQLite 批准行不能放行。再核对当前正文、职位、站点租约和节奏。未批准不领取。不直接向招聘平台发送 |
 | 发送前一次性授权 | 已落地 | `jobagent worker authorize-greeting`（重新核对门禁；授权消费后不能再次领取发送权限，异常须核验） |
 | 回读记账 | 已落地 | `jobagent worker record-greeting`（准确正文和 URL 才可登记 sent；不明确或门禁改变登记 intervention，审计与完成事件同事务） |
 | 任务状态 | 已落地 | `jobagent worker show`（读取持久化回执；父代理的 SUCCESS 不能替代任务完成证据） |

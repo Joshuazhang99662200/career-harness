@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from jobagent.bridge.worker import WorkerGateway
+from jobagent.digest import canonical_digest
 from jobagent.errors import (
     ApprovalRequiredError,
     ContractValidationError,
@@ -12,6 +13,7 @@ from jobagent.errors import (
     StorageError,
 )
 from jobagent.outreach.service import OutreachService
+from jobagent.schemas.feishu import FeishuRecord, SharedSendPolicy
 from jobagent.schemas.job_intelligence import SourceJobRecord
 from jobagent.schemas.outreach import OutreachDraft, OutreachResult
 from jobagent.schemas.sources import HostBrowserSpec, SourceKind, SourceManifest
@@ -48,10 +50,58 @@ def record() -> SourceJobRecord:
     )
 
 
-def gateway(tmp_path: Path) -> WorkerGateway:
+class MutableShared:
+    def __init__(self, record: FeishuRecord) -> None:
+        self.record = record
+
+    def current(self, record_id: str) -> FeishuRecord:
+        if record_id != self.record.record_id:
+            raise ContractValidationError("Shared record was not found.")
+        return self.record
+
+    def replace(self, **fields: object) -> None:
+        merged = {**self.record.fields, **fields}
+        self.record = self.record.model_copy(
+            update={
+                "fields": merged,
+                "content_digest": canonical_digest(
+                    {"record": self.record.record_id, "fields": merged}
+                ),
+            }
+        )
+
+
+def ready_record(
+    *, approval: str = "APPROVED_SYNTHETIC", progress: str = "READY_SYNTHETIC", greeting: str = TEXT
+) -> FeishuRecord:
+    fields = {"approval": [approval], "progress": [progress], "greeting": greeting}
+    return FeishuRecord(
+        table_id="tblSynthetic",
+        record_id="rec_synthetic_job",
+        fields=fields,
+        content_digest=canonical_digest({"record": "rec_synthetic_job", "fields": fields}),
+    )
+
+
+SEND_POLICY = SharedSendPolicy(
+    approved_values=["APPROVED_SYNTHETIC"], ready_progress=["READY_SYNTHETIC"]
+)
+
+
+def gateway(tmp_path: Path, *, shared: str = "ready") -> WorkerGateway:
     db = Database(tmp_path / "worker.sqlite3")
     db.migrate()
-    return WorkerGateway(db, manifests=[MANIFEST], clock=lambda: NOW)
+    source = None if shared == "off" else MutableShared(ready_record())
+    if shared == "unapproved" and source is not None:
+        source.replace(approval=["WAIT"])
+    return WorkerGateway(
+        db,
+        manifests=[MANIFEST],
+        clock=lambda: NOW,
+        shared=source,
+        shared_record_id=None if source is None else source.record.record_id,
+        send_policy=None if source is None else SEND_POLICY,
+    )
 
 
 def request() -> WorkerFetchRequest:
@@ -151,10 +201,13 @@ def test_event_failure_rolls_back_the_entire_fetch(tmp_path: Path) -> None:
 
 
 def test_claim_requires_human_approval_and_platform_lease(tmp_path: Path) -> None:
-    gw = gateway(tmp_path)
-    batch_id = prepare(gw, approve=False)
+    gw = gateway(tmp_path, shared="unapproved")
+    batch_id = prepare(gw, approve=True)
     with pytest.raises(ApprovalRequiredError):
         gw.claim_greeting(batch_id, "local_test", "W1")
+    with gw.database.connect() as connection:
+        claims = connection.execute("SELECT COUNT(*) FROM worker_send_claims").fetchone()
+    assert claims is not None and claims[0] == 0
 
 
 def test_claim_without_lease_is_refused(tmp_path: Path) -> None:
@@ -263,7 +316,14 @@ def test_another_worker_cannot_complete_a_claim_and_expiry_never_releases_again(
     claim = gw.claim_greeting(prepare(gw), "local_test", "W1")
     with pytest.raises(ContractValidationError):
         gw.record_greeting(WorkerReadback(task_id=claim.task_id, worker_id="W2", result="unknown"))
-    later = WorkerGateway(gw.database, manifests=[MANIFEST], clock=lambda: NOW + timedelta(hours=1))
+    later = WorkerGateway(
+        gw.database,
+        manifests=[MANIFEST],
+        clock=lambda: NOW + timedelta(hours=1),
+        shared=gw.shared,
+        shared_record_id=gw.shared_record_id,
+        send_policy=gw.send_policy,
+    )
     store = SqliteOutreachRepository(gw.database)
     assert store.acquire_lease("local_test", "W2", now=NOW + timedelta(hours=1), ttl_seconds=1800)
     with pytest.raises(ContractValidationError):
@@ -284,13 +344,15 @@ def test_completion_event_failure_rolls_back_send_audit(tmp_path: Path) -> None:
     assert gw.show(claim.task_id) == claim
 
 
-def test_an_approval_without_the_original_question_does_not_release_content(tmp_path: Path) -> None:
+def test_missing_local_ask_does_not_block_a_current_shared_approval(tmp_path: Path) -> None:
     gw = gateway(tmp_path)
-    batch_id = prepare(gw)
+    batch_id = prepare(gw, approve=False)
     with gw.database.connect() as c, c:
         c.execute("DELETE FROM outreach_asks")
-    with pytest.raises(ApprovalRequiredError):
-        gw.claim_greeting(batch_id, "local_test", "W1")
+    claim = gw.claim_greeting(batch_id, "local_test", "W1")
+    assert claim.item.text == TEXT
+    assert claim.approval_channel.value == "shared_table"
+    assert SqliteOutreachRepository(gw.database).get_approval(batch_id) is None
 
 
 def test_sent_report_without_dispatch_authorization_is_intervention(tmp_path: Path) -> None:
@@ -312,7 +374,8 @@ def test_a_changed_gate_during_execution_still_records_an_intervention(tmp_path:
     gw = gateway(tmp_path)
     claim = gw.claim_greeting(prepare(gw), "local_test", "W1")
     gw.authorize_greeting(claim.task_id, "W1")
-    SqliteOutreachRepository(gw.database).withdraw(claim.batch_id, "synthetic withdrawal", NOW)
+    assert isinstance(gw.shared, MutableShared)
+    gw.shared.replace(approval=["WAIT"])
     receipt = gw.record_greeting(
         WorkerReadback(
             task_id=claim.task_id,

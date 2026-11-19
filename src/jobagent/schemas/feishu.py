@@ -74,6 +74,36 @@ class FeishuQuery(ContractModel):
     expected_table_revision: int | str | None = None
 
 
+class SharedSendPolicy(ContractModel):
+    """Explicit current-state values that may be executed. No personal defaults."""
+
+    approved_values: list[NonEmptyString] = Field(min_length=1)
+    ready_progress: list[NonEmptyString] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_values(self) -> "SharedSendPolicy":
+        if len(set(self.approved_values)) != len(self.approved_values):
+            raise ValueError("Approved values must be unique.")
+        if len(set(self.ready_progress)) != len(self.ready_progress):
+            raise ValueError("Ready progress values must be unique.")
+        return self
+
+
+class SharedWorkDecision(ContractModel):
+    """One fresh read of approval and progress. This object does not dispatch."""
+
+    record_id: NonEmptyString
+    progress: str | None = None
+    approval: str | None = None
+    greeting: str | None = None
+    content_digest: Digest
+    business_allowed: bool
+    send_dispatched: Literal[False] = False
+    reason: Literal[
+        "unapproved", "approval_missing", "progress_missing", "progress_not_ready", "ready"
+    ]
+
+
 class FeishuWriteReceipt(ContractModel):
     record_id: str
     status: Literal["verified", "unverified", "unknown"]

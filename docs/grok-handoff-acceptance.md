@@ -64,25 +64,47 @@ EXIT:0
 
 ### Worker 与 SQLite 业务状态
 
-这些模块本轮没有删除，也没有改成读飞书。区分如下：
+这些模块没有删除。Worker 的发送决定不再读本地批准；其余路径按下面三类保留。
 
-- **重复的业务状态：** `SqliteOutreachRepository` 的 batch / ask / approval。`WorkerGateway._batch` 用 `get_batch`、`get_approval`、`get_ask` 决定能不能领取招呼，不读共享表的「处理进度 × 批准状态」。
-- **技术状态：** `SqliteWorkerRepository` 的 claim、fetch receipt、worker event。这是执行租约和回执，不是批准账本。
-- **兼容层：** `panel_decisions.asked_items` 仍 `SELECT ask_json FROM outreach_asks`，`record_panel_decision` 把本地面板决定写回本地库。本地模式还要这条路径；它不能否认飞书里已经存在的本人批准，本轮也还没把它接到共享表。
+- **原先重复的业务状态：** `SqliteOutreachRepository` 的 approval / ask 不再决定 Worker 能不能发。当前共享记录的批准和处理进度才决定。本地 batch 只提供待执行的招呼正文。
+- **技术状态：** `SqliteWorkerRepository` 的 claim、fetch receipt、worker event，以及站点租约、日上限和间隔。这些不是批准账本。
+- **兼容层：** `panel_decisions.asked_items` 仍 `SELECT ask_json FROM outreach_asks`，`record_panel_decision` 仍写本地面板决定。本地模式还要这条路径；它不能否认飞书里已经存在的本人批准，也还没接到共享表。
 
-| 读取点 | 调用链 | 状态 |
+| 读取点 | 分类 | 调用链与现状 |
 |---|---|---|
-| `WorkerGateway._batch` / `_next` / `claim_greeting` | `bridge/worker.py` → `SqliteOutreachRepository` | not_integrated（相对共享表） |
-| `panel_decisions.asked_items`、`_approval` | `bridge/panel_decisions.py` 读 `outreach_asks` 和 approval | not_integrated（相对共享表）；本地兼容仍保留 |
-| `PipelineProofResolver._greeting` | `storage/pipeline_proofs.py` → `get_batch` / `get_approval` | not_integrated。它核对本地发送审计，不读飞书联合状态 |
-| `PipelineRepository.current` | `storage/pipeline_repository.py` 读 `pipeline_jobs` | 本地 pipeline 技术/业务状态。没有飞书「处理进度」字段 |
-| `console/outreach.py`、`console/execution.py` | 直接读 `outreach_asks` / `get_approval` | not_integrated |
-| `bridge/greeting_context.py` | SQL join `outreach_asks` | not_integrated |
-| `cli/outreach.py`、`storage/feedback_repository.py`、`storage/pipeline_service.py`、`storage/pipeline_recontact.py`、`cli/tracking.py`、`bridge/roleplay.py`、`bridge/status.py`、`memory/usage.py` | 各自读取本地 `OutreachApproval` 或 ask | 本地账本仍在。本轮没有逐个改成共享来源 |
+| `WorkerGateway._next` / `claim_greeting` / `authorize_greeting` / `record_greeting` | 业务决定已改到当前共享记录；执行租约仍在本地 | 每次先 `SharedJobReader.current`，再 `current_work_decision`。不再读 `get_approval` / `get_ask`。Mock 测试见下节。真实表未读 |
+| `panel_decisions.asked_items`、`_approval` | 本地兼容层 | 仍读 `outreach_asks`。本地面板路径保留，没有接到共享表。not_integrated |
+| `PipelineProofResolver._greeting` | 技术证明 | 仍用本地发送审计核对已发生的回读，不决定能不能发。not_integrated |
+| `SqliteWorkerRepository` | 技术状态 | claim、fetch receipt、worker event。保留 |
+| `PipelineRepository` / `pipeline_jobs` | 本地 pipeline 状态 | 不复制飞书「处理进度」。48 小时规则仍走既有 `ABANDON_HOURS`，本轮没有新到期账，也不会改批准字段 |
+| `console/outreach.py`、`console/execution.py`、`bridge/greeting_context.py`、`cli/outreach.py`、`storage/feedback_repository.py`、`storage/pipeline_service.py`、`storage/pipeline_recontact.py`、`cli/tracking.py`、`bridge/roleplay.py`、`bridge/status.py`、`memory/usage.py` | 兼容层或其他本地读者 | 仍读写本地 `OutreachApproval` / `OutreachAsk`。它们不是 Worker 发送决定。本轮没有改成第二套业务账，也没有删掉 |
 
-`bridge/worker.py` 不导入 `FeishuGateway`。Worker 没有消费共享表「处理进度 × 批准状态」的路径。状态：**not_integrated**。
+`memory send-gate` 的 `shared_send_decision` 仍是信号路径：即使批准值匹配也 `allowed=false`、`send_dispatched=false`。Worker 用的是另一次当前读取上的 `current_work_decision`。
 
-本轮新增的 `shared_send_decision`（`src/jobagent/jobs/shared_send_gate.py`，CLI `memory send-gate`）只解释调用方已经读到的投影。未批准或不存在批准时原因是 `unapproved` / `approval_missing`，`send_dispatched` 恒为 false。它没有被 `WorkerGateway._batch` 调用，所以相对真实执行链是 **partially_wired**。
+## 5A. Worker 发送决定改读当前共享状态
+
+证据种类：静态源码审计 + Mock/Fixture。不是真实 Bitable，也不是宿主实测。
+
+`claim_greeting`、`authorize_greeting`、`record_greeting` 在领取、授权和回读之前都重新调用 `SharedJobReader.current`。没有 reader、记录号或显式政策时直接 `ApprovalRequiredError`，不会退回 SQLite 批准。
+
+`current_work_decision` 只解释刚读到的 `approval` 与 `progress`（单选一项或一段文本；其他形状视为缺失）。两者都落在调用方传入的 `approved_values` 和 `ready_progress` 里，业务上才是 `ready`。招呼语正文必须和执行条目逐字相同。GPT 已经写好招呼、或本地 `outreach_approvals` 里有一行，都不能单独放行。
+
+允许之后才使用本地批次正文、职位新鲜度、站点租约、日上限和间隔。这些是执行器状态。观察到的批准对象只在内存里交给节奏函数，不写入 `outreach_approvals`。通道记为 `shared_table`。
+
+`decision.send_dispatched` 恒为 false。本模块不调用招聘平台。本地 claim 只是执行租约。
+
+测试（fixture）：
+
+| 测试 | 结果 |
+|---|---|
+| `test_leftover_sqlite_approval_does_not_send_when_the_table_is_unapproved` | 本地已有批准行，当前记录未批准：不领取，`reason=unapproved`，`send_dispatched=false` |
+| `test_missing_or_unready_progress_does_not_send` | 进度缺失或不在就绪列表：不领取 |
+| `test_current_shared_approval_does_not_require_a_local_approval_row` | 当前记录就绪且没有本地批准行：可以领取执行条目，不写批准行 |
+| `test_gateway_get_is_reread_before_authorize` | 合成 `FeishuGateway.get` 在授权前再次读取；批准改成 WAIT 后授权失败 |
+| `test_a_generated_greeting_is_not_approval` | 已有招呼文本但批准不是允许值：不发送 |
+| `test_cli_fixture_refuses_sqlite_approval_until_the_file_is_current` | CLI 每次重读 fixture 文件。文件未批准时拒绝；改成当前就绪后才领取 |
+
+`--feishu-config` 会走现有 `FeishuGateway.get`。本环境没有凭证，测试没有走这条活路径。状态：Worker 发送决定对 fixture / 注入的 gateway 读取是 **implemented**；真实飞书当前态是 **blocked**（无凭证，未读未写）。
 
 ### 事件订阅与原生历史
 
@@ -179,7 +201,7 @@ CLI 闭环在 `test_cli_fixture_updates_search_parameters_without_sending`：`si
 
 ## 8. 未接通项与最小下一步
 
-1. Worker 仍读 SQLite 批准。最小下一步是给 `WorkerGateway._batch` 增加一条显式的共享投影输入，并在写前重读飞书；不要删现有 SQLite，也不要在没有投影时假装本地缺行就是未批准。本轮没做这件事。
+1. Worker 的发送决定已改读当前共享记录，但 `panel_decisions`、控制台、pipeline proof 和其他本地 `OutreachApproval` 读者仍是兼容层或技术证明。真实飞书读取仍因没有凭证而 blocked。下一步只在有凭证时用 `--feishu-config` 做一次只读 `get`，不要写表。
 2. 生产事件订阅仍关闭。要接时用官方 SDK 的 `WSClient` / `EventDispatcher`，先在授权的测试应用上验证，不要用 CLI 事件目录的空缺代替实测，也不要在本仓库里直接 `start()`。
 3. 原生历史读取仍缺适配器方法。rev 152 需要有凭证的只读查询，不能靠再写一次合成记录来等它出现。
 4. Dream 仍未接通。现在的编译器只校验宿主交来的归因。真正调用 GPT 之前，要单独做无增量跳过、版本和失败不推进游标；本轮故意没有做这套。
@@ -196,13 +218,13 @@ CLI 闭环在 `test_cli_fixture_updates_search_parameters_without_sending`：`si
 
 ```text
 python3 -m pytest -q -rs --basetemp=/workspace/.pytest-final
-2080 passed, 3 skipped in 153.95s
+2086 passed, 3 skipped, 0 failed in 162.54s
 EXIT:0
 ```
 
 3 个跳过都在 `tests/reasoning/test_output_schemas.py:38`：`No module named 'anthropic'`。本环境没有安装可选的 `reasoning` extra。
 
-相对固定提交、新测试尚未收集时的 2063 passed / 3 skipped，增加 17 个通过。这 17 个是 `tests/memory/test_memory_signal.py`。
+这条命令包含 Memory Signal v1 和 Worker 共享状态测试。固定提交上、那些测试尚未收集时，本机基线是 2063 passed / 3 skipped，退出码 0。不要把它和 PR #34 的历史数字混用。
 
 ```text
 python3 -m ruff check .

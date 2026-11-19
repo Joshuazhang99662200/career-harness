@@ -40,6 +40,8 @@ class WorkerSendClaim(ContractModel):
     policy_digest: Digest
     approval_id: NonEmptyString
     approval_channel: ApprovalChannel
+    shared_record_id: NonEmptyString
+    shared_content_digest: Digest
     item: OutreachItem
     claimed_at: AwareDatetime
     state: Literal["claimed", "authorized"] = "claimed"

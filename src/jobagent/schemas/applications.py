@@ -53,6 +53,8 @@ class ApprovalChannel(StrEnum):
 
     INTERACTIVE_TERMINAL = "interactive_terminal"
     AGENT_RELAY = "agent_relay"
+    # Observed on the current shared record. It is not a local ask/approval row.
+    SHARED_TABLE = "shared_table"
 
 
 class ApplicationPackage(ContractModel):

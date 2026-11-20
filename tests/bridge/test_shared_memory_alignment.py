@@ -141,6 +141,8 @@ class FakeBase:
         self.calls: list[list[str]] = []
         self.fail_history = False
         self.fail_writes = False
+        self.fail_next_retains = 0
+        self.plant_conflict: str | None = None
         self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
         self.changed_at_type = "datetime"
         self.revisions = {JOBS: 7, SIGNALS: 11, SEARCH: 3, GREETING: 4}
@@ -253,6 +255,9 @@ class FakeBase:
             raise ContractValidationError("Synthetic write failure")
         body = json.loads(argv[argv.index("--json") + 1])
         names = self.names[table_id]
+        if self.fail_next_retains and self._retains(names, body):
+            self.fail_next_retains -= 1
+            raise ContractValidationError("Synthetic retain failure")
         store = self._store(table_id)
         for record_id, fields in body["update_records"].items():
             for field_id, value in fields.items():
@@ -272,8 +277,28 @@ class FakeBase:
             record_id = f"rec_mem_{self._seq}"
             store[record_id] = {names[field_id]: value for field_id, value in fields.items()}
             ids.append(record_id)
+            if self.plant_conflict:
+                self._seq += 1
+                extra_id = f"rec_mem_{self._seq}"
+                extra = dict(store[record_id])
+                if self.plant_conflict == "second_published":
+                    extra["version"] = "99"
+                store[extra_id] = extra
+                self.plant_conflict = None
         self.revisions[table_id] += 1
         return {"record_id_list": ids}
+
+    def _retains(self, names: dict[str, str], body: dict[str, object]) -> bool:
+        updates = body.get("update_records")
+        if not isinstance(updates, dict):
+            return False
+        for fields in updates.values():
+            if not isinstance(fields, dict):
+                continue
+            for field_id, value in fields.items():
+                if names.get(str(field_id)) == "publication_status" and value == "retained":
+                    return True
+        return False
 
     def _history(self, argv: list[str], table_id: str) -> dict[str, object]:
         record_id = argv[argv.index("--record-id") + 1]
@@ -560,6 +585,95 @@ def test_memory_schema_version_publish_and_idempotent_replay() -> None:
     base.changed_at_type = "select"
     with pytest.raises(ContractValidationError):
         store.page_workflow_signals(limit=1, offset=0)
+
+
+def _statuses(base: FakeBase) -> dict[object, object]:
+    return {row["version"]: row["publication_status"] for row in base.search_rows.values()}
+
+
+def test_retain_failure_is_recovered_only_after_one_published_version_remains() -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    first = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+    ))
+    assert first.verified is True and first.version == "1"
+
+    _put_signal(
+        base, "rec_signal_next", learning_status="pending_dream", job_title="Platform role",
+    )
+    second = _memory("rec_signal_next", keywords=["distributed systems"])
+    base.fail_next_retains = 1
+    failed = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next", memory=second,
+    ))
+    assert failed.verified is False
+    assert failed.advanced_to_learned is False
+    assert failed.learning_status == "pending_dream"
+    assert base.signals["rec_signal_next"]["learning_status"] == "pending_dream"
+    assert _statuses(base) == {"1": "published", "2": "published"}
+
+    recovered = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next", memory=second,
+    ))
+    assert recovered.verified is True
+    assert recovered.advanced_to_learned is True
+    assert _statuses(base) == {"1": "retained", "2": "published"}
+    assert base.signals["rec_signal_next"]["learning_status"] == "learned"
+    assert len(base.search_rows) == 2
+
+
+def test_retry_stays_pending_when_closeout_still_fails() -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+    ))
+    _put_signal(base, "rec_signal_next", learning_status="pending_dream", job_title="Next")
+    second = _memory("rec_signal_next", keywords=["distributed systems"])
+    base.fail_next_retains = 2
+    first = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next", memory=second,
+    ))
+    second_try = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next", memory=second,
+    ))
+    assert first.verified is False and second_try.verified is False
+    assert second_try.advanced_to_learned is False
+    assert base.signals["rec_signal_next"]["learning_status"] == "pending_dream"
+    assert _statuses(base)["1"] == "published"
+    assert _statuses(base)["2"] == "published"
+
+
+def test_overlapping_publish_is_rejected_without_a_second_ledger() -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    store._publish_claims.add(("CAND_FIXTURE", "search"))
+    with pytest.raises(ContractValidationError, match="single-writer"):
+        store.publish_memory(MemoryPublishRequest(
+            signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+        ))
+    assert base.signals["rec_signal_grade"]["learning_status"] == "pending_dream"
+    assert base.search_rows == {}
+    assert not any("+record-batch-create" in call for call in base.calls)
+
+
+@pytest.mark.parametrize("conflict", ["duplicate_version", "second_published"])
+def test_publish_does_not_learn_when_the_version_set_is_ambiguous(conflict: str) -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    base.plant_conflict = conflict
+    result = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+    ))
+    assert result.verified is False
+    assert result.advanced_to_learned is False
+    assert result.learning_status == "pending_dream"
+    assert base.signals["rec_signal_grade"]["learning_status"] == "pending_dream"
+    published = [
+        row for row in base.search_rows.values() if row["publication_status"] == "published"
+    ]
+    assert len(published) == 2
 
 
 def test_failed_publish_does_not_mark_the_signal_learned() -> None:

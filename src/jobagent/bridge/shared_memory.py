@@ -1,5 +1,6 @@
 """Read Workflow signals and publish memory versions. Does not call a model."""
 
+import threading
 from typing import Never
 
 from pydantic import JsonValue
@@ -16,7 +17,7 @@ from jobagent.memory.publication import (
 from jobagent.memory.search_round import plan_search_round
 from jobagent.memory.workflow_signal import WorkflowSignalLedger, parse_workflow_signal
 from jobagent.schemas.feishu import FeishuPatch, FeishuRecord
-from jobagent.schemas.memory_signal import OperatorDirectory
+from jobagent.schemas.memory_signal import OperatorDirectory, PublishedMemory
 from jobagent.schemas.shared_memory import (
     GREETING_MEMORY_FIELDS,
     HUMAN_SIGNAL_FIELD_COUNT,
@@ -46,12 +47,20 @@ class SharedMemoryService:
     GPT supplies attribution and Dream output. This service checks schema,
     deduplicates, versions, and writes. A failed write does not advance
     ``learning_status``.
+
+    Publish is single-writer for one candidate and memory kind inside this
+    process. ``_publish_claims`` is that technical claim. It is not a business
+    ledger and it cannot see a publisher in another process. After the writes,
+    the version set is read back; duplicate versions or more than one published
+    row block ``learned``.
     """
 
     def __init__(self, gateway: FeishuGateway, operators: OperatorDirectory) -> None:
         self.gateway = gateway
         self.operators = OperatorDirectory.model_validate(operators.model_dump())
         self.ledger = WorkflowSignalLedger()
+        self._publish_guard = threading.Lock()
+        self._publish_claims: set[tuple[str, str]] = set()
 
     def page_workflow_signals(
         self,
@@ -164,64 +173,12 @@ class SharedMemoryService:
             _reject("Memory kind does not match the signal domain.")
         if key == "greeting_memory" and parsed.memory_domain != "greeting":
             _reject("Memory kind does not match the signal domain.")
-        rows = [
-            decode_memory_row(
-                record.record_id, record.fields, greeting=key == "greeting_memory"
-            )
-            for record in self._collect(
-                key,
-                list(memory_field_names(memory.kind)),
-                [["candidate_id", "is", memory.candidate_id]],
-            )
-        ]
-        existing = next((row for row in rows if row.memory.memory_id == memory.memory_id), None)
-        if existing is not None:
-            return self._finish_existing(request.signal_record_id, parsed.learning_status, existing)
-        if parsed.learning_status != "pending_dream":
-            _reject("Memory publish requires a signal that finished history enrichment.")
-        same_kind = [row for row in rows if row.memory.kind == memory.kind]
-        version = str(1 + max((int(row.version) for row in same_kind), default=0))
-        published_rows = [row for row in same_kind if row.publication_status == "published"]
-        supersedes = (
-            max((row.version for row in published_rows), key=int) if published_rows else None
-        )
-        receipt = self.gateway.append_memory_row(key, memory_row_fields(
-            memory,
-            request.signal_record_id,
-            version=version,
-            publication_status="published",
-            supersedes_version=supersedes,
-        ))
-        if not receipt.verified or receipt.record_id is None:
-            return MemoryPublishResult(
-                duplicate=False,
-                verified=False,
-                advanced_to_learned=False,
-                learning_status=parsed.learning_status,
-            )
-        retained: list[str] = []
-        for row in published_rows:
-            if not self._retain(key, row.record_id, memory.memory_id):
-                return MemoryPublishResult(
-                    duplicate=False,
-                    verified=False,
-                    advanced_to_learned=False,
-                    learning_status="pending_dream",
-                    version=version,
-                    record_id=receipt.record_id,
-                    retained_record_ids=retained,
-                )
-            retained.append(row.record_id)
-        advanced = self._set_learning_status(request.signal_record_id, "learned")
-        return MemoryPublishResult(
-            duplicate=False,
-            verified=True,
-            advanced_to_learned=advanced,
-            learning_status="learned" if advanced else "pending_dream",
-            version=version,
-            record_id=receipt.record_id,
-            retained_record_ids=retained,
-        )
+        claim = (memory.candidate_id, memory.kind)
+        self._claim_publish(claim)
+        try:
+            return self._publish_serial(request, memory, key, parsed.learning_status)
+        finally:
+            self._release_publish(claim)
 
     def read_search_round(self, round_input: SearchRoundInput) -> SearchRoundPlan:
         round_input = SearchRoundInput.model_validate(round_input.model_dump())
@@ -244,23 +201,114 @@ class SharedMemoryService:
             rows.append(row)
         return plan_search_round(rows, round_input)
 
-    def _finish_existing(
-        self, signal_record_id: str, status: LearningStatus, existing: StoredMemoryRow
+    def _claim_publish(self, claim: tuple[str, str]) -> None:
+        """One in-process publisher per candidate and kind. Not a shared ledger."""
+        with self._publish_guard:
+            if claim in self._publish_claims:
+                _reject(
+                    "Memory publish is single-writer for this candidate and kind; "
+                    "wait for the in-process publisher to finish."
+                )
+            self._publish_claims.add(claim)
+
+    def _release_publish(self, claim: tuple[str, str]) -> None:
+        with self._publish_guard:
+            self._publish_claims.discard(claim)
+
+    def _publish_serial(
+        self,
+        request: MemoryPublishRequest,
+        memory: PublishedMemory,
+        key: str,
+        learning_status: LearningStatus,
     ) -> MemoryPublishResult:
-        if status == "pending_history_enrichment":
+        rows = self._kind_rows(key, memory)
+        existing = next((row for row in rows if row.memory.memory_id == memory.memory_id), None)
+        created_id = existing.record_id if existing is not None else None
+        version = existing.version if existing is not None else None
+        duplicate = existing is not None
+        if existing is None:
+            if learning_status != "pending_dream":
+                _reject("Memory publish requires a signal that finished history enrichment.")
+            version = str(1 + max((int(row.version) for row in rows), default=0))
+            if any(row.version == version for row in rows):
+                return _publish_failure(learning_status, version, None)
+            published = [row for row in rows if row.publication_status == "published"]
+            supersedes = max((row.version for row in published), key=int) if published else None
+            receipt = self.gateway.append_memory_row(key, memory_row_fields(
+                memory,
+                request.signal_record_id,
+                version=version,
+                publication_status="published",
+                supersedes_version=supersedes,
+            ))
+            if not receipt.verified or receipt.record_id is None:
+                return _publish_failure(learning_status, version, receipt.record_id)
+            created_id = receipt.record_id
+            rows = self._kind_rows(key, memory)
+        closed, retained = self._close_previous(key, rows, memory.memory_id)
+        if not closed:
+            return _publish_failure(
+                learning_status, version, created_id, retained, duplicate=duplicate
+            )
+        confirmed = self._kind_rows(key, memory)
+        if not _one_current_publication(confirmed, memory.memory_id):
+            current = next(
+                (row for row in confirmed if row.memory.memory_id == memory.memory_id), None
+            )
+            return _publish_failure(
+                learning_status,
+                current.version if current is not None else version,
+                current.record_id if current is not None else created_id,
+                duplicate=duplicate,
+            )
+        if learning_status == "learned":
+            current = next(row for row in confirmed if row.memory.memory_id == memory.memory_id)
+            return MemoryPublishResult(
+                duplicate=True,
+                verified=True,
+                advanced_to_learned=False,
+                learning_status="learned",
+                version=current.version,
+                record_id=current.record_id,
+            )
+        if learning_status != "pending_dream":
             _reject("Memory publish requires a signal that finished history enrichment.")
-        advanced = False
-        if status == "pending_dream":
-            advanced = self._set_learning_status(signal_record_id, "learned")
-        learned = status == "learned" or advanced
+        advanced = self._set_learning_status(request.signal_record_id, "learned")
+        current = next(row for row in confirmed if row.memory.memory_id == memory.memory_id)
         return MemoryPublishResult(
-            duplicate=True,
-            verified=True,
+            duplicate=duplicate,
+            verified=advanced,
             advanced_to_learned=advanced,
-            learning_status="learned" if learned else status,
-            version=existing.version,
-            record_id=existing.record_id,
+            learning_status="learned" if advanced else learning_status,
+            version=current.version,
+            record_id=current.record_id,
+            retained_record_ids=retained,
         )
+
+    def _kind_rows(self, key: str, memory: PublishedMemory) -> list[StoredMemoryRow]:
+        greeting = key == "greeting_memory"
+        loaded = [
+            decode_memory_row(record.record_id, record.fields, greeting=greeting)
+            for record in self._collect(
+                key,
+                list(memory_field_names(memory.kind)),
+                [["candidate_id", "is", memory.candidate_id]],
+            )
+        ]
+        return [row for row in loaded if row.memory.kind == memory.kind]
+
+    def _close_previous(
+        self, key: str, rows: list[StoredMemoryRow], memory_id: str
+    ) -> tuple[bool, list[str]]:
+        retained: list[str] = []
+        for row in rows:
+            if row.memory.memory_id == memory_id or row.publication_status != "published":
+                continue
+            if not self._retain(key, row.record_id, memory_id):
+                return False, retained
+            retained.append(row.record_id)
+        return True, retained
 
     def _set_learning_status(self, signal_record_id: str, status: LearningStatus) -> bool:
         current = self.gateway.get("human_signals", signal_record_id)
@@ -354,6 +402,33 @@ class SharedMemoryService:
         for name in names:
             if mapped[name].get("type") != "text":
                 _reject("Memory columns used by this contract must be text.")
+
+
+def _one_current_publication(rows: list[StoredMemoryRow], memory_id: str) -> bool:
+    versions = [row.version for row in rows]
+    if len(versions) != len(set(versions)):
+        return False
+    published = [row for row in rows if row.publication_status == "published"]
+    return len(published) == 1 and published[0].memory.memory_id == memory_id
+
+
+def _publish_failure(
+    learning_status: LearningStatus,
+    version: str | None,
+    record_id: str | None,
+    retained: list[str] | None = None,
+    *,
+    duplicate: bool = False,
+) -> MemoryPublishResult:
+    return MemoryPublishResult(
+        duplicate=duplicate,
+        verified=False,
+        advanced_to_learned=False,
+        learning_status=learning_status,
+        version=version,
+        record_id=record_id,
+        retained_record_ids=list(retained or []),
+    )
 
 
 def _enrichment_fields(diff: RecordHistoryDiff, target: LearningStatus) -> dict[str, JsonValue]:

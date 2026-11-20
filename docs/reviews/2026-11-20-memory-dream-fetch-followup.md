@@ -59,3 +59,25 @@ Ruff or mypy result; the execution environment remains blocked.
 - GPT Dream attribution/model invocation
 - Muse Fetch consumption and changed real search parameters
 - Cross-process/distributed single-writer behavior
+
+
+## Third-round disposition — follow-up commit
+
+The following additional code changes are included after the initial follow-up:
+
+- The publish claim is process-wide across independent `SharedMemoryService` instances and keyed by the physical table/domain. `search` and `matching` therefore contend for the same `search_memory` slot.
+- In-place updates now re-read after an unverified/partial write. The service restores the previous full row only when every observed field is either its previous value or the attempted value and no unrelated field changed. It then verifies the complete previous row. If the readback is unavailable or a conflicting edit is observed, it does not overwrite that state and reports restoration as unknown/false.
+- Dream batches now freeze an explicit 10-business-day window (`window_start`, IANA timezone, and business-day count) into their identity and checkpoint. Signals outside that window remain pending and are not silently consumed.
+- A folded Dream with no net change marks its frozen Signals learned without incrementing the current Memory version. An empty net result without a baseline creates no empty Memory row.
+- GPT/Muse host reasoning rules are added in `skills/job-hunting/references/memory-dream.md`, including clustering across independent Jobs/days, sequential edits on one Job, baseline preservation, contradictory evidence, and no automatic retirement when a feature leaves the rolling window.
+- A regression test explicitly preserves the current fail-closed behavior for two sequential history edits when no event-correlation key exists.
+
+Still blocked and not represented as solved:
+- Production Workflow Human Signals do not currently provide a verified source event ID or populated before/after correlation pair. Native history alone cannot safely distinguish multiple edits. The new test documents this; production learning remains blocked for ambiguous rows until a stable event-correlation source is connected.
+- The host must hold a candidate-level lease across the entire start → GPT Dream → complete lifecycle and serialize direct publishers. The process-wide Python lock does not coordinate separate CLI processes or machines.
+- The actual Jobs `candidate_id` field ID/type must be verified in the private Feishu config and live schema.
+- The host must compute `window_start` from its configured work calendar. Without a configured holiday calendar, the reference requires the explicit Monday–Friday fallback; the code validates the frozen boundaries and timezone but does not independently know public holidays or prove the interval contains exactly ten business days.
+- Greeting has an isolated publication table and is excluded from Search Dream, but a separate production Greeting aggregation/consumption workflow is not claimed as complete.
+- CI runs observed so far still fail before runner allocation (`runner_id=0`, no steps); no pytest/Ruff/mypy result is available from GitHub Actions.
+
+No real Base, Workflow subscription, GPT invocation, Muse Fetch or recruiting action was performed by this follow-up.

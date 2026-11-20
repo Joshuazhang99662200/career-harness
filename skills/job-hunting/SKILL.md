@@ -32,6 +32,7 @@ pipeline 动态策略兼容性已在生产写入边界检查；MCP 搜索与查�
 ## 上下文路由
 
 - 生成侧/执行侧需要共同读取飞书待办、按角色回填或回写结果时，加载 [references/feishu-shared-source.md](references/feishu-shared-source.md)。按真实 Schema 联合查询阶段与批准，共用轻量接口；不建本地业务账本，事件只提示刷新。当前只验证最小读写与回读，不能宣称宿主事件联动或真实发送已接通。三字段人工信号的生产入口是 Workflow 写入的 Human Signals 行（`memory workflow-page`、`memory enrich-signal`）。`memory signal-receive` 只解析本地事件 fixture，不是已接通的生产订阅。归因和 Dream 仍由调用方完成，本仓库不调用模型。
+- Search Memory Dream 的10工作日窗口、GPT行为归纳、基线合并与 no-op 规则见 [references/memory-dream.md](references/memory-dream.md)。该指令由 GPT/Muse 宿主执行；代码只校验窗口边界与发布契约，不调用模型。
 
 - 首次配置、加载已确认配置，或本人明确要求调整时间、阈值、次数、比例与写作偏好时，先读 [references/dynamic-variables.md](references/dynamic-variables.md)。先核对初始化身份；只有首次或主动变更才生成问题，普通任务只准备只读计划。用私有单变量提问、本人确认与版本快照，不把外部表格、宿主猜测或平台参考自动激活。
 

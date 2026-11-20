@@ -16,7 +16,8 @@
 | 实时字段映射 | 已落地 | `jobagent feishu schema`：私有配置指定字段 ID，读取实时 Schema；不修改表结构 |
 | 按条件读取待办 | 已落地 | `jobagent feishu query`：生成侧/执行侧共用字段映射与原生 AND 条件；显式取数上限和 offset，续页核对 expected_table_revision；has_more 不等于已完成遍历，不授予外发权 |
 | 单条来源与版本 | 已落地 | `jobagent feishu get`：准确记录及所映射内容摘要；摘要不是飞书原生记录版本，不能证明人工批准 |
-| 最小字段回写 | 已落地 | `jobagent feishu patch`：显式角色白名单、写前内容比对与写后正向回读；不写本人决定，不发送，不创建业务库；只支持 text/select，不提供原子 CAS，未知结果不重试 |
+| 最小字段回写 | 已落地 | `jobagent feishu patch`：显式角色白名单、写前内容比对与写后正向回读；不写本人决定，不发送，不创建业务库；只支持 text/select/datetime，不提供原子 CAS，未知结果不重试 |
+| 单条记录历史 | 已落地 | `jobagent feishu record-history`：对一条岗位记录调用官方 `base +record-history-list`，只读。同一字段恰好一次可读 before/after，且操作者能用 open_id 或 union_id 对照名单时才是 matched；显示名、对不上、不唯一或历史未读完都不猜测。不写表 |
 
 ## 候选人(Candidate)
 
@@ -41,9 +42,13 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | 记忆实际使用核验 | 已落地(招呼) | `jobagent memory usage`：从外联账本统计各偏好记忆版本、偏好规则与动态规则版本实际进入起草、批准、发送的条目数；`greetings generate` 产出的定向稿在来源绑定中记录生成输入摘要、记忆版本与所选规则。无记录的旧稿或手写稿计为未归因，不推测；回复结果见 `memory effect`，不代表因果结论 |
 | 记忆效果对比 | 已落地(观察性) | `jobagent memory effect`：须显式给出 `--window-days` 观察窗口与 `--min-sample` 最小样本，把有正向发送记录的招呼按岗位与渠道关联到窗口内的招聘方来信；窗口未结束的计为待定、不进任何分母。各记忆版本与规则对比未使用记忆的招呼，用 Wilson / Newcombe 95% 区间，样本不足报 insufficient_sample，区间跨 0 报 no_clear_difference。非随机分配，只是相关性 |
 | 效果判定模拟 | 已落地 | `jobagent memory simulate`：在已知真实效果的合成数据上重复判定，给出检出率、误报率与反向误判率，用于估计需要多少样本；固定种子可复现 |
-| 三字段人工信号 | 已落地 | `jobagent memory signal-receive`：读取本地 `drive.file.bitable_record_changed_v1` fixture，只保留配置的匹配档位、处理进度、招呼语；Bot 不进入人工信号，操作者或前后值无法区分时为 unknown。可选 `--receipt` 只存事件摘要做去重。不订阅、不连网、不发送 |
+| 三字段人工信号 | 已落地 | `jobagent memory signal-receive`：测试夹具。只解析本地 `drive.file.bitable_record_changed_v1` JSON，不是已接通的生产事件路径。Bot 不进入人工信号，操作者或前后值无法区分时为 unknown。不订阅、不连网、不发送 |
+| Workflow 人工信号 | 已落地 | `jobagent memory workflow-page`：读取 Workflow 写入的 Human Signals 行。记录 id 是唯一标识，`signal_id` 可空。同记录同摘要为重复，同记录不同内容拒绝。不订阅、不启用 Workflow |
+| 信号历史补齐 | 已落地 | `jobagent memory enrich-signal`：用记录历史补 before/after、操作者与时间。人类且唯一匹配时 `learning_status` 变为 `pending_dream`；Bot 或无法匹配变为 `unknown`，不记作人工偏好。查询失败或回写未核对时不改状态 |
+| 记忆版本发布 | 已落地 | `jobagent memory publish-version`：校验调用方交来的记忆草稿，写入搜索与匹配记忆或招呼语表达记忆，保留旧版本。不调用模型。写入未核对时不把信号标为 `learned` |
+| 搜索记忆读取 | 已落地 | `jobagent memory search-round`：读取最新已发布的 search 记忆并应用到本轮关键词、方向和排除项。没有发布记忆时沿用调用方给出的检索配置，不发明偏好，不改硬条件、查询次数或每查询取数，不发起 Fetch |
 | 信号归因发布 | 已落地 | `jobagent memory signal-compile`：校验宿主已写好的归因是否引用本次 JD 与原稿摘要，并发布 search / matching / greeting / workflow 记忆。进度变化不能带搜索参数。不调用模型、不写飞书 |
-| 搜索记忆消费 | 已落地 | `jobagent memory apply-search`：只把 search 记忆加到关键词、岗位方向或排除项，并逐项给出记忆与事件原因；招呼和进度记忆不改变搜索参数。不执行搜索、不发送 |
+| 搜索记忆消费 | 已落地 | `jobagent memory apply-search`：本地文件上的 search 记忆，不是生产记忆表。只改关键词、岗位方向或排除项；招呼和进度记忆不改变搜索参数。生产读取见 `memory search-round`。不执行搜索、不发送 |
 | 未批准不发送 | 已落地 | `jobagent memory send-gate`：读取当前投影的处理进度与批准状态。未批准或不存在批准时拒绝；批准值即使匹配，该命令也不发送 |
 | 角色扮演工作区 | 已落地(仅合成) | `jobagent roleplay init`：在当前目录 `.jobagent/roleplay` 建立独立合成工作区：合成候选人、经 `confirm` 确认的合成证据与合成岗位；已存在即拒绝。`--memory-mode full|notes_only|off` 建立对照臂，`--strict-owner` 拒绝反馈中的全称词 |
 | 模拟本人人设 | 已落地(仅合成) | `jobagent roleplay persona`：只给扮演本人的会话看人设与隐藏偏好；生成方的任何请求都不包含这些内容 |

@@ -102,9 +102,13 @@ jobagent feishu patch --config <private-config.json> --request <patch.json>
 
 ## 记录历史与事件
 
-单条历史通过现有官方 `base +record-history-list` 查询，必须先确定本人允许的目标记录范围，不遍历全表历史。历史 before/after、时间与操作者以真实返回为准；如果 operator 仅为显示名或 AI 与本人共用凭据，就保留归因未知，不能直接进入 Human Preference。
+生产人工信号来自已存在且保持 Disabled 的三条 Base Workflow。它们只在 Human Signals 表追加一行，写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain` 和 `learning_status=pending_history_enrichment`。该行的 record_id 是唯一标识。`memory signal-receive` 只解析本地 `drive.file.bitable_record_changed_v1` fixture，不是生产入口。本仓库不提供建表、改字段类型或启用 Workflow 的命令。
 
-事件订阅仅提示对应宿主刷新当前记录；各侧仍按业务条件重新查询。当前本次实测 CLI 的事件目录不包含 Bitable record changed，不能虚构 event consume 命令。官方 SDK 的长连接路线见 [Node SDK](https://github.com/larksuite/node-sdk)，真实应用订阅、事件 fixture、后台部署和宿主触发仍需独立核验。本页读写能力不证明事件长连接已经启用。
+`jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。只有整段历史里该字段恰好一次可读的 before/after，并且操作者能用 open_id 或 union_id 唯一对照名单时，结果才是 matched。仅有显示名、名单对不上、前后值不唯一，都是 unknown，不猜测，也不把 Bot 写成人工偏好。历史没有读完时直接失败，不把不完整结果当成 unknown 后推进状态。
+
+`pending_history_enrichment` 只在状态回写正向核对后改为 `pending_dream` 或 `unknown`。查询失败或回写失败保持原状态。`learned` 只在调用方交来的记忆草稿完成版本写入和回读之后更新。Dream 仍由 GPT 执行，本适配器不调用模型。
+
+事件订阅仅提示对应宿主刷新当前记录；各侧仍按业务条件重新查询。不能把 CLI 事件目录的空缺写成平台没有该事件，也不能虚构 event consume 命令。官方 SDK 的长连接路线见 [Node SDK](https://github.com/larksuite/node-sdk)。本页不证明事件长连接已经启用。
 
 ## 可用性验收
 

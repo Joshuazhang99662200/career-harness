@@ -9,14 +9,18 @@ from pydantic import JsonValue
 
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
+from jobagent.memory.history_match import ParsedPage, match_history, parse_history_page
 from jobagent.schemas.feishu import (
     FeishuConfig,
+    FeishuCreateReceipt,
     FeishuPage,
     FeishuPatch,
     FeishuRecord,
     FeishuTable,
     FeishuWriteReceipt,
 )
+from jobagent.schemas.memory_signal import OperatorDirectory
+from jobagent.schemas.shared_memory import PRODUCTION_TABLE_IDS, RecordHistoryDiff
 
 
 def reject(message: str) -> Never:
@@ -72,7 +76,7 @@ class FeishuGateway:
         return ["base", command, "--base-token", self.config.base_token,
                 "--table-id", self._table(key).table_id]
 
-    def schema(self, key: str) -> dict[str, dict[str, Any]]:
+    def _live_fields(self, key: str) -> dict[str, dict[str, Any]]:
         fields: dict[str, dict[str, Any]] = {}
         offset = 0
         while True:
@@ -93,6 +97,13 @@ class FeishuGateway:
                 break
             if not rows or offset > total:
                 reject("Feishu field schema pagination is incomplete.")
+        return fields
+
+    def catalog(self, key: str) -> list[dict[str, Any]]:
+        return [dict(field) for field in self._live_fields(key).values()]
+
+    def schema(self, key: str) -> dict[str, dict[str, Any]]:
+        fields = self._live_fields(key)
         mapping = self._table(key).fields
         if not set(mapping.values()) <= set(fields):
             reject("Configured field IDs are missing from the current live schema.")
@@ -177,23 +188,10 @@ class FeishuGateway:
             reject("Patch crosses this role's explicit writable field boundary.")
         for name, value in request.fields.items():
             field = live[name]
-            if name == "approval" or field.get("name") in {"批准状态", "你的决定"}:
-                reject("Human decision fields cannot be changed by an agent.")
             if (field.get("name") in {"招呼语", "邮件正文", "准确全文"}
                     and name not in table.material_fields):
                 reject("Material writes require an explicit current-approval guard configuration.")
-            kind = field.get("type")
-            if kind == "text":
-                if value is not None and not isinstance(value, str):
-                    reject("Text fields require an exact string or null.")
-            elif kind == "select":
-                options = {o.get("name") for o in field.get("options", [])}
-                if (not isinstance(value, list) or not all(isinstance(v, str) for v in value)
-                        or not set(value) <= options
-                        or (field.get("multiple") is False and len(value) > 1)):
-                    reject("Select values must match the current live schema.")
-            else:
-                reject("This minimal adapter only writes text/select; other types need adapters.")
+            _reject_cell(field, name, value)
         current = self.get(request.table, request.record_id)
         if current.content_digest != request.expected_digest:
             reject("Record content changed; reread the shared source before writing.")
@@ -237,3 +235,123 @@ class FeishuGateway:
         if not receipt.verified:
             receipt.diagnostic = "readback_mismatch_do_not_repeat"
         return receipt
+
+    def _require_production_table(self, key: str) -> FeishuTable:
+        expected = PRODUCTION_TABLE_IDS.get(key)
+        table = self._table(key)
+        if expected is None or table.table_id != expected:
+            reject("Configured table id is not the production table for this operation.")
+        return table
+
+    def record_history(
+        self,
+        key: str,
+        record_id: str,
+        field_id: str,
+        *,
+        operators: OperatorDirectory,
+        page_size: int = 50,
+        max_pages: int = 20,
+    ) -> RecordHistoryDiff:
+        """Read one job record's history. A partial page sequence is not a diff."""
+        if key != "jobs":
+            reject("Record history for preference learning reads the production jobs table.")
+        self._require_production_table(key)
+        if not record_id or not field_id or not 1 <= page_size <= 50 or not 1 <= max_pages <= 50:
+            reject("Record history needs one record, one field, and an explicit page budget.")
+        directory = OperatorDirectory.model_validate(operators.model_dump())
+        pages: list[ParsedPage] = []
+        cursor: int | None = None
+        while len(pages) < max_pages:
+            argv = [
+                *self._args(key, "+record-history-list"),
+                "--record-id", record_id,
+                "--page-size", str(page_size),
+            ]
+            if cursor is not None:
+                argv.extend(["--max-version", str(cursor)])
+            page = parse_history_page(self.transport.call(argv))
+            pages.append(page)
+            if not page.has_more:
+                break
+            if page.next_max_version is None:
+                reject("Record history page did not continue.")
+            cursor = page.next_max_version
+        else:
+            reject("Record history did not finish; the diff is not uniquely matched.")
+        return match_history(
+            pages, record_id=record_id, field_id=field_id, operators=directory
+        )
+
+    def append_memory_row(self, key: str, fields: dict[str, JsonValue]) -> FeishuCreateReceipt:
+        """Append one row to a production memory table and read it back."""
+        if key not in {"search_memory", "greeting_memory"}:
+            reject("Record creation is limited to the two production memory tables.")
+        table = self._require_production_table(key)
+        if not fields:
+            reject("Memory append requires the semantic columns.")
+        allowed = set(table.writable.get("memory", []))
+        if set(fields) != allowed or not set(fields) <= set(table.fields):
+            reject("Memory append must write exactly the memory role's columns.")
+        live = self.schema(key)
+        for name, value in fields.items():
+            _reject_cell(live[name], name, value)
+        receipt = FeishuCreateReceipt(
+            status="unverified", verified=False, dispatched=False
+        )
+        payload = {"create_records": [{
+            table.fields[name]: value for name, value in fields.items()
+        }]}
+        receipt.dispatched = True
+        try:
+            response = self.transport.call([
+                *self._args(key, "+record-batch-create"),
+                "--json", json.dumps(payload, ensure_ascii=False),
+            ])
+        except ContractValidationError:
+            receipt.status = "unknown"
+            receipt.diagnostic = "dispatch_outcome_unknown_do_not_repeat"
+            return receipt
+        if response.get("ignored_fields"):
+            receipt.diagnostic = "ignored_fields_requires_reconciliation"
+            return receipt
+        created = response.get("record_id_list")
+        if (not isinstance(created, list) or len(created) != 1
+                or not isinstance(created[0], str) or not created[0]):
+            receipt.status = "unknown"
+            receipt.diagnostic = "create_identity_unknown_do_not_repeat"
+            return receipt
+        try:
+            record = self.get(key, created[0])
+        except ContractValidationError:
+            receipt.status = "unknown"
+            receipt.record_id = created[0]
+            receipt.diagnostic = "readback_unavailable_do_not_repeat"
+            return receipt
+        receipt.record_id = record.record_id
+        receipt.record = record
+        receipt.verified = all(record.fields.get(name) == value for name, value in fields.items())
+        receipt.status = "verified" if receipt.verified else "unverified"
+        if not receipt.verified:
+            receipt.diagnostic = "readback_mismatch_do_not_repeat"
+        return receipt
+
+
+def _reject_cell(field: dict[str, Any], name: str, value: JsonValue) -> None:
+    if name == "approval" or field.get("name") in {"批准状态", "你的决定"}:
+        reject("Human decision fields cannot be changed by an agent.")
+    kind = field.get("type")
+    if kind == "text":
+        if value is not None and not isinstance(value, str):
+            reject("Text fields require an exact string or null.")
+    elif kind == "select":
+        options = {option.get("name") for option in field.get("options", [])}
+        if (not isinstance(value, list) or not all(isinstance(item, str) for item in value)
+                or not set(value) <= options
+                or (field.get("multiple") is False and len(value) > 1)):
+            reject("Select values must match the current live schema.")
+    elif kind == "datetime":
+        if value is not None and (not isinstance(value, str) or not value):
+            reject("Datetime fields require an exact string or null.")
+    else:
+        reject("This minimal adapter only writes text, select or datetime.")

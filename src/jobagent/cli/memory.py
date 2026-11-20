@@ -10,6 +10,8 @@ import typer
 from pydantic import ValidationError
 
 from jobagent.bridge.memory_sources import PrivateSourceReader, private_path
+from jobagent.bridge.shared_memory import SharedMemoryService
+from jobagent.cli.feishu import gateway as feishu_gateway
 from jobagent.cli.private_io import fail, open_database, read_model
 from jobagent.errors import ContractValidationError, JobAgentError
 from jobagent.jobs.search_memory_apply import apply_search_memory
@@ -33,6 +35,7 @@ from jobagent.schemas.memory_signal import (
     SignalReceiptFile,
     WatchedJobFields,
 )
+from jobagent.schemas.shared_memory import MemoryPublishRequest, SearchRoundInput
 from jobagent.storage.candidate_repository import SqliteCandidateRepository
 from jobagent.storage.conversation_repository import SqliteConversationRepository
 from jobagent.storage.memory_repository import MemoryRepository
@@ -271,6 +274,68 @@ def apply_search(
             candidate_id=candidate,
         )
         typer.echo(applied.model_dump_json(indent=2))
+    except JobAgentError as error:
+        fail(error)
+
+
+def _shared_memory(config: Path, operators: OperatorDirectory | None = None) -> SharedMemoryService:
+    return SharedMemoryService(feishu_gateway(config), operators or OperatorDirectory())
+
+
+@memory_app.command("workflow-page")
+def workflow_page(
+    config: ConfigOption,
+    limit: Annotated[int, typer.Option("--limit", min=1, max=200)],
+    offset: Annotated[int, typer.Option("--offset", min=0)] = 0,
+    revision: Annotated[int | None, typer.Option("--revision")] = None,
+) -> None:
+    """Read one page of pending Workflow Human Signals. Does not subscribe or write."""
+    try:
+        if offset and revision is None:
+            raise ContractValidationError("Continuation requires the table revision.")
+        page = _shared_memory(config).page_workflow_signals(
+            limit=limit, offset=offset, expected_table_revision=revision,
+        )
+        typer.echo(page.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
+
+
+@memory_app.command("enrich-signal")
+def enrich_signal(
+    config: ConfigOption,
+    record_id: Annotated[str, typer.Option("--record-id")],
+    operators: Annotated[Path, typer.Option("--operators")],
+) -> None:
+    """Attach record history to one Human Signal. Failure leaves learning_status unchanged."""
+    try:
+        directory = read_model(operators, OperatorDirectory)
+        result = _shared_memory(config, directory).enrich_signal(record_id)
+        typer.echo(result.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
+
+
+@memory_app.command("publish-version")
+def publish_version(
+    config: ConfigOption, request: Annotated[Path, typer.Option("--request")]
+) -> None:
+    """Validate a supplied memory draft and publish the next version. Does not call a model."""
+    try:
+        result = _shared_memory(config).publish_memory(read_model(request, MemoryPublishRequest))
+        typer.echo(result.model_dump_json())
+        if not result.verified:
+            raise typer.Exit(1)
+    except JobAgentError as error:
+        fail(error)
+
+
+@memory_app.command("search-round")
+def search_round(config: ConfigOption, request: Annotated[Path, typer.Option("--request")]) -> None:
+    """Read the latest published search memory. No memory keeps the supplied search config."""
+    try:
+        plan = _shared_memory(config).read_search_round(read_model(request, SearchRoundInput))
+        typer.echo(plan.model_dump_json())
     except JobAgentError as error:
         fail(error)
 

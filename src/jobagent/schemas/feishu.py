@@ -6,7 +6,7 @@ from pydantic import Field, JsonValue, model_validator
 
 from jobagent.schemas.common import ContractModel, Digest, NonEmptyString
 
-FeishuRole = Literal["generation", "execution"]
+FeishuRole = Literal["generation", "execution", "memory"]
 
 
 class FeishuTable(ContractModel):
@@ -110,6 +110,19 @@ class FeishuWriteReceipt(ContractModel):
     verified: bool
     dispatched: bool
     evidence_reference: str
+    record: FeishuRecord | None = None
+    diagnostic: str | None = None
+    concurrency_guarantee: Literal["pre_read_only"] = "pre_read_only"
+    grants_execution_permission: Literal[False] = False
+
+
+class FeishuCreateReceipt(ContractModel):
+    """One memory-table append. Unknown means the caller must not advance status."""
+
+    record_id: str | None = None
+    status: Literal["verified", "unverified", "unknown"]
+    verified: bool
+    dispatched: bool
     record: FeishuRecord | None = None
     diagnostic: str | None = None
     concurrency_guarantee: Literal["pre_read_only"] = "pre_read_only"

@@ -1,0 +1,17 @@
+{
+  "source_table": "tbl0m4LpWgeGuZEd",
+  "source_record_id": "rec_job_data",
+  "job_title": "Data Platform Engineer",
+  "field_name": "匹配档位",
+  "field_id": "flddtn4pvI",
+  "signal_type": "matching_correction",
+  "memory_domain": "search_match",
+  "learning_status": "pending_history_enrichment",
+  "signal_id": null,
+  "source_context": null,
+  "operator_id": null,
+  "operator_name": null,
+  "changed_at": null,
+  "before_value": null,
+  "after_value": null
+}

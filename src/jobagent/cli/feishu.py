@@ -10,6 +10,7 @@ from jobagent.bridge.feishu_gateway import FeishuGateway, LarkCliTransport
 from jobagent.cli.private_io import fail, read_model
 from jobagent.errors import JobAgentError
 from jobagent.schemas.feishu import FeishuConfig, FeishuPatch, FeishuQuery
+from jobagent.schemas.shared_memory import RecordHistoryRequest
 
 feishu_app = typer.Typer(help="Shared Feishu source via the installed official CLI.")
 ConfigOption = Annotated[Path, typer.Option("--config")]
@@ -53,6 +54,24 @@ def get_record(
     try:
         result = gateway(config).get(table, record_id)
         typer.echo(result.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
+
+
+@feishu_app.command("record-history")
+def record_history(config: ConfigOption, request: RequestOption) -> None:
+    """Read one job record's history for one field. Does not write or learn."""
+    try:
+        value = read_model(request, RecordHistoryRequest)
+        diff = gateway(config).record_history(
+            value.table,
+            value.record_id,
+            value.field_id,
+            operators=value.operators,
+            page_size=value.page_size,
+            max_pages=value.max_pages,
+        )
+        typer.echo(diff.model_dump_json())
     except JobAgentError as error:
         fail(error)
 

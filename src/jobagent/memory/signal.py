@@ -1,10 +1,9 @@
-"""Filter one Bitable record-changed fixture into human feedback signals.
+"""Test tool for one local ``drive.file.bitable_record_changed_v1`` fixture.
 
-Official Node SDK long-connection registration is ``WSClient.start`` with
-``EventDispatcher.register({ "drive.file.bitable_record_changed_v1": ... })``.
-This module does not import that SDK, open a socket, or enable a subscription.
-Lark CLI event catalogs are a host concern; a missing CLI event is not treated
-as proof the platform event does not exist.
+Production human signals are Workflow-written Human Signals rows. This parser
+is not a connected production event path: it does not import an official SDK,
+open a socket, or enable a subscription. A missing CLI event catalog is not
+proof the platform event does not exist.
 """
 
 from collections.abc import Mapping
@@ -89,7 +88,9 @@ def _field_map(action: Mapping[str, Any], key: str) -> tuple[dict[str, str | Non
 
 
 class SignalInbox:
-    """In-process event idempotency. Same id and digest replays; a changed body conflicts.
+    """Test tool. In-process fixture idempotency, not a production event subscription.
+
+    Same id and digest replays; a changed body conflicts.
 
     The digest map is technical dedup of one event payload. It is not a job ledger
     and it does not store approval or progress as business state.

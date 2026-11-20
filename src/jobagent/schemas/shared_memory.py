@@ -258,6 +258,7 @@ class MemoryPublishResult(ContractModel):
     duplicate: bool
     verified: bool
     advanced_to_learned: bool
+    previous_snapshot_restored: bool | None = None
     learning_status: LearningStatus | None = None
     version: str | None = None
     record_id: str | None = None
@@ -307,18 +308,24 @@ class SearchRoundPlan(ContractModel):
 
 
 class DreamBatchStart(ContractModel):
-    """Caller-supplied batch size and cutoff. No quiet-window default."""
+    """Freeze a rolling ten-business-day window using the host's configured calendar."""
 
     candidate_id: CandidateId
     batch_size: int = Field(ge=1)
+    window_start: NonEmptyString
+    window_timezone: NonEmptyString
+    window_business_days: Literal[10] = 10
     cutoff: NonEmptyString
 
 
 class DreamBatchSnapshot(ContractModel):
-    """Frozen signal ids for one Dream run. Later rows wait for the next run."""
+    """Frozen signal ids and observation window for one Dream run."""
 
     batch_id: NonEmptyString
     candidate_id: CandidateId
+    window_start: NonEmptyString
+    window_timezone: NonEmptyString
+    window_business_days: Literal[10] = 10
     cutoff: NonEmptyString
     data_version: NonEmptyString
     signal_ids: list[NonEmptyString]
@@ -351,6 +358,8 @@ class DreamBatchResult(ContractModel):
     batch_id: NonEmptyString
     verified: bool
     republished: bool
+    no_change: bool = False
+    previous_snapshot_restored: bool | None = None
     memory_version: str | None = None
     memory_record_id: str | None = None
     learned_signal_ids: list[str] = Field(default_factory=list)

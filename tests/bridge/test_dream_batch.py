@@ -18,6 +18,8 @@ from jobagent.schemas.shared_memory import (
 from tests.bridge.test_shared_memory_alignment import FakeBase, config, service
 
 CUTOFF = "2026-11-20T12:00:00+00:00"
+WINDOW_START = "2026-11-09T00:00:00+00:00"
+WINDOW_TIMEZONE = "Asia/Shanghai"
 JOB = "JOB_DATA_PLATFORM"
 
 
@@ -77,9 +79,19 @@ def _delta(
     )
 
 
-def _start(store: SharedMemoryService, size: int, cutoff: str = CUTOFF):
+def _start(
+    store: SharedMemoryService,
+    size: int,
+    cutoff: str = CUTOFF,
+    window_start: str = WINDOW_START,
+):
     return store.start_dream_batch(DreamBatchStart(
-        candidate_id="CAND_FIXTURE", batch_size=size, cutoff=cutoff,
+        candidate_id="CAND_FIXTURE",
+        batch_size=size,
+        window_start=window_start,
+        window_timezone=WINDOW_TIMEZONE,
+        window_business_days=10,
+        cutoff=cutoff,
     ))
 
 
@@ -109,6 +121,9 @@ def test_new_edit_after_dream_starts_stays_out_of_the_frozen_batch() -> None:
     assert snapshot.signal_ids == ["rec_early"]
     assert snapshot.resumed is False
     assert snapshot.quiet_window_seconds is None
+    assert snapshot.window_start == WINDOW_START
+    assert snapshot.window_timezone == WINDOW_TIMEZONE
+    assert snapshot.window_business_days == 10
     _ready(base, "rec_after_start", "2026-11-20T08:05:00+00:00", before="B", after="A")
     assert "rec_after_start" not in snapshot.signal_ids
     result = _finish(store, snapshot, [_delta("rec_early", "Early grade.", add=["backend"])])
@@ -118,7 +133,17 @@ def test_new_edit_after_dream_starts_stays_out_of_the_frozen_batch() -> None:
     assert base.signals["rec_late_clock"]["learning_status"] == "pending_dream"
 
 
-def test_two_successive_edits_on_one_job_both_remain() -> None:
+def test_signals_outside_the_rolling_ten_workday_window_stay_pending() -> None:
+    base, store = service()
+    _ready(base, "rec_old", "2026-11-06T09:00:00+08:00")
+    _ready(base, "rec_current", "2026-11-20T09:00:00+08:00")
+    snapshot = _start(store, 10)
+    assert snapshot.signal_ids == ["rec_current"]
+    assert base.signals["rec_old"]["source_context"] is None
+    assert base.signals["rec_old"]["learning_status"] == "pending_dream"
+
+
+def test_two_successive_edits_on_one_job_both_remain() -> None
     base, store = service()
     _ready(base, "rec_cb", "2026-11-20T08:00:00+00:00", before="C", after="B")
     _ready(base, "rec_ba", "2026-11-20T09:00:00+00:00", before="B", after="A")
@@ -296,10 +321,12 @@ def test_second_dream_start_resumes_instead_of_claiming_a_second_batch() -> None
     assert "complete_dream_batch" not in patrol_source
     base, store = service()
     _ready(base, "rec_open", "2026-11-20T08:00:00+00:00")
-    store._publish_claims.add(("CAND_FIXTURE", "dream-batch"))
-    with pytest.raises(ContractValidationError, match="single-writer"):
-        _start(store, 10)
-    store._publish_claims.discard(("CAND_FIXTURE", "dream-batch"))
+    store._claim_publish(("CAND_FIXTURE", "dream-batch"))
+    try:
+        with pytest.raises(ContractValidationError, match="single-writer"):
+            _start(store, 10)
+    finally:
+        store._release_publish(("CAND_FIXTURE", "dream-batch"))
     first = _start(store, 10)
     second = _start(store, 10)
     assert second.resumed is True
@@ -452,6 +479,9 @@ def test_dream_cli_requires_an_explicit_operator_directory(tmp_path, monkeypatch
     request_path.write_text(DreamBatchStart(
         candidate_id="CAND_FIXTURE",
         batch_size=10,
+        window_start=WINDOW_START,
+        window_timezone=WINDOW_TIMEZONE,
+        window_business_days=10,
         cutoff=CUTOFF,
     ).model_dump_json(), encoding="utf-8")
     operators_path = tmp_path / "operators.json"
@@ -488,7 +518,48 @@ def test_dream_batch_is_scoped_to_candidate_via_source_job_mapping() -> None:
     snapshot = store.start_dream_batch(DreamBatchStart(
         candidate_id="CAND_A",
         batch_size=10,
+        window_start=WINDOW_START,
+        window_timezone=WINDOW_TIMEZONE,
+        window_business_days=10,
         cutoff=CUTOFF,
     ))
     assert snapshot.signal_ids == ["rec_candidate_a"]
     assert base.signals["rec_candidate_b"]["source_context"] is None
+
+
+
+def test_no_net_change_marks_signals_learned_without_publishing_a_new_version() -> None:
+    base, store = service()
+    _publish_one(store, base, "rec_baseline", "2026-11-20T07:00:00+00:00", ["data platform"])
+    current = next(iter(base.search_rows.values()))
+    assert current["version"] == "1"
+
+    _ready(base, "rec_repeat", "2026-11-20T09:00:00+00:00", before="B", after="A")
+    snapshot = _start(store, 10)
+    result = _finish(store, snapshot, [
+        _delta("rec_repeat", "The existing data platform preference is reaffirmed.",
+               add=["data platform"]),
+    ])
+
+    assert result.verified is True
+    assert result.no_change is True
+    assert result.republished is False
+    assert result.memory_version == "1"
+    assert len(base.search_rows) == 1
+    assert next(iter(base.search_rows.values()))["version"] == "1"
+    assert base.signals["rec_repeat"]["learning_status"] == "learned"
+
+
+def test_empty_net_delta_without_baseline_does_not_create_memory() -> None:
+    base, store = service()
+    _ready(base, "rec_noop", "2026-11-20T09:00:00+00:00")
+    snapshot = _start(store, 10)
+    result = _finish(store, snapshot, [
+        _delta("rec_noop", "No durable search preference change."),
+    ])
+    assert result.verified is True
+    assert result.no_change is True
+    assert result.memory_version is None
+    assert result.memory_record_id is None
+    assert base.search_rows == {}
+    assert base.signals["rec_noop"]["learning_status"] == "learned"

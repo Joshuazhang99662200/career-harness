@@ -38,7 +38,10 @@ def decode_source_signal_ids(value: str) -> list[str]:
 
 
 def fold_search_snapshot(
-    previous: PublishedMemory | None, deltas: list[SignalPreferenceDelta]
+    previous: PublishedMemory | None,
+    deltas: list[SignalPreferenceDelta],
+    *,
+    allow_empty: bool = False,
 ) -> tuple[list[str], list[str], list[str]]:
     """Return the full currently valid keyword, direction, and exclusion lists."""
     keywords = [] if previous is None else list(previous.keywords)
@@ -50,7 +53,7 @@ def fold_search_snapshot(
         _apply(exclusions, delta.remove_exclusions, delta.add_exclusions)
         _drop_excluded(keywords, exclusions)
     _drop_excluded(keywords, exclusions)
-    if not keywords and not directions and not exclusions:
+    if not keywords and not directions and not exclusions and not allow_empty:
         _reject("Search snapshot has no remaining keyword, direction, or exclusion.")
     return keywords, directions, exclusions
 

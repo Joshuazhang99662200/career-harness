@@ -144,6 +144,7 @@ class FakeBase:
         self.fail_writes = False
         self.fail_next_status_writes = 0
         self.fail_after_source_context_writes: int | None = None
+        self.partial_memory_update_fields: int | None = None
         self.timeout_after_apply = 0
         self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
         self.changed_at_type = "datetime"
@@ -279,12 +280,23 @@ class FakeBase:
             self.fail_next_status_writes -= 1
             raise ContractValidationError("Synthetic status failure")
         store = self._store(table_id)
-        for record_id, fields in body["update_records"].items():
-            for field_id, value in fields.items():
-                store[record_id][names[field_id]] = value
+        ignored_fields: list[str] = []
+        partial_count = self.partial_memory_update_fields
+        if table_id in {SEARCH, GREETING} and partial_count is not None:
+            self.partial_memory_update_fields = None
+            for record_id, fields in body["update_records"].items():
+                for index, (field_id, value) in enumerate(fields.items()):
+                    if index < partial_count:
+                        store[record_id][names[field_id]] = value
+                    else:
+                        ignored_fields.append(field_id)
+        else:
+            for record_id, fields in body["update_records"].items():
+                for field_id, value in fields.items():
+                    store[record_id][names[field_id]] = value
         self.revisions[table_id] += 1
         self._maybe_timeout()
-        return {}
+        return {"ignored_fields": ignored_fields} if ignored_fields else {}
 
     def _maybe_timeout(self) -> None:
         if self.timeout_after_apply:
@@ -669,6 +681,29 @@ def test_failed_update_leaves_the_previous_record_readable() -> None:
     assert "data platform" in str(row["keywords"])
 
 
+def test_partial_memory_update_restores_the_previous_published_snapshot() -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    first = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+    ))
+    assert first.verified is True and first.record_id is not None
+    previous = dict(base.search_rows[first.record_id])
+
+    _put_signal(base, "rec_signal_next", learning_status="pending_dream", job_title="Next")
+    base.partial_memory_update_fields = 3
+    failed = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next",
+        memory=_memory("rec_signal_next", keywords=["distributed systems"]),
+    ))
+
+    assert failed.verified is False
+    assert failed.advanced_to_learned is False
+    assert failed.previous_snapshot_restored is True
+    assert base.search_rows[first.record_id] == previous
+    assert base.signals["rec_signal_next"]["learning_status"] == "pending_dream"
+
+
 def test_timeout_after_a_successful_update_is_confirmed_by_reread() -> None:
     base, store = service()
     _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
@@ -709,14 +744,36 @@ def test_retry_of_the_same_snapshot_does_not_create_a_second_record() -> None:
 def test_overlapping_publish_is_rejected_without_a_second_ledger() -> None:
     base, store = service()
     _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
-    store._publish_claims.add(("CAND_FIXTURE", "search"))
-    with pytest.raises(ContractValidationError, match="single-writer"):
-        store.publish_memory(MemoryPublishRequest(
-            signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
-        ))
+    store._claim_publish(("CAND_FIXTURE", "search_memory"))
+    try:
+        with pytest.raises(ContractValidationError, match="single-writer"):
+            store.publish_memory(MemoryPublishRequest(
+                signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+            ))
+    finally:
+        store._release_publish(("CAND_FIXTURE", "search_memory"))
     assert base.signals["rec_signal_grade"]["learning_status"] == "pending_dream"
     assert base.search_rows == {}
     assert not any("+record-batch-create" in call for call in base.calls)
+
+
+def test_storage_domain_lock_is_shared_across_service_instances_and_memory_kinds() -> None:
+    from jobagent.bridge.feishu_gateway import FeishuGateway
+
+    base, first = service()
+    _put_signal(base, "rec_matching", learning_status="pending_dream")
+    second = SharedMemoryService(FeishuGateway(config(), base), OPERATORS)
+    first._claim_publish(("CAND_FIXTURE", "search_memory"))
+    try:
+        with pytest.raises(ContractValidationError, match="storage domain"):
+            second.publish_memory(MemoryPublishRequest(
+                signal_record_id="rec_matching",
+                memory=_memory("rec_matching", kind="matching", notes=["B->A"]),
+            ))
+    finally:
+        first._release_publish(("CAND_FIXTURE", "search_memory"))
+    assert base.search_rows == {}
+    assert base.signals["rec_matching"]["learning_status"] == "pending_dream"
 
 
 def test_publish_rejects_candidate_mismatch_from_the_source_job() -> None:

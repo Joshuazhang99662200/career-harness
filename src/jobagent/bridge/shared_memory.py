@@ -4,6 +4,7 @@ import json
 import threading
 from datetime import datetime
 from typing import Never
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import JsonValue
 
@@ -54,6 +55,13 @@ def _reject(message: str) -> Never:
     raise ContractValidationError(message)
 
 
+# Process-wide coordination across independent service instances. This is not
+# a cross-process/distributed lease; the host must serialize the whole Dream
+# lifecycle and all writers for the same candidate/storage domain.
+_PUBLISH_GUARD = threading.Lock()
+_PUBLISH_CLAIMS: set[tuple[str, str]] = set()
+
+
 class SharedMemoryService:
     """Infrastructure for Human Signals and the two memory tables.
 
@@ -72,8 +80,6 @@ class SharedMemoryService:
         self.gateway = gateway
         self.operators = OperatorDirectory.model_validate(operators.model_dump())
         self.ledger = WorkflowSignalLedger()
-        self._publish_guard = threading.Lock()
-        self._publish_claims: set[tuple[str, str]] = set()
 
     def page_workflow_signals(
         self,
@@ -188,7 +194,8 @@ class SharedMemoryService:
             _reject("Memory kind does not match the signal domain.")
         if key == "greeting_memory" and parsed.memory_domain != "greeting":
             _reject("Memory kind does not match the signal domain.")
-        claim = (memory.candidate_id, memory.kind)
+        # "search" and "matching" both publish into the same physical table.
+        claim = (memory.candidate_id, key)
         self._claim_publish(claim)
         try:
             return self._publish_serial(request, memory, key, parsed.learning_status)
@@ -207,7 +214,14 @@ class SharedMemoryService:
     def start_dream_batch(self, request: DreamBatchStart) -> DreamBatchSnapshot:
         """Freeze pending human signals. A later edit stays out of this batch."""
         request = DreamBatchStart.model_validate(request.model_dump())
-        _aware(request.cutoff)
+        window_start = _aware(request.window_start)
+        cutoff = _aware(request.cutoff)
+        if window_start > cutoff:
+            _reject("Dream observation window start must not be after its cutoff.")
+        try:
+            ZoneInfo(request.window_timezone)
+        except ZoneInfoNotFoundError:
+            _reject("Dream observation window timezone must be a valid IANA timezone.")
         claim = (request.candidate_id, "dream-batch")
         self._claim_publish(claim)
         try:
@@ -219,7 +233,7 @@ class SharedMemoryService:
         """Publish one complete snapshot for the frozen signals, then mark them learned."""
         request = DreamBatchComplete.model_validate(request.model_dump())
         claim = (request.snapshot.candidate_id, "dream-batch")
-        kind_claim = (request.snapshot.candidate_id, "search")
+        kind_claim = (request.snapshot.candidate_id, "search_memory")
         self._claim_publish(claim)
         try:
             self._claim_publish(kind_claim)
@@ -279,6 +293,8 @@ class SharedMemoryService:
                 continue
             if item.changed_at is None or _batch_stamp(item) is not None:
                 continue
+            if not _at_or_after(item.changed_at, request.window_start):
+                continue
             if not _at_or_before(item.changed_at, request.cutoff):
                 continue
             if self._candidate_id_for_signal(item) != request.candidate_id:
@@ -290,6 +306,9 @@ class SharedMemoryService:
         signal_ids = [item.signal_record_id for item in chosen]
         batch_id = canonical_digest({
             "candidate_id": request.candidate_id,
+            "window_start": request.window_start,
+            "window_timezone": request.window_timezone,
+            "window_business_days": request.window_business_days,
             "cutoff": request.cutoff,
             "data_version": data_version,
             "signal_ids": signal_ids,
@@ -297,6 +316,9 @@ class SharedMemoryService:
         snapshot = DreamBatchSnapshot(
             batch_id=batch_id,
             candidate_id=request.candidate_id,
+            window_start=request.window_start,
+            window_timezone=request.window_timezone,
+            window_business_days=request.window_business_days,
             cutoff=request.cutoff,
             data_version=data_version,
             signal_ids=signal_ids,
@@ -319,17 +341,32 @@ class SharedMemoryService:
             _reject("More than one unfinished Dream batch is open for this candidate.")
         stamp = stamps[0]
         raw_ids = stamp.get("signal_ids")
+        window_start = stamp.get("window_start")
+        window_timezone = stamp.get("window_timezone")
+        window_business_days = stamp.get("window_business_days")
         cutoff = stamp.get("cutoff")
         data_version = stamp.get("data_version")
         if (
             not isinstance(raw_ids, list)
             or not raw_ids
+            or not isinstance(window_start, str)
+            or not window_start
+            or not isinstance(window_timezone, str)
+            or not window_timezone
+            or type(window_business_days) is not int
+            or window_business_days != 10
             or not isinstance(cutoff, str)
             or not cutoff
             or not isinstance(data_version, str)
             or not data_version
         ):
-            _reject("Unfinished Dream batch does not name its frozen signals.")
+            _reject("Unfinished Dream batch does not name its complete 10-workday observation window.")
+        if _aware(window_start) > _aware(cutoff):
+            _reject("Unfinished Dream batch has an invalid observation window.")
+        try:
+            ZoneInfo(window_timezone)
+        except ZoneInfoNotFoundError:
+            _reject("Unfinished Dream batch has an invalid IANA timezone.")
         signal_ids: list[str] = []
         for item in raw_ids:
             if not isinstance(item, str) or not item:
@@ -340,6 +377,9 @@ class SharedMemoryService:
         snapshot = DreamBatchSnapshot(
             batch_id=str(stamp["batch_id"]),
             candidate_id=candidate_id,
+            window_start=window_start,
+            window_timezone=window_timezone,
+            window_business_days=window_business_days,
             cutoff=cutoff,
             data_version=data_version,
             signal_ids=signal_ids,
@@ -382,8 +422,30 @@ class SharedMemoryService:
         deltas = [by_id[item.signal_record_id] for item in ordered]
         previous = self._current_search_memory(snapshot.candidate_id)
         keywords, directions, exclusions = fold_search_snapshot(
-            None if previous is None else previous.memory, deltas
+            None if previous is None else previous.memory, deltas, allow_empty=True
         )
+        previous_keywords = [] if previous is None else previous.memory.keywords
+        previous_directions = [] if previous is None else previous.memory.role_directions
+        previous_exclusions = [] if previous is None else previous.memory.exclusions
+        if (
+            keywords == previous_keywords
+            and directions == previous_directions
+            and exclusions == previous_exclusions
+        ):
+            learned, pending = self._mark_batch_learned(ordered)
+            return DreamBatchResult(
+                batch_id=snapshot.batch_id,
+                verified=not pending,
+                republished=False,
+                no_change=True,
+                memory_version=None if previous is None else previous.version,
+                memory_record_id=None if previous is None else previous.record_id,
+                learned_signal_ids=learned,
+                pending_signal_ids=pending,
+                keywords=keywords,
+                role_directions=directions,
+                exclusions=exclusions,
+            )
         anchor = ordered[-1]
         ordered_ids = [item.signal_record_id for item in ordered]
         covering = self._published_covering(snapshot.candidate_id, ordered_ids)
@@ -443,6 +505,7 @@ class SharedMemoryService:
                 memory_version=published.version,
                 memory_record_id=published.record_id,
                 pending_signal_ids=list(snapshot.signal_ids),
+                previous_snapshot_restored=published.previous_snapshot_restored,
                 keywords=keywords,
                 role_directions=directions,
                 exclusions=exclusions,
@@ -562,18 +625,18 @@ class SharedMemoryService:
         return self._domain_rows("search_memory", candidate_id)
 
     def _claim_publish(self, claim: tuple[str, str]) -> None:
-        """One in-process publisher per candidate and kind. Not a shared ledger."""
-        with self._publish_guard:
-            if claim in self._publish_claims:
+        """Claim one candidate/storage-domain slot across service instances in this process."""
+        with _PUBLISH_GUARD:
+            if claim in _PUBLISH_CLAIMS:
                 _reject(
-                    "Memory publish is single-writer for this candidate and kind; "
-                    "wait for the in-process publisher to finish."
+                    "Memory publish is single-writer for this candidate and storage domain; "
+                    "wait for the current publisher to finish."
                 )
-            self._publish_claims.add(claim)
+            _PUBLISH_CLAIMS.add(claim)
 
     def _release_publish(self, claim: tuple[str, str]) -> None:
-        with self._publish_guard:
-            self._publish_claims.discard(claim)
+        with _PUBLISH_GUARD:
+            _PUBLISH_CLAIMS.discard(claim)
 
     def _publish_serial(
         self,
@@ -618,6 +681,7 @@ class SharedMemoryService:
                 publication_status="published", supersedes_version=current.version,
             )
             live = self.gateway.get(key, current.record_id)
+            previous_fields = dict(live.fields)
             self.gateway.patch(FeishuPatch(
                 table=key,
                 record_id=current.record_id,
@@ -630,7 +694,15 @@ class SharedMemoryService:
                 key, memory.candidate_id, current.record_id, expected, version
             )
             if landed is None:
-                return _publish_failure(learning_status, current.version, current.record_id)
+                restored = self._restore_previous_snapshot(
+                    key, current.record_id, previous_fields, fields,
+                )
+                return _publish_failure(
+                    learning_status,
+                    current.version,
+                    current.record_id,
+                    previous_snapshot_restored=restored,
+                )
             record_id = current.record_id
         if not advance_signal or learning_status == "learned":
             return MemoryPublishResult(
@@ -674,6 +746,43 @@ class SharedMemoryService:
         if row.publication_status != "published":
             return None
         return row
+
+    def _restore_previous_snapshot(
+        self,
+        key: str,
+        record_id: str,
+        previous_fields: dict[str, JsonValue],
+        attempted_fields: dict[str, JsonValue],
+    ) -> bool:
+        """Restore only a provable partial write; never overwrite concurrent edits."""
+        try:
+            observed = self.gateway.get(key, record_id)
+        except ContractValidationError:
+            return False
+        if observed.fields == previous_fields:
+            return True
+        if set(observed.fields) != set(previous_fields):
+            return False
+        for name, value in observed.fields.items():
+            if name in attempted_fields:
+                if value not in (previous_fields[name], attempted_fields[name]):
+                    return False
+            elif value != previous_fields[name]:
+                return False
+        restore_fields = {name: previous_fields[name] for name in attempted_fields}
+        try:
+            self.gateway.patch(FeishuPatch(
+                table=key,
+                record_id=record_id,
+                role="memory",
+                expected_digest=observed.content_digest,
+                fields=restore_fields,
+                evidence_reference="memory-restore:" + record_id,
+            ))
+            restored = self.gateway.get(key, record_id)
+        except ContractValidationError:
+            return False
+        return restored.fields == previous_fields
 
     def _domain_rows(self, key: str, candidate_id: str) -> list[StoredMemoryRow]:
         greeting = key == "greeting_memory"
@@ -867,6 +976,9 @@ def _batch_checkpoint(snapshot: DreamBatchSnapshot) -> dict[str, object]:
     return {
         "batch_id": snapshot.batch_id,
         "candidate_id": snapshot.candidate_id,
+        "window_start": snapshot.window_start,
+        "window_timezone": snapshot.window_timezone,
+        "window_business_days": snapshot.window_business_days,
         "cutoff": snapshot.cutoff,
         "data_version": snapshot.data_version,
         "signal_ids": list(snapshot.signal_ids),
@@ -918,6 +1030,10 @@ def _aware(value: str) -> datetime:
 
 def _at_or_before(changed_at: str, cutoff: str) -> bool:
     return _aware(changed_at) <= _aware(cutoff)
+
+
+def _at_or_after(changed_at: str, window_start: str) -> bool:
+    return _aware(changed_at) >= _aware(window_start)
 
 
 def _enrichment_fields(diff: RecordHistoryDiff, target: LearningStatus) -> dict[str, JsonValue]:

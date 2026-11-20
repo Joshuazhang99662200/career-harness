@@ -69,9 +69,9 @@ class SharedMemoryService:
     deduplicates, versions, and writes. A failed write does not advance
     ``learning_status``.
 
-    Publish is single-writer for one candidate and memory kind inside this
-    process. ``_publish_claims`` is that technical claim. It is not a business
-    ledger and it cannot see a publisher in another process. Each candidate has
+    Publish is single-writer for one candidate and storage domain inside this
+    process. The module-level claim registry is not a business ledger and it
+    cannot see a publisher in another process. Each candidate has
     one current record per memory domain. A new snapshot overwrites that
     record. History stays in Feishu record history, not in extra rows.
     """
@@ -424,6 +424,28 @@ class SharedMemoryService:
         keywords, directions, exclusions = fold_search_snapshot(
             None if previous is None else previous.memory, deltas, allow_empty=True
         )
+        anchor = ordered[-1]
+        ordered_ids = [item.signal_record_id for item in ordered]
+        covering = self._published_covering(snapshot.candidate_id, ordered_ids)
+        if covering is not None:
+            learned, pending = self._mark_batch_learned(ordered)
+            return DreamBatchResult(
+                batch_id=snapshot.batch_id,
+                verified=not pending,
+                republished=False,
+                memory_version=covering.version,
+                memory_record_id=covering.record_id,
+                learned_signal_ids=learned,
+                pending_signal_ids=pending,
+                keywords=keywords,
+                role_directions=directions,
+                exclusions=exclusions,
+            )
+        if not keywords and not directions and not exclusions and previous is not None:
+            _reject(
+                "Dream cannot publish an empty Search Memory; preserve the previous snapshot "
+                "until an explicit reset contract exists."
+            )
         previous_keywords = [] if previous is None else previous.memory.keywords
         previous_directions = [] if previous is None else previous.memory.role_directions
         previous_exclusions = [] if previous is None else previous.memory.exclusions
@@ -440,23 +462,6 @@ class SharedMemoryService:
                 no_change=True,
                 memory_version=None if previous is None else previous.version,
                 memory_record_id=None if previous is None else previous.record_id,
-                learned_signal_ids=learned,
-                pending_signal_ids=pending,
-                keywords=keywords,
-                role_directions=directions,
-                exclusions=exclusions,
-            )
-        anchor = ordered[-1]
-        ordered_ids = [item.signal_record_id for item in ordered]
-        covering = self._published_covering(snapshot.candidate_id, ordered_ids)
-        if covering is not None:
-            learned, pending = self._mark_batch_learned(ordered)
-            return DreamBatchResult(
-                batch_id=snapshot.batch_id,
-                verified=not pending,
-                republished=False,
-                memory_version=covering.version,
-                memory_record_id=covering.record_id,
                 learned_signal_ids=learned,
                 pending_signal_ids=pending,
                 keywords=keywords,

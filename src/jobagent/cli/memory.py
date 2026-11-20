@@ -348,11 +348,16 @@ def search_round(config: ConfigOption, request: Annotated[Path, typer.Option("--
 
 @memory_app.command("dream-batch-start")
 def dream_batch_start(
-    config: ConfigOption, request: Annotated[Path, typer.Option("--request")]
+    config: ConfigOption,
+    request: Annotated[Path, typer.Option("--request")],
+    operators: Annotated[Path, typer.Option("--operators")],
 ) -> None:
-    """Freeze pending human signals for one Dream run. Does not call a model."""
+    """Freeze eligible human search signals for one Dream run. Does not call a model."""
     try:
-        page = _shared_memory(config).start_dream_batch(read_model(request, DreamBatchStart))
+        directory = read_model(operators, OperatorDirectory)
+        page = _shared_memory(config, directory).start_dream_batch(
+            read_model(request, DreamBatchStart)
+        )
         typer.echo(page.model_dump_json())
     except JobAgentError as error:
         fail(error)
@@ -360,11 +365,14 @@ def dream_batch_start(
 
 @memory_app.command("dream-batch-complete")
 def dream_batch_complete(
-    config: ConfigOption, request: Annotated[Path, typer.Option("--request")]
+    config: ConfigOption,
+    request: Annotated[Path, typer.Option("--request")],
+    operators: Annotated[Path, typer.Option("--operators")],
 ) -> None:
-    """Publish one complete snapshot for a frozen batch. Does not call a model."""
+    """Publish one complete search snapshot for a frozen batch. Does not call a model."""
     try:
-        result = _shared_memory(config).complete_dream_batch(
+        directory = read_model(operators, OperatorDirectory)
+        result = _shared_memory(config, directory).complete_dream_batch(
             read_model(request, DreamBatchComplete)
         )
         typer.echo(result.model_dump_json())

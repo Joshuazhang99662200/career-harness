@@ -246,11 +246,15 @@ class SharedMemoryService:
         """Keep the pinned version even when a newer snapshot is already published."""
         pin = FetchMemoryPin.model_validate(pin.model_dump())
         round_input = SearchRoundInput.model_validate(round_input.model_dump())
-        if not pin.applied or pin.memory_record_id is None or pin.content_hash is None:
-            return self.pin_fetch_memory(round_input)
-        self._validate_memory_table("search_memory")
         if pin.candidate_id != round_input.candidate_id:
             _reject("Fetch pin belongs to another candidate.")
+        if not pin.applied:
+            # No memory at round start is itself a pinned state. Do not adopt a
+            # memory published halfway through this Fetch round.
+            return pin
+        if pin.memory_record_id is None or pin.content_hash is None:
+            _reject("Applied Fetch pin is missing its memory identity or content hash.")
+        self._validate_memory_table("search_memory")
         # The table keeps one current record, so an in-place update would replace
         # this round's snapshot. The pin already holds the snapshot observed at start.
         return pin
@@ -259,7 +263,12 @@ class SharedMemoryService:
         self._validate_human_signals()
         records, data_version = self._pending_signal_page()
         parsed = [parse_workflow_signal(record.record_id, record.fields) for record in records]
-        open_batches = [item for item in parsed if _batch_stamp(item) is not None]
+        open_batches = [
+            item for item in parsed
+            if _search_dream_signal(item)
+            and (stamp := _batch_stamp(item)) is not None
+            and stamp.get("candidate_id") == request.candidate_id
+        ]
         if open_batches:
             return self._resume_batch(request.candidate_id, open_batches)
         eligible = [
@@ -292,37 +301,68 @@ class SharedMemoryService:
         return snapshot
 
     def _resume_batch(self, candidate_id: str, signals: list[WorkflowSignal]) -> DreamBatchSnapshot:
-        stamps = [_batch_stamp(item) for item in signals]
-        if any(item is None for item in stamps):
-            _reject("An unfinished Dream batch could not be read.")
-        batch_ids = {str(item["batch_id"]) for item in stamps if item is not None}
+        stamps = [
+            stamp for item in signals
+            if (stamp := _batch_stamp(item)) is not None
+            and stamp.get("candidate_id") == candidate_id
+        ]
+        if not stamps:
+            _reject("No unfinished Dream batch belongs to this candidate.")
+        batch_ids = {str(item.get("batch_id")) for item in stamps}
         if len(batch_ids) != 1:
             _reject("More than one unfinished Dream batch is open for this candidate.")
-        stamp = next(item for item in stamps if item is not None)
-        if str(stamp.get("candidate_id")) != candidate_id:
-            _reject("Unfinished Dream batch belongs to another candidate.")
+        stamp = stamps[0]
         raw_ids = stamp.get("signal_ids")
-        if not isinstance(raw_ids, list):
+        cutoff = stamp.get("cutoff")
+        data_version = stamp.get("data_version")
+        if (
+            not isinstance(raw_ids, list)
+            or not raw_ids
+            or not isinstance(cutoff, str)
+            or not cutoff
+            or not isinstance(data_version, str)
+            or not data_version
+        ):
             _reject("Unfinished Dream batch does not name its frozen signals.")
         signal_ids: list[str] = []
         for item in raw_ids:
             if not isinstance(item, str) or not item:
                 _reject("Unfinished Dream batch does not name its frozen signals.")
             signal_ids.append(item)
-        pending = {item.signal_record_id for item in signals}
-        frozen = [item for item in signal_ids if item in pending]
-        return DreamBatchSnapshot(
+        if len(signal_ids) != len(set(signal_ids)):
+            _reject("Unfinished Dream batch contains duplicate signal ids.")
+        snapshot = DreamBatchSnapshot(
             batch_id=str(stamp["batch_id"]),
             candidate_id=candidate_id,
-            cutoff=str(stamp["cutoff"]),
-            data_version=str(stamp["data_version"]),
-            signal_ids=frozen,
+            cutoff=cutoff,
+            data_version=data_version,
+            signal_ids=signal_ids,
             overflow_signal_ids=[],
             resumed=True,
         )
+        expected_stamp = _batch_checkpoint(snapshot)
+        # Recover the complete frozen set, including signals already marked learned.
+        # A partial checkpoint write is also repaired here, but only into empty
+        # source_context cells; conflicting context is never overwritten.
+        for signal_id in signal_ids:
+            record = self.gateway.get("human_signals", signal_id)
+            signal = parse_workflow_signal(record.record_id, record.fields)
+            if not _human_ready(signal, self.operators, allow_learned=True):
+                _reject("Frozen Dream signal is no longer eligible human search feedback.")
+            existing = _batch_stamp(signal)
+            if existing is not None and existing != expected_stamp:
+                _reject("Frozen Dream signal belongs to a different batch snapshot.")
+            if existing is None and signal.source_context not in (None, ""):
+                _reject("Frozen Dream signal has conflicting source_context.")
+        self._stamp_batch(snapshot)
+        return snapshot
 
     def _complete_dream_batch(self, request: DreamBatchComplete) -> DreamBatchResult:
         snapshot = request.snapshot
+        if not snapshot.signal_ids:
+            _reject("Dream batch is empty; skip model execution and completion.")
+        if len(snapshot.signal_ids) != len(set(snapshot.signal_ids)):
+            _reject("Dream batch contains duplicate signal ids.")
         signals = self._frozen_signals(snapshot)
         if [item.signal_record_id for item in signals] != list(snapshot.signal_ids):
             _reject("Dream batch signals do not match the frozen snapshot.")
@@ -415,17 +455,14 @@ class SharedMemoryService:
 
     def _frozen_signals(self, snapshot: DreamBatchSnapshot) -> list[WorkflowSignal]:
         found: list[WorkflowSignal] = []
+        expected_stamp = _batch_checkpoint(snapshot)
         for signal_id in snapshot.signal_ids:
             record = self.gateway.get("human_signals", signal_id)
             signal = parse_workflow_signal(record.record_id, record.fields)
-            stamp = _batch_stamp(signal)
-            if stamp is None or stamp.get("batch_id") != snapshot.batch_id:
-                _reject("Frozen Dream signal belongs to another batch.")
-            if signal.learning_status == "pending_dream":
-                if not _human_ready(signal, self.operators):
-                    _reject("Frozen Dream signal is not human feedback with a completed diff.")
-            elif signal.learning_status != "learned":
-                _reject("Frozen Dream signal is no longer pending in this batch.")
+            if _batch_stamp(signal) != expected_stamp:
+                _reject("Frozen Dream signal does not match the complete batch snapshot.")
+            if not _human_ready(signal, self.operators, allow_learned=True):
+                _reject("Frozen Dream signal is not eligible human search feedback.")
             found.append(signal)
         return found
 
@@ -440,17 +477,18 @@ class SharedMemoryService:
         return learned, pending
 
     def _stamp_batch(self, snapshot: DreamBatchSnapshot) -> None:
-        body = canonical_json({
-            "dream_batch": {
-                "batch_id": snapshot.batch_id,
-                "candidate_id": snapshot.candidate_id,
-                "cutoff": snapshot.cutoff,
-                "data_version": snapshot.data_version,
-                "signal_ids": list(snapshot.signal_ids),
-            }
-        })
+        expected = _batch_checkpoint(snapshot)
+        body = canonical_json({"dream_batch": expected})
         for signal_id in snapshot.signal_ids:
             current = self.gateway.get("human_signals", signal_id)
+            signal = parse_workflow_signal(current.record_id, current.fields)
+            if not _human_ready(signal, self.operators, allow_learned=True):
+                _reject("Only eligible human search signals can be frozen for Dream.")
+            existing = _batch_stamp(signal)
+            if existing is not None:
+                if existing != expected:
+                    _reject("Human Signal is already frozen in a different Dream batch.")
+                continue
             if current.fields.get("source_context") not in (None, ""):
                 _reject(
                     "Human Signal source_context is already in use; batch checkpoint has no column."
@@ -628,14 +666,26 @@ class SharedMemoryService:
     def _domain_rows(self, key: str, candidate_id: str) -> list[StoredMemoryRow]:
         greeting = key == "greeting_memory"
         names = GREETING_MEMORY_FIELDS if greeting else SEARCH_MEMORY_FIELDS
+        records = self._collect(
+            key, list(names), [["candidate_id", "is", candidate_id]],
+        )
+        # Rows retained by the superseded multi-row publisher are inert history.
+        # Continue only when exactly one current published row exists. If only
+        # retained rows remain, do not silently treat that candidate as memory-free.
+        statuses = [record.fields.get("publication_status") for record in records]
+        if any(status not in {"published", "retained"} for status in statuses):
+            _reject("Memory row has an unknown publication status.")
+        published_records = [
+            record for record in records if record.fields.get("publication_status") == "published"
+        ]
+        if records and not published_records:
+            _reject("Only legacy retained memory rows remain; reconcile before publishing.")
         loaded = [
             decode_memory_row(record.record_id, record.fields, greeting=greeting)
-            for record in self._collect(
-                key, list(names), [["candidate_id", "is", candidate_id]],
-            )
+            for record in published_records
         ]
         if len(loaded) > 1:
-            _reject("This candidate has more than one memory record in this domain.")
+            _reject("This candidate has more than one published memory record in this domain.")
         return loaded
 
     def _set_learning_status(self, signal_record_id: str, status: LearningStatus) -> bool:
@@ -784,8 +834,34 @@ def _batch_stamp(signal: WorkflowSignal) -> dict[str, object] | None:
     return batch
 
 
-def _human_ready(signal: WorkflowSignal, operators: OperatorDirectory) -> bool:
-    if signal.learning_status != "pending_dream":
+def _batch_checkpoint(snapshot: DreamBatchSnapshot) -> dict[str, object]:
+    return {
+        "batch_id": snapshot.batch_id,
+        "candidate_id": snapshot.candidate_id,
+        "cutoff": snapshot.cutoff,
+        "data_version": snapshot.data_version,
+        "signal_ids": list(snapshot.signal_ids),
+    }
+
+
+def _search_dream_signal(signal: WorkflowSignal) -> bool:
+    return (
+        signal.signal_type == "matching_correction"
+        and signal.memory_domain == "search_match"
+    )
+
+
+def _human_ready(
+    signal: WorkflowSignal,
+    operators: OperatorDirectory,
+    *,
+    allow_learned: bool = False,
+) -> bool:
+    if not _search_dream_signal(signal):
+        return False
+    if signal.learning_status != "pending_dream" and not (
+        allow_learned and signal.learning_status == "learned"
+    ):
         return False
     before, after = signal.before_value, signal.after_value
     if not before or not after or before == after:

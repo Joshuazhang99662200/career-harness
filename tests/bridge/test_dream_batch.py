@@ -15,7 +15,7 @@ from jobagent.schemas.shared_memory import (
     SearchRoundInput,
     SignalPreferenceDelta,
 )
-from tests.bridge.test_shared_memory_alignment import FakeBase, service
+from tests.bridge.test_shared_memory_alignment import FakeBase, config, service
 
 CUTOFF = "2026-11-20T12:00:00+00:00"
 JOB = "JOB_DATA_PLATFORM"
@@ -330,3 +330,136 @@ def test_pin_type_rejects_an_applied_pin_without_a_hash() -> None:
             original_keywords=["backend engineer"],
             keywords=["backend engineer"],
         )
+
+
+
+def test_search_dream_excludes_greeting_and_workflow_signals() -> None:
+    base, store = service()
+    _ready(base, "rec_search", "2026-11-20T08:00:00+00:00")
+    _ready(base, "rec_greeting", "2026-11-20T08:10:00+00:00")
+    base.signals["rec_greeting"].update({
+        "field_name": "招呼语",
+        "field_id": "fld0jsS3ei",
+        "signal_type": "greeting_revision",
+        "memory_domain": "greeting",
+    })
+    _ready(base, "rec_workflow", "2026-11-20T08:20:00+00:00")
+    base.signals["rec_workflow"].update({
+        "field_name": "处理进度",
+        "field_id": "fldarFiHsF",
+        "signal_type": "workflow_outcome",
+        "memory_domain": "workflow_context",
+    })
+
+    snapshot = _start(store, 10)
+    assert snapshot.signal_ids == ["rec_search"]
+    assert base.signals["rec_greeting"]["source_context"] is None
+    assert base.signals["rec_workflow"]["source_context"] is None
+    assert base.signals["rec_greeting"]["learning_status"] == "pending_dream"
+    assert base.signals["rec_workflow"]["learning_status"] == "pending_dream"
+
+
+def test_no_memory_fetch_pin_stays_unapplied_after_memory_is_published() -> None:
+    base, store = service()
+    pinned = store.pin_fetch_memory(_round())
+    assert pinned.applied is False
+    _ready(base, "rec_during_fetch", "2026-11-20T08:00:00+00:00")
+    snapshot = _start(store, 10)
+    _finish(store, snapshot, [
+        _delta("rec_during_fetch", "Add a data platform direction.", add=["data platform"]),
+    ])
+
+    held = store.continue_fetch(pinned, _round())
+    assert held == pinned
+    assert held.applied is False
+    assert held.memory_version is None
+    assert held.keywords == ["backend engineer"]
+
+
+def test_restart_after_partial_learned_write_restores_the_full_frozen_batch() -> None:
+    base, store = service()
+    _ready(base, "rec_cb", "2026-11-20T08:00:00+00:00", before="C", after="B")
+    _ready(base, "rec_ba", "2026-11-20T09:00:00+00:00", before="B", after="A")
+    snapshot = _start(store, 10)
+    deltas = [
+        _delta("rec_cb", "First correction.", add=["pipelines"]),
+        _delta("rec_ba", "Later correction.", add=["tier-a"]),
+    ]
+    base.fail_next_status_writes = 1
+    interrupted = _finish(store, snapshot, deltas)
+    assert interrupted.verified is False
+    assert base.signals["rec_cb"]["learning_status"] == "pending_dream"
+    assert base.signals["rec_ba"]["learning_status"] == "learned"
+
+    restarted = SharedMemoryService(store.gateway, store.operators)
+    resumed = _start(restarted, 10)
+    assert resumed.resumed is True
+    assert resumed.signal_ids == ["rec_cb", "rec_ba"]
+    recovered = _finish(restarted, resumed, deltas)
+    assert recovered.verified is True
+    assert recovered.republished is False
+    assert recovered.learned_signal_ids == ["rec_cb", "rec_ba"]
+    assert len(base.search_rows) == 1
+
+
+def test_partial_batch_checkpoint_is_completed_on_resume() -> None:
+    base, store = service()
+    _ready(base, "rec_first", "2026-11-20T08:00:00+00:00")
+    _ready(base, "rec_second", "2026-11-20T09:00:00+00:00", before="B", after="A")
+    base.fail_after_source_context_writes = 1
+    with pytest.raises(ContractValidationError, match="checkpoint"):
+        _start(store, 10)
+
+    restarted = SharedMemoryService(store.gateway, store.operators)
+    resumed = _start(restarted, 10)
+    assert resumed.resumed is True
+    assert resumed.signal_ids == ["rec_first", "rec_second"]
+    for signal_id in resumed.signal_ids:
+        checkpoint = json.loads(str(base.signals[signal_id]["source_context"]))
+        assert checkpoint["dream_batch"]["signal_ids"] == resumed.signal_ids
+
+
+def test_empty_dream_batch_cannot_be_completed() -> None:
+    _base, store = service()
+    empty = _start(store, 10)
+    assert empty.signal_ids == []
+    with pytest.raises(ContractValidationError, match="empty"):
+        _finish(store, empty, [])
+
+
+def test_dream_cli_requires_an_explicit_operator_directory(tmp_path, monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from jobagent.cli import feishu as feishu_cli
+    from jobagent.cli.app import app
+    from jobagent.schemas.memory_signal import OperatorDirectory
+    from jobagent.schemas.shared_memory import DreamBatchStart
+
+    base = FakeBase()
+    _ready(base, "rec_cli", "2026-11-20T08:00:00+00:00")
+    monkeypatch.setattr(feishu_cli, "LarkCliTransport", lambda _config: base)
+    config_path = tmp_path / "feishu.json"
+    config_path.write_text(config().model_dump_json(), encoding="utf-8")
+    request_path = tmp_path / "dream-start.json"
+    request_path.write_text(DreamBatchStart(
+        candidate_id="CAND_FIXTURE",
+        batch_size=10,
+        cutoff=CUTOFF,
+    ).model_dump_json(), encoding="utf-8")
+    operators_path = tmp_path / "operators.json"
+    operators_path.write_text(OperatorDirectory(
+        human_open_ids=["ou_human_fixture"],
+        bot_open_ids=["ou_bot_fixture"],
+    ).model_dump_json(), encoding="utf-8")
+
+    runner = CliRunner()
+    args = [
+        "memory", "dream-batch-start",
+        "--config", str(config_path),
+        "--request", str(request_path),
+    ]
+    missing = runner.invoke(app, args)
+    assert missing.exit_code != 0
+    completed = runner.invoke(app, [*args, "--operators", str(operators_path)])
+    assert completed.exit_code == 0, completed.output
+    assert json.loads(completed.output)["signal_ids"] == ["rec_cli"]

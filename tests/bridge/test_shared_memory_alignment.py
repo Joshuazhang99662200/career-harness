@@ -142,6 +142,7 @@ class FakeBase:
         self.fail_history = False
         self.fail_writes = False
         self.fail_next_status_writes = 0
+        self.fail_after_source_context_writes: int | None = None
         self.timeout_after_apply = 0
         self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
         self.changed_at_type = "datetime"
@@ -255,6 +256,21 @@ class FakeBase:
             raise ContractValidationError("Synthetic write failure")
         body = json.loads(argv[argv.index("--json") + 1])
         names = self.names[table_id]
+        if self.fail_after_source_context_writes is not None:
+            updates = body.get("update_records")
+            writes_context = (
+                isinstance(updates, dict)
+                and any(
+                    isinstance(fields, dict)
+                    and any(names.get(str(field_id)) == "source_context" for field_id in fields)
+                    for fields in updates.values()
+                )
+            )
+            if writes_context:
+                if self.fail_after_source_context_writes == 0:
+                    self.fail_after_source_context_writes = None
+                    raise ContractValidationError("Synthetic checkpoint failure")
+                self.fail_after_source_context_writes -= 1
         if self.fail_next_status_writes and self._marks_learned(names, body):
             self.fail_next_status_writes -= 1
             raise ContractValidationError("Synthetic status failure")
@@ -717,6 +733,43 @@ def test_workflow_memory_and_bot_status_are_not_published() -> None:
             memory=_memory("rec_progress", kind="workflow", notes=["progress changed"]),
         ))
     assert base.writes() == []
+
+
+def test_legacy_retained_rows_are_inert_when_one_published_row_exists() -> None:
+    base, store = service()
+    _put_signal(base, "rec_first", learning_status="pending_dream")
+    first = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_first", memory=_memory("rec_first"),
+    ))
+    assert first.verified is True and first.record_id is not None
+    legacy = dict(base.search_rows[first.record_id])
+    legacy["publication_status"] = "retained"
+    base.search_rows["rec_legacy_retained"] = legacy
+
+    _put_signal(base, "rec_next", learning_status="pending_dream", job_title="Next role")
+    updated = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_next",
+        memory=_memory("rec_next", keywords=["distributed systems"]),
+    ))
+    assert updated.verified is True
+    assert updated.record_id == first.record_id
+    assert len(base.search_rows) == 2
+    assert base.search_rows["rec_legacy_retained"]["publication_status"] == "retained"
+    assert base.search_rows[first.record_id]["version"] == "2"
+
+
+def test_retained_only_memory_domain_requires_reconciliation() -> None:
+    base, store = service()
+    _put_signal(base, "rec_first", learning_status="pending_dream")
+    first = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_first", memory=_memory("rec_first"),
+    ))
+    assert first.record_id is not None
+    base.search_rows[first.record_id]["publication_status"] = "retained"
+    with pytest.raises(ContractValidationError, match="Only legacy retained"):
+        store.read_search_round(SearchRoundInput(
+            candidate_id="CAND_FIXTURE", keywords=["backend engineer"],
+        ))
 
 
 def test_search_round_applies_published_memory_and_falls_back_without_it() -> None:

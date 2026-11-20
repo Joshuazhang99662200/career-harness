@@ -76,6 +76,7 @@ def config() -> FeishuConfig:
                     "match_grade": MATCH_FIELD,
                     "greeting": GREETING_FIELD,
                     "progress": PROGRESS_FIELD,
+                    "candidate_id": _field("candidate_id"),
                 },
             },
             "human_signals": {
@@ -147,6 +148,7 @@ class FakeBase:
         self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
         self.changed_at_type = "datetime"
         self.revisions = {JOBS: 7, SIGNALS: 11, SEARCH: 3, GREETING: 4}
+        self.jobs: dict[str, dict[str, object]] = {}
         self.signals: dict[str, dict[str, object]] = {}
         self.search_rows: dict[str, dict[str, object]] = {}
         self.greeting_rows: dict[str, dict[str, object]] = {}
@@ -196,6 +198,8 @@ class FakeBase:
         return {"fields": rows, "total": len(rows)}
 
     def _store(self, table_id: str) -> dict[str, dict[str, object]]:
+        if table_id == JOBS:
+            return self.jobs
         if table_id == SIGNALS:
             return self.signals
         if table_id == SEARCH:
@@ -348,8 +352,22 @@ def service(base: FakeBase | None = None) -> tuple[FakeBase, SharedMemoryService
     return transport, SharedMemoryService(FeishuGateway(config(), transport), OPERATORS)
 
 
-def _put_signal(base: FakeBase, record_id: str, **overrides: object) -> None:
-    base.signals[record_id] = _signal_row(**overrides)
+def _put_signal(
+    base: FakeBase,
+    record_id: str,
+    *,
+    candidate_id: str = "CAND_FIXTURE",
+    **overrides: object,
+) -> None:
+    row = _signal_row(**overrides)
+    base.signals[record_id] = row
+    source_record_id = str(row["source_record_id"])
+    base.jobs.setdefault(source_record_id, {
+        "match_grade": "B",
+        "greeting": "",
+        "progress": "",
+        "candidate_id": candidate_id,
+    })
 
 
 def _memory(

@@ -182,6 +182,8 @@ class SharedMemoryService:
         parsed = parse_workflow_signal(current.record_id, current.fields)
         if parsed.source_record_id != memory.record_id:
             _reject("Memory publication points at a different job record than the signal.")
+        if self._candidate_id_for_signal(parsed) != memory.candidate_id:
+            _reject("Memory publication candidate does not match the source job record.")
         if key == "search_memory" and parsed.memory_domain != "search_match":
             _reject("Memory kind does not match the signal domain.")
         if key == "greeting_memory" and parsed.memory_domain != "greeting":
@@ -271,13 +273,17 @@ class SharedMemoryService:
         ]
         if open_batches:
             return self._resume_batch(request.candidate_id, open_batches)
-        eligible = [
-            item for item in parsed
-            if _human_ready(item, self.operators)
-            and item.changed_at is not None
-            and _at_or_before(item.changed_at, request.cutoff)
-            and _batch_stamp(item) is None
-        ]
+        eligible: list[WorkflowSignal] = []
+        for item in parsed:
+            if not _human_ready(item, self.operators):
+                continue
+            if item.changed_at is None or _batch_stamp(item) is not None:
+                continue
+            if not _at_or_before(item.changed_at, request.cutoff):
+                continue
+            if self._candidate_id_for_signal(item) != request.candidate_id:
+                continue
+            eligible.append(item)
         eligible.sort(key=lambda item: (item.changed_at or "", item.signal_record_id))
         chosen = eligible[: request.batch_size]
         overflow = [item.signal_record_id for item in eligible[request.batch_size :]]
@@ -349,6 +355,8 @@ class SharedMemoryService:
             signal = parse_workflow_signal(record.record_id, record.fields)
             if not _human_ready(signal, self.operators, allow_learned=True):
                 _reject("Frozen Dream signal is no longer eligible human search feedback.")
+            if self._candidate_id_for_signal(signal) != snapshot.candidate_id:
+                _reject("Frozen Dream signal belongs to another candidate.")
             existing = _batch_stamp(signal)
             if existing is not None and existing != expected_stamp:
                 _reject("Frozen Dream signal belongs to a different batch snapshot.")
@@ -463,6 +471,8 @@ class SharedMemoryService:
                 _reject("Frozen Dream signal does not match the complete batch snapshot.")
             if not _human_ready(signal, self.operators, allow_learned=True):
                 _reject("Frozen Dream signal is not eligible human search feedback.")
+            if self._candidate_id_for_signal(signal) != snapshot.candidate_id:
+                _reject("Frozen Dream signal belongs to another candidate.")
             found.append(signal)
         return found
 
@@ -484,6 +494,8 @@ class SharedMemoryService:
             signal = parse_workflow_signal(current.record_id, current.fields)
             if not _human_ready(signal, self.operators, allow_learned=True):
                 _reject("Only eligible human search signals can be frozen for Dream.")
+            if self._candidate_id_for_signal(signal) != snapshot.candidate_id:
+                _reject("Only signals owned by this candidate can be frozen for Dream.")
             existing = _batch_stamp(signal)
             if existing is not None:
                 if existing != expected:
@@ -673,7 +685,10 @@ class SharedMemoryService:
         # Continue only when exactly one current published row exists. If only
         # retained rows remain, do not silently treat that candidate as memory-free.
         statuses = [record.fields.get("publication_status") for record in records]
-        if any(status not in {"published", "retained"} for status in statuses):
+        if any(
+            not isinstance(status, str) or status not in {"published", "retained"}
+            for status in statuses
+        ):
             _reject("Memory row has an unknown publication status.")
         published_records = [
             record for record in records if record.fields.get("publication_status") == "published"
@@ -687,6 +702,20 @@ class SharedMemoryService:
         if len(loaded) > 1:
             _reject("This candidate has more than one published memory record in this domain.")
         return loaded
+
+    def _candidate_id_for_signal(self, signal: WorkflowSignal) -> str:
+        """Resolve candidate ownership through the configured source Jobs record."""
+        jobs = self.gateway.config.tables.get("jobs")
+        if jobs is None or "candidate_id" not in jobs.fields:
+            _reject("Jobs mapping must include the candidate_id field before Memory can publish.")
+        schema = self.gateway.schema("jobs")
+        if schema["candidate_id"].get("type") != "text":
+            _reject("Jobs candidate_id must be a text field in the live schema.")
+        source = self.gateway.get("jobs", signal.source_record_id)
+        candidate_id = source.fields.get("candidate_id")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            _reject("Source job record has no verified candidate_id.")
+        return candidate_id
 
     def _set_learning_status(self, signal_record_id: str, status: LearningStatus) -> bool:
         current = self.gateway.get("human_signals", signal_record_id)

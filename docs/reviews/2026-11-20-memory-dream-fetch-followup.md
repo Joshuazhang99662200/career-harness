@@ -34,10 +34,11 @@ or send recruiting messages.
   there is a unique attributable history change. Current Workflow-written
   Human Signals do not carry a stable source event id or before/after pair;
   the implementation must not guess which historical edit caused the row.
-- Human Signals do not currently expose a verified `candidate_id` mapping.
-  Multi-candidate use of one shared Base is not accepted as verified until a
-  trusted `source_record_id -> candidate_id` mapping is supplied and checked.
-  A candidate id in a CLI request alone is not proof of ownership.
+- Dream and direct Memory publication now resolve each signal's
+  `source_record_id` through the configured Jobs table `candidate_id` field.
+  Missing mapping, a non-text live field, or an empty source value fails closed.
+  The private Feishu config must map the actual production field id; that live
+  mapping has not yet been inspected in this session.
 - The operator directory remains private host configuration. No names, IDs,
   tokens, cookies or credentials are committed.
 

@@ -30,10 +30,24 @@ def _ready(
     after: str = "B",
     operator: str = "ou_human_fixture",
     title: str = "Data Platform Engineer",
+    source_record_id: str = "rec_job_data",
+    candidate_id: str = "CAND_FIXTURE",
 ) -> None:
+    base.jobs.setdefault("rec_job_data", {
+        "match_grade": "B",
+        "greeting": "",
+        "progress": "",
+        "candidate_id": "CAND_FIXTURE",
+    })
+    base.jobs.setdefault(source_record_id, {
+        "match_grade": "B",
+        "greeting": "",
+        "progress": "",
+        "candidate_id": candidate_id,
+    })
     base.signals[record_id] = {
         "source_table": "tbl0m4LpWgeGuZEd",
-        "source_record_id": "rec_job_data",
+        "source_record_id": source_record_id,
         "job_title": title,
         "field_name": "匹配档位",
         "field_id": "flddtn4pvI",
@@ -463,3 +477,24 @@ def test_dream_cli_requires_an_explicit_operator_directory(tmp_path, monkeypatch
     completed = runner.invoke(app, [*args, "--operators", str(operators_path)])
     assert completed.exit_code == 0, completed.output
     assert json.loads(completed.output)["signal_ids"] == ["rec_cli"]
+
+
+
+def test_dream_batch_is_scoped_to_candidate_via_source_job_mapping() -> None:
+    base, store = service()
+    _ready(
+        base, "rec_candidate_a", "2026-11-20T08:00:00+00:00",
+        source_record_id="rec_job_a", candidate_id="CAND_A",
+    )
+    _ready(
+        base, "rec_candidate_b", "2026-11-20T08:05:00+00:00",
+        source_record_id="rec_job_b", candidate_id="CAND_B",
+    )
+
+    snapshot = store.start_dream_batch(DreamBatchStart(
+        candidate_id="CAND_A",
+        batch_size=10,
+        cutoff=CUTOFF,
+    ))
+    assert snapshot.signal_ids == ["rec_candidate_a"]
+    assert base.signals["rec_candidate_b"]["source_context"] is None

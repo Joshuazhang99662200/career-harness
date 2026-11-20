@@ -142,6 +142,7 @@ class FakeBase:
         self.fail_history = False
         self.fail_writes = False
         self.fail_next_retains = 0
+        self.fail_next_status_writes = 0
         self.plant_conflict: str | None = None
         self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
         self.changed_at_type = "datetime"
@@ -258,6 +259,9 @@ class FakeBase:
         if self.fail_next_retains and self._retains(names, body):
             self.fail_next_retains -= 1
             raise ContractValidationError("Synthetic retain failure")
+        if self.fail_next_status_writes and self._marks_learned(names, body):
+            self.fail_next_status_writes -= 1
+            raise ContractValidationError("Synthetic status failure")
         store = self._store(table_id)
         for record_id, fields in body["update_records"].items():
             for field_id, value in fields.items():
@@ -287,6 +291,18 @@ class FakeBase:
                 self.plant_conflict = None
         self.revisions[table_id] += 1
         return {"record_id_list": ids}
+
+    def _marks_learned(self, names: dict[str, str], body: dict[str, object]) -> bool:
+        updates = body.get("update_records")
+        if not isinstance(updates, dict):
+            return False
+        for fields in updates.values():
+            if not isinstance(fields, dict):
+                continue
+            for field_id, value in fields.items():
+                if names.get(str(field_id)) == "learning_status" and value == "learned":
+                    return True
+        return False
 
     def _retains(self, names: dict[str, str], body: dict[str, object]) -> bool:
         updates = body.get("update_records")

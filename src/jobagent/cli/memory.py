@@ -35,7 +35,13 @@ from jobagent.schemas.memory_signal import (
     SignalReceiptFile,
     WatchedJobFields,
 )
-from jobagent.schemas.shared_memory import MemoryPublishRequest, SearchRoundInput
+from jobagent.schemas.shared_memory import (
+    DreamBatchComplete,
+    DreamBatchStart,
+    FetchMemoryPin,
+    MemoryPublishRequest,
+    SearchRoundInput,
+)
 from jobagent.storage.candidate_repository import SqliteCandidateRepository
 from jobagent.storage.conversation_repository import SqliteConversationRepository
 from jobagent.storage.memory_repository import MemoryRepository
@@ -338,6 +344,61 @@ def search_round(config: ConfigOption, request: Annotated[Path, typer.Option("--
         typer.echo(plan.model_dump_json())
     except JobAgentError as error:
         fail(error)
+
+
+@memory_app.command("dream-batch-start")
+def dream_batch_start(
+    config: ConfigOption, request: Annotated[Path, typer.Option("--request")]
+) -> None:
+    """Freeze pending human signals for one Dream run. Does not call a model."""
+    try:
+        page = _shared_memory(config).start_dream_batch(read_model(request, DreamBatchStart))
+        typer.echo(page.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
+
+
+@memory_app.command("dream-batch-complete")
+def dream_batch_complete(
+    config: ConfigOption, request: Annotated[Path, typer.Option("--request")]
+) -> None:
+    """Publish one complete snapshot for a frozen batch. Does not call a model."""
+    try:
+        result = _shared_memory(config).complete_dream_batch(
+            read_model(request, DreamBatchComplete)
+        )
+        typer.echo(result.model_dump_json())
+        if not result.verified:
+            raise typer.Exit(1)
+    except JobAgentError as error:
+        fail(error)
+
+
+@memory_app.command("fetch-pin")
+def fetch_pin(config: ConfigOption, request: Annotated[Path, typer.Option("--request")]) -> None:
+    """Pin the latest valid search snapshot for one Fetch round. Does not fetch."""
+    try:
+        pin = _shared_memory(config).pin_fetch_memory(read_model(request, SearchRoundInput))
+        typer.echo(pin.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
+
+
+@memory_app.command("fetch-continue")
+def fetch_continue(
+    config: ConfigOption, request: Annotated[Path, typer.Option("--request")]
+) -> None:
+    """Re-read the pinned snapshot. A newer publish does not replace it."""
+    try:
+        body = json.loads(request.read_text(encoding="utf-8"))
+        pin = FetchMemoryPin.model_validate(body["pin"])
+        current = SearchRoundInput.model_validate(body["round"])
+        held = _shared_memory(config).continue_fetch(pin, current)
+        typer.echo(held.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
+    except (OSError, json.JSONDecodeError, ValidationError, UnicodeError):
+        fail(ContractValidationError("Fetch pin input is unavailable or invalid."))
 
 
 @memory_app.command("send-gate")

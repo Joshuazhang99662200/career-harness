@@ -47,6 +47,9 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | 信号历史补齐 | 已落地 | `jobagent memory enrich-signal`：用记录历史补 before/after、操作者与时间。人类且唯一匹配时 `learning_status` 变为 `pending_dream`；Bot 或无法匹配变为 `unknown`，不记作人工偏好。查询失败或回写未核对时不改状态 |
 | 记忆版本发布 | 已落地 | `jobagent memory publish-version`：校验调用方交来的记忆草稿，写入搜索与匹配记忆或招呼语表达记忆，保留旧版本。不调用模型。写入未核对时不把信号标为 `learned` |
 | 搜索记忆读取 | 已落地 | `jobagent memory search-round`：读取最新已发布的 search 记忆并应用到本轮关键词、方向和排除项。没有发布记忆时沿用调用方给出的检索配置，不发明偏好，不改硬条件、查询次数或每查询取数，不发起 Fetch |
+| Dream 信号批次 | 已落地 | `jobagent memory dream-batch-start`：按调用方给出的 Batch Size 和截止时间冻结 `pending_dream` 且已完成人类 diff 的信号。运行中新来的信号和超出批次的信号留到下一轮。不调用模型，不发明静默等待时间 |
+| Dream 批次完成 | 已落地 | `jobagent memory dream-batch-complete`：只处理冻结批次，把仍然有效的搜索偏好折成一份完整快照再发布。发布成功才把对应信号标为 `learned`。回写失败后的重试按记忆行里的 source signal id 列表补状态，不另建版本 |
+| Fetch 记忆钉住 | 已落地 | `jobagent memory fetch-pin`：读取最新唯一已发布快照，核对版本和内容摘要后钉住这一轮。`jobagent memory fetch-continue` 在轮次中途继续用钉住的版本，不改读更新的发布。没有记忆时沿用调用方检索配置。不发起 Fetch |
 | 信号归因发布 | 已落地 | `jobagent memory signal-compile`：校验宿主已写好的归因是否引用本次 JD 与原稿摘要，并发布 search / matching / greeting / workflow 记忆。进度变化不能带搜索参数。不调用模型、不写飞书 |
 | 搜索记忆消费 | 已落地 | `jobagent memory apply-search`：本地文件上的 search 记忆，不是生产记忆表。只改关键词、岗位方向或排除项；招呼和进度记忆不改变搜索参数。生产读取见 `memory search-round`。不执行搜索、不发送 |
 | 未批准不发送 | 已落地 | `jobagent memory send-gate`：读取当前投影的处理进度与批准状态。未批准或不存在批准时拒绝；批准值即使匹配，该命令也不发送 |

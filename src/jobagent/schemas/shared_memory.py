@@ -10,6 +10,7 @@ from pydantic import Field, JsonValue, model_validator
 
 from jobagent.schemas.candidate import CandidateId
 from jobagent.schemas.common import ContractModel, Digest, NonEmptyString
+from jobagent.schemas.jobs import JobId
 from jobagent.schemas.memory_signal import (
     OperatorDirectory,
     OperatorKind,
@@ -302,6 +303,95 @@ class SearchRoundPlan(ContractModel):
         named = self.memory_version is not None and self.memory_record_id is not None
         if self.applied is not named:
             raise ValueError("Applied search memory must name the version that was read.")
+        return self
+
+
+class DreamBatchStart(ContractModel):
+    """Caller-supplied batch size and cutoff. No quiet-window default."""
+
+    candidate_id: CandidateId
+    batch_size: int = Field(ge=1)
+    cutoff: NonEmptyString
+
+
+class DreamBatchSnapshot(ContractModel):
+    """Frozen signal ids for one Dream run. Later rows wait for the next run."""
+
+    batch_id: NonEmptyString
+    candidate_id: CandidateId
+    cutoff: NonEmptyString
+    data_version: NonEmptyString
+    signal_ids: list[NonEmptyString]
+    overflow_signal_ids: list[str] = Field(default_factory=list)
+    resumed: bool
+    quiet_window_seconds: None = None
+    grants_send: Literal[False] = False
+
+
+class SignalPreferenceDelta(ContractModel):
+    """One signal's preference change, supplied by the caller. Not a model call."""
+
+    signal_record_id: NonEmptyString
+    add_keywords: list[NonEmptyString] = Field(default_factory=list)
+    remove_keywords: list[NonEmptyString] = Field(default_factory=list)
+    add_role_directions: list[NonEmptyString] = Field(default_factory=list)
+    remove_role_directions: list[NonEmptyString] = Field(default_factory=list)
+    add_exclusions: list[NonEmptyString] = Field(default_factory=list)
+    remove_exclusions: list[NonEmptyString] = Field(default_factory=list)
+    reason: NonEmptyString
+
+
+class DreamBatchComplete(ContractModel):
+    snapshot: DreamBatchSnapshot
+    deltas: list[SignalPreferenceDelta]
+    job_id: JobId
+
+
+class DreamBatchResult(ContractModel):
+    batch_id: NonEmptyString
+    verified: bool
+    republished: bool
+    memory_version: str | None = None
+    memory_record_id: str | None = None
+    learned_signal_ids: list[str] = Field(default_factory=list)
+    pending_signal_ids: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    role_directions: list[str] = Field(default_factory=list)
+    exclusions: list[str] = Field(default_factory=list)
+    grants_send: Literal[False] = False
+
+
+class FetchMemoryPin(ContractModel):
+    """One Fetch round's pinned search memory. A newer publish does not replace it."""
+
+    candidate_id: CandidateId
+    memory_version: str | None = None
+    memory_record_id: str | None = None
+    content_hash: str | None = None
+    last_consumed_version: str | None = None
+    applied: bool
+    original_keywords: list[str]
+    keywords: list[str]
+    additions: list[str] = Field(default_factory=list)
+    exclusions: list[str] = Field(default_factory=list)
+    role_directions: list[str] = Field(default_factory=list)
+    hard_constraints: dict[str, JsonValue] = Field(default_factory=dict)
+    queries_per_site_per_round: int | None = None
+    top_per_query: int | None = None
+    search_frequency: str | None = None
+    changes_hard_constraints: Literal[False] = False
+    grants_fetch: Literal[False] = False
+    grants_send: Literal[False] = False
+
+    @model_validator(mode="after")
+    def pin_names_the_version_it_applied(self) -> "FetchMemoryPin":
+        named = self.memory_version is not None and self.memory_record_id is not None
+        if self.applied is not named:
+            raise ValueError("Applied fetch memory must name the pinned version.")
+        if self.applied and self.content_hash is None:
+            raise ValueError("Applied fetch memory must name the content hash that was checked.")
+        if self.last_consumed_version != self.memory_version:
+            raise ValueError("Consumption audit must match the pinned version.")
         return self
 
 

@@ -923,11 +923,13 @@ def _publish_failure(
     retained: list[str] | None = None,
     *,
     duplicate: bool = False,
+    previous_snapshot_restored: bool | None = None,
 ) -> MemoryPublishResult:
     return MemoryPublishResult(
         duplicate=duplicate,
         verified=False,
         advanced_to_learned=False,
+        previous_snapshot_restored=previous_snapshot_restored,
         learning_status=learning_status,
         version=version,
         record_id=record_id,

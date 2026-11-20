@@ -33,12 +33,6 @@ def _ready(
     source_record_id: str = "rec_job_data",
     candidate_id: str = "CAND_FIXTURE",
 ) -> None:
-    base.jobs.setdefault("rec_job_data", {
-        "match_grade": "B",
-        "greeting": "",
-        "progress": "",
-        "candidate_id": "CAND_FIXTURE",
-    })
     base.jobs.setdefault(source_record_id, {
         "match_grade": "B",
         "greeting": "",

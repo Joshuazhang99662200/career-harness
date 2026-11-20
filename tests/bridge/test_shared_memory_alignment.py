@@ -719,6 +719,19 @@ def test_overlapping_publish_is_rejected_without_a_second_ledger() -> None:
     assert not any("+record-batch-create" in call for call in base.calls)
 
 
+def test_publish_rejects_candidate_mismatch_from_the_source_job() -> None:
+    base, store = service()
+    _put_signal(base, "rec_candidate_signal", candidate_id="CAND_A", learning_status="pending_dream")
+    with pytest.raises(ContractValidationError, match="candidate does not match"):
+        store.publish_memory(MemoryPublishRequest(
+            signal_record_id="rec_candidate_signal",
+            memory=_memory("rec_candidate_signal"),
+        ))
+    assert base.search_rows == {}
+    assert base.signals["rec_candidate_signal"]["learning_status"] == "pending_dream"
+    assert base.writes() == []
+
+
 def test_failed_publish_does_not_mark_the_signal_learned() -> None:
     base, store = service()
     _put_signal(base, "rec_signal_grade", learning_status="pending_dream")

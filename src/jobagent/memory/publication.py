@@ -118,6 +118,7 @@ def memory_row_fields(
         "reason": memory.reason,
         "notes": _json_list(list(memory.notes)),
         "jd_digest": memory.jd_digest,
+        # Previous version number on this same row. Not a second memory record.
         "supersedes_version": supersedes_version,
         "content_digest": canonical_digest(body),
     }

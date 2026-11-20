@@ -45,7 +45,7 @@ Personal AI 默认入口见 [宿主接入](../../../hosts/personal-ai/README.md)
 | 三字段人工信号 | 已落地 | `jobagent memory signal-receive`：测试夹具。只解析本地 `drive.file.bitable_record_changed_v1` JSON，不是已接通的生产事件路径。Bot 不进入人工信号，操作者或前后值无法区分时为 unknown。不订阅、不连网、不发送 |
 | Workflow 人工信号 | 已落地 | `jobagent memory workflow-page`：读取 Workflow 写入的 Human Signals 行。记录 id 是唯一标识，`signal_id` 可空。同记录同摘要为重复，同记录不同内容拒绝。不订阅、不启用 Workflow |
 | 信号历史补齐 | 已落地 | `jobagent memory enrich-signal`：用记录历史补 before/after、操作者与时间。人类且唯一匹配时 `learning_status` 变为 `pending_dream`；Bot 或无法匹配变为 `unknown`，不记作人工偏好。查询失败或回写未核对时不改状态 |
-| 记忆版本发布 | 已落地 | `jobagent memory publish-version`：校验调用方交来的记忆草稿，写入搜索与匹配记忆或招呼语表达记忆，保留旧版本。不调用模型。写入未核对时不把信号标为 `learned` |
+| 记忆版本发布 | 已落地 | `jobagent memory publish-version`：每个候选人每个记忆域只保留一条当前记录。首次才创建；之后在同一 record_id 上更新完整快照、版本和内容摘要，并回读确认。回读不一致或结果不明时先重读，不另建记录。历史版本看记录修改历史。不调用模型。快照未确认时不把信号标为 `learned` |
 | 搜索记忆读取 | 已落地 | `jobagent memory search-round`：读取最新已发布的 search 记忆并应用到本轮关键词、方向和排除项。没有发布记忆时沿用调用方给出的检索配置，不发明偏好，不改硬条件、查询次数或每查询取数，不发起 Fetch |
 | Dream 信号批次 | 已落地 | `jobagent memory dream-batch-start`：按调用方给出的 Batch Size 和截止时间冻结 `pending_dream` 且已完成人类 diff 的信号。运行中新来的信号和超出批次的信号留到下一轮。不调用模型，不发明静默等待时间 |
 | Dream 批次完成 | 已落地 | `jobagent memory dream-batch-complete`：只处理冻结批次，把仍然有效的搜索偏好折成一份完整快照再发布。发布成功才把对应信号标为 `learned`。回写失败后的重试按记忆行里的 source signal id 列表补状态，不另建版本 |

@@ -284,7 +284,7 @@ class FeishuGateway:
         )
 
     def append_memory_row(self, key: str, fields: dict[str, JsonValue]) -> FeishuCreateReceipt:
-        """Append one row to a production memory table and read it back."""
+        """Create the first memory row for a candidate and domain, then read it back."""
         if key not in {"search_memory", "greeting_memory"}:
             reject("Record creation is limited to the two production memory tables.")
         table = self._require_production_table(key)

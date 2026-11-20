@@ -141,9 +141,8 @@ class FakeBase:
         self.calls: list[list[str]] = []
         self.fail_history = False
         self.fail_writes = False
-        self.fail_next_retains = 0
         self.fail_next_status_writes = 0
-        self.plant_conflict: str | None = None
+        self.timeout_after_apply = 0
         self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
         self.changed_at_type = "datetime"
         self.revisions = {JOBS: 7, SIGNALS: 11, SEARCH: 3, GREETING: 4}
@@ -256,9 +255,6 @@ class FakeBase:
             raise ContractValidationError("Synthetic write failure")
         body = json.loads(argv[argv.index("--json") + 1])
         names = self.names[table_id]
-        if self.fail_next_retains and self._retains(names, body):
-            self.fail_next_retains -= 1
-            raise ContractValidationError("Synthetic retain failure")
         if self.fail_next_status_writes and self._marks_learned(names, body):
             self.fail_next_status_writes -= 1
             raise ContractValidationError("Synthetic status failure")
@@ -267,7 +263,13 @@ class FakeBase:
             for field_id, value in fields.items():
                 store[record_id][names[field_id]] = value
         self.revisions[table_id] += 1
+        self._maybe_timeout()
         return {}
+
+    def _maybe_timeout(self) -> None:
+        if self.timeout_after_apply:
+            self.timeout_after_apply -= 1
+            raise ContractValidationError("Synthetic write timeout")
 
     def _create(self, argv: list[str], table_id: str) -> dict[str, object]:
         if self.fail_writes:
@@ -281,15 +283,8 @@ class FakeBase:
             record_id = f"rec_mem_{self._seq}"
             store[record_id] = {names[field_id]: value for field_id, value in fields.items()}
             ids.append(record_id)
-            if self.plant_conflict:
-                self._seq += 1
-                extra_id = f"rec_mem_{self._seq}"
-                extra = dict(store[record_id])
-                if self.plant_conflict == "second_published":
-                    extra["version"] = "99"
-                store[extra_id] = extra
-                self.plant_conflict = None
         self.revisions[table_id] += 1
+        self._maybe_timeout()
         return {"record_id_list": ids}
 
     def _marks_learned(self, names: dict[str, str], body: dict[str, object]) -> bool:
@@ -301,18 +296,6 @@ class FakeBase:
                 continue
             for field_id, value in fields.items():
                 if names.get(str(field_id)) == "learning_status" and value == "learned":
-                    return True
-        return False
-
-    def _retains(self, names: dict[str, str], body: dict[str, object]) -> bool:
-        updates = body.get("update_records")
-        if not isinstance(updates, dict):
-            return False
-        for fields in updates.values():
-            if not isinstance(fields, dict):
-                continue
-            for field_id, value in fields.items():
-                if names.get(str(field_id)) == "publication_status" and value == "retained":
                     return True
         return False
 
@@ -590,9 +573,12 @@ def test_memory_schema_version_publish_and_idempotent_replay() -> None:
         signal_record_id="rec_signal_next", memory=second,
     ))
     assert nxt.version == "2"
-    statuses = {row["version"]: row["publication_status"] for row in base.search_rows.values()}
-    assert statuses == {"1": "retained", "2": "published"}
-    assert len(base.search_rows) == 2
+    assert nxt.record_id == published.record_id
+    assert len(base.search_rows) == 1
+    only = next(iter(base.search_rows.values()))
+    assert only["version"] == "2"
+    assert only["publication_status"] == "published"
+    assert "distributed systems" in str(only["keywords"])
 
     base.signal_field_count = 18
     with pytest.raises(ContractValidationError):
@@ -603,62 +589,87 @@ def test_memory_schema_version_publish_and_idempotent_replay() -> None:
         store.page_workflow_signals(limit=1, offset=0)
 
 
-def _statuses(base: FakeBase) -> dict[object, object]:
-    return {row["version"]: row["publication_status"] for row in base.search_rows.values()}
-
-
-def test_retain_failure_is_recovered_only_after_one_published_version_remains() -> None:
+def test_in_place_update_keeps_one_record_and_bumps_version() -> None:
     base, store = service()
     _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
     first = store.publish_memory(MemoryPublishRequest(
         signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
     ))
     assert first.verified is True and first.version == "1"
-
+    assert len(base.search_rows) == 1
     _put_signal(
         base, "rec_signal_next", learning_status="pending_dream", job_title="Platform role",
     )
     second = _memory("rec_signal_next", keywords=["distributed systems"])
-    base.fail_next_retains = 1
-    failed = store.publish_memory(MemoryPublishRequest(
+    updated = store.publish_memory(MemoryPublishRequest(
         signal_record_id="rec_signal_next", memory=second,
     ))
-    assert failed.verified is False
-    assert failed.advanced_to_learned is False
-    assert failed.learning_status == "pending_dream"
-    assert base.signals["rec_signal_next"]["learning_status"] == "pending_dream"
-    assert _statuses(base) == {"1": "published", "2": "published"}
-
-    recovered = store.publish_memory(MemoryPublishRequest(
-        signal_record_id="rec_signal_next", memory=second,
-    ))
-    assert recovered.verified is True
-    assert recovered.advanced_to_learned is True
-    assert _statuses(base) == {"1": "retained", "2": "published"}
+    assert updated.verified is True
+    assert updated.version == "2"
+    assert updated.record_id == first.record_id
+    assert len(base.search_rows) == 1
+    row = base.search_rows[first.record_id or ""]
+    assert row["version"] == "2"
+    assert "distributed systems" in str(row["keywords"])
     assert base.signals["rec_signal_next"]["learning_status"] == "learned"
-    assert len(base.search_rows) == 2
 
 
-def test_retry_stays_pending_when_closeout_still_fails() -> None:
+def test_failed_update_leaves_the_previous_record_readable() -> None:
     base, store = service()
     _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
-    store.publish_memory(MemoryPublishRequest(
+    first = store.publish_memory(MemoryPublishRequest(
         signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
     ))
     _put_signal(base, "rec_signal_next", learning_status="pending_dream", job_title="Next")
-    second = _memory("rec_signal_next", keywords=["distributed systems"])
-    base.fail_next_retains = 2
-    first = store.publish_memory(MemoryPublishRequest(
-        signal_record_id="rec_signal_next", memory=second,
+    base.fail_writes = True
+    failed = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next",
+        memory=_memory("rec_signal_next", keywords=["distributed systems"]),
     ))
-    second_try = store.publish_memory(MemoryPublishRequest(
-        signal_record_id="rec_signal_next", memory=second,
-    ))
-    assert first.verified is False and second_try.verified is False
-    assert second_try.advanced_to_learned is False
+    assert failed.verified is False
+    assert failed.advanced_to_learned is False
     assert base.signals["rec_signal_next"]["learning_status"] == "pending_dream"
-    assert _statuses(base)["1"] == "published"
-    assert _statuses(base)["2"] == "published"
+    assert len(base.search_rows) == 1
+    row = base.search_rows[first.record_id or ""]
+    assert row["version"] == "1"
+    assert "data platform" in str(row["keywords"])
+
+
+def test_timeout_after_a_successful_update_is_confirmed_by_reread() -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    first = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
+    ))
+    _put_signal(base, "rec_signal_next", learning_status="pending_dream", job_title="Next")
+    base.timeout_after_apply = 1
+    second = _memory("rec_signal_next", keywords=["distributed systems"])
+    confirmed = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_next", memory=second,
+    ))
+    assert confirmed.verified is True
+    assert confirmed.version == "2"
+    assert confirmed.record_id == first.record_id
+    assert len(base.search_rows) == 1
+    creates = [call for call in base.calls if "+record-batch-create" in call]
+    assert len(creates) == 1
+
+
+def test_retry_of_the_same_snapshot_does_not_create_a_second_record() -> None:
+    base, store = service()
+    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
+    memory = _memory("rec_signal_grade")
+    store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=memory,
+    ))
+    again = store.publish_memory(MemoryPublishRequest(
+        signal_record_id="rec_signal_grade", memory=memory,
+    ))
+    assert again.duplicate is True
+    assert again.verified is True
+    assert again.version == "1"
+    assert len(base.search_rows) == 1
+    assert sum("+record-batch-create" in call for call in base.calls) == 1
 
 
 def test_overlapping_publish_is_rejected_without_a_second_ledger() -> None:
@@ -672,24 +683,6 @@ def test_overlapping_publish_is_rejected_without_a_second_ledger() -> None:
     assert base.signals["rec_signal_grade"]["learning_status"] == "pending_dream"
     assert base.search_rows == {}
     assert not any("+record-batch-create" in call for call in base.calls)
-
-
-@pytest.mark.parametrize("conflict", ["duplicate_version", "second_published"])
-def test_publish_does_not_learn_when_the_version_set_is_ambiguous(conflict: str) -> None:
-    base, store = service()
-    _put_signal(base, "rec_signal_grade", learning_status="pending_dream")
-    base.plant_conflict = conflict
-    result = store.publish_memory(MemoryPublishRequest(
-        signal_record_id="rec_signal_grade", memory=_memory("rec_signal_grade"),
-    ))
-    assert result.verified is False
-    assert result.advanced_to_learned is False
-    assert result.learning_status == "pending_dream"
-    assert base.signals["rec_signal_grade"]["learning_status"] == "pending_dream"
-    published = [
-        row for row in base.search_rows.values() if row["publication_status"] == "published"
-    ]
-    assert len(published) == 2
 
 
 def test_failed_publish_does_not_mark_the_signal_learned() -> None:

@@ -46,9 +46,10 @@ or send recruiting messages.
 
 New regression tests are added for the fixes above. This GitHub-connected
 editing session cannot execute the repository's Python environment; local
-pytest, Ruff and mypy results are therefore pending. A GitHub Actions workflow
-is added to run those gates on the PR. No test result is claimed until Actions
-returns an actual run and conclusion.
+pytest, Ruff and mypy results are therefore pending. The CI workflow was
+accepted and triggered, but the observed runs failed before runner allocation:
+`runner_id=0`, no runner name and an empty step list. This is not a pytest,
+Ruff or mypy result; the execution environment remains blocked.
 
 ## Still not live-verified
 

@@ -721,7 +721,9 @@ def test_overlapping_publish_is_rejected_without_a_second_ledger() -> None:
 
 def test_publish_rejects_candidate_mismatch_from_the_source_job() -> None:
     base, store = service()
-    _put_signal(base, "rec_candidate_signal", candidate_id="CAND_A", learning_status="pending_dream")
+    _put_signal(
+        base, "rec_candidate_signal", candidate_id="CAND_A", learning_status="pending_dream",
+    )
     with pytest.raises(ContractValidationError, match="candidate does not match"):
         store.publish_memory(MemoryPublishRequest(
             signal_record_id="rec_candidate_signal",

@@ -3,12 +3,29 @@
 </p>
 
 <p align="center">
-  <strong>可能是全网最想帮你找到工作的求职搭子。</strong>
+  <a href="https://github.com/Joshuazhang99662200/career-harness/actions/workflows/ci.yml">
+    <img src="https://github.com/Joshuazhang99662200/career-harness/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" />
+  </a>
+  <a href="https://github.com/Joshuazhang99662200/career-harness/stargazers">
+    <img src="https://img.shields.io/github/stars/Joshuazhang99662200/career-harness?style=flat-square" alt="GitHub Stars" />
+  </a>
+  <a href="https://github.com/Joshuazhang99662200/career-harness/network/members">
+    <img src="https://img.shields.io/github/forks/Joshuazhang99662200/career-harness?style=flat-square" alt="GitHub Forks" />
+  </a>
+  <a href="https://github.com/Joshuazhang99662200/career-harness/issues">
+    <img src="https://img.shields.io/github/issues/Joshuazhang99662200/career-harness?style=flat-square" alt="Open Issues" />
+  </a>
+  <img src="https://img.shields.io/github/last-commit/Joshuazhang99662200/career-harness?style=flat-square" alt="Last Commit" />
+  <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+" />
+  <img src="https://img.shields.io/badge/License-PolyForm_Noncommercial-blue?style=flat-square" alt="PolyForm Noncommercial License" />
+  <img src="https://img.shields.io/badge/Human_Approval-Required-green?style=flat-square" alt="Human Approval Required" />
 </p>
 
-<p align="center">
-  帮你找岗位、读 JD、准备招呼语和定向简历，也会慢慢记住你的修改和偏好。你负责选择和拍板，它负责把重复琐事接过去。
-</p>
+## 关于 CareerHarness
+
+> **Note：可能是全网最想帮你找到工作的求职搭子。**
+>
+> 帮你找岗位、读 JD、准备招呼语和定向简历，也会慢慢记住你的修改和偏好。你负责选择和拍板，它负责把重复琐事接过去。
 
 CareerHarness 用一张飞书多维表格，把岗位搜索、内容准备、人工审批和持续复盘连在一起。
 

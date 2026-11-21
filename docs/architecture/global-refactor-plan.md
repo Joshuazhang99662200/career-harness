@@ -128,6 +128,14 @@ P1 内的 `AGENTS.md` 改写、角色 md、数据契约三份文档相互独立�
 
 ## 7. 进度记录（续做）
 
+**2026-11-21 本人裁定与执行：**
+
+- **Signal Workflow 已全部启用。** 原有三条（`匹配档位`、`招呼语`、`处理进度`）经本人授权用 `lark-cli` 启用；新增第四条监听 `批准状态`（`signal_type=approval_decision`，`memory_domain=approval`），按已有 Workflow 的步骤结构复制，只改监听字段与标签。四条均读回为 enabled。P4 第 1 步完成。
+- **旧数据放弃（P5 取消）。** 本人决定不迁移旧 SQLite、Markdown / JSON 偏好与本地 Candidate 事实，以 Base 当前数据为准。
+- **P7 合成岗位验收由本人完成。** 本仓库未另行重跑端到端链路。
+- **合并。** 本分支经本人要求合并到 `main`。
+
+
 - **P3 文档门禁已收口。** 修正了失效的内部链接（lens-routing、resume-builder、oss-review、PRIVACY），`optimizer` 视角文档的 `EVID_*` 改称“材料事实”，两处 RUF001 全角标点以 `noqa` 标注；pytest、ruff、mypy 均绿。
 - **已提交** `28a1b48`（P1–P3 检查点，含旧代码退役删除）。
 - **`SKILL.md` 已改为角色路由入口：** 先读私有 `settings.json` 认角色，缺设置转 Initial Setup，再按 GM / EM 分表加载；EM 不加载写作与 Dream 技能。`lens-routing.md` 补上四个视角正文的链接，`agents/openai.yaml` 去掉“证据接地”旧说法。新增 3 个路由测试，门禁 91 passed。

@@ -24,5 +24,5 @@
 | JD 评级、招呼语、定向简历 | 已落地 | GM 按 [GM.md](../roles/GM.md)、[招呼语 Skill](../greeting/SKILL.md) 与 [简历优化](../optimizer/SKILL.md) 完成 |
 | 检索岗位、执行已批准动作 | 委托外部技能 | EM 用宿主自己的云端浏览器、MCP 或浏览器插件完成，见 [EM.md](../roles/EM.md) |
 | 凌晨 Dream | 已落地 | GM 按 [memory-dream.md](memory-dream.md) 用 CLI 读写表格；调度由宿主承担 |
-| 本人批准信号的 Workflow | 未开始 | 现有 Workflow 不监听 `批准状态`；新增须本人授权后在 Base 里配置 |
+| 本人信号的 Workflow | 已落地 | 四条 Workflow 分别监听 `匹配档位`、`招呼语`、`处理进度`、`批准状态`，各向 Human Signals 追加一行；2026-11-21 经本人授权用 `lark-cli` 启用并读回 |
 | 钉钉多维表格 | 未开始 | 钉钉 CLI 的表格读写尚未核验 |

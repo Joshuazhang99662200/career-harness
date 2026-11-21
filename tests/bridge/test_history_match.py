@@ -14,14 +14,14 @@ def test_two_sequential_edits_on_one_field_remain_ambiguous_without_event_correl
                 "create_time": 1795161600,
                 "activity_type": "update",
                 "operator": {"open_id": "ou_human_fixture", "name": "Human"},
-                "field_changes": [{"field_id": "flddtn4pvI", "before": "C", "after": "B"}],
+                "field_changes": [{"field_id": "fld_match_fixture", "before": "C", "after": "B"}],
             },
             {
                 "rev": 42,
                 "create_time": 1795165200,
                 "activity_type": "update",
                 "operator": {"open_id": "ou_human_fixture", "name": "Human"},
-                "field_changes": [{"field_id": "flddtn4pvI", "before": "B", "after": "A"}],
+                "field_changes": [{"field_id": "fld_match_fixture", "before": "B", "after": "A"}],
             },
         ],
         "has_more": False,
@@ -29,7 +29,7 @@ def test_two_sequential_edits_on_one_field_remain_ambiguous_without_event_correl
     result = match_history(
         [page],
         record_id="rec_job_fixture",
-        field_id="flddtn4pvI",
+        field_id="fld_match_fixture",
         operators=OPERATORS,
     )
     assert result.state == "unknown"
@@ -46,14 +46,14 @@ def test_one_unique_human_field_change_can_be_attributed() -> None:
             "create_time": 1795168800,
             "activity_type": "update",
             "operator": {"open_id": "ou_human_fixture", "name": "Human"},
-            "field_changes": [{"field_id": "flddtn4pvI", "before": "B", "after": "A"}],
+            "field_changes": [{"field_id": "fld_match_fixture", "before": "B", "after": "A"}],
         }],
         "has_more": False,
     })
     result = match_history(
         [page],
         record_id="rec_job_fixture",
-        field_id="flddtn4pvI",
+        field_id="fld_match_fixture",
         operators=OPERATORS,
     )
     assert result.state == "matched"

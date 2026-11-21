@@ -6,7 +6,7 @@ from typing import Never
 
 from pydantic import JsonValue, ValidationError
 
-from jobagent.digest import canonical_digest
+from jobagent.digest import canonical_digest, text_digest
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.memory_signal import PublishedMemory
 from jobagent.schemas.shared_memory import (
@@ -48,6 +48,31 @@ def publication_body(values: Mapping[str, object], signal_record_id: str) -> dic
 def published_memory_id(values: Mapping[str, object], signal_record_id: str) -> str:
     identity = canonical_digest(publication_body(values, signal_record_id))
     return "MEM_" + identity[7:27].upper()
+
+
+def memory_jd_digest(sources: list[tuple[str, str]]) -> str:
+    """Provenance for one published memory. This is not a hash of preferences.
+
+    One source job stores ``text_digest`` of that job's JD text. Several source
+    jobs store the canonical digest of each source record and that JD's digest.
+    Keywords, role directions and exclusions are not inputs.
+    """
+    if not sources:
+        _reject("JD digest needs at least one source job with JD text.")
+    ordered = sorted(sources, key=lambda item: item[0])
+    if len({record_id for record_id, _text in ordered}) != len(ordered):
+        _reject("JD digest sources must be unique records.")
+    for record_id, jd_text in ordered:
+        if not record_id or not isinstance(jd_text, str) or not jd_text.strip():
+            _reject("JD digest needs the source record and its JD text.")
+    if len(ordered) == 1:
+        return text_digest(ordered[0][1])
+    return canonical_digest({
+        "source_context": [
+            {"source_record_id": record_id, "jd_digest": text_digest(jd_text)}
+            for record_id, jd_text in ordered
+        ]
+    })
 
 
 def assert_publishable(memory: PublishedMemory) -> str:

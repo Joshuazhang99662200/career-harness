@@ -20,7 +20,7 @@ from jobagent.schemas.feishu import (
     FeishuWriteReceipt,
 )
 from jobagent.schemas.memory_signal import OperatorDirectory
-from jobagent.schemas.shared_memory import PRODUCTION_TABLE_IDS, RecordHistoryDiff
+from jobagent.schemas.shared_memory import SHARED_MEMORY_TABLE_KEYS, RecordHistoryDiff
 
 
 def reject(message: str) -> Never:
@@ -236,12 +236,13 @@ class FeishuGateway:
             receipt.diagnostic = "readback_mismatch_do_not_repeat"
         return receipt
 
-    def _require_production_table(self, key: str) -> FeishuTable:
-        expected = PRODUCTION_TABLE_IDS.get(key)
-        table = self._table(key)
-        if expected is None or table.table_id != expected:
-            reject("Configured table id is not the production table for this operation.")
-        return table
+    def _require_configured_table(self, key: str) -> FeishuTable:
+        if key not in SHARED_MEMORY_TABLE_KEYS or key not in self.config.tables:
+            reject(
+                "This operation uses the private Jobs, Materials, Human Signals "
+                "or memory table mapping."
+            )
+        return self._table(key)
 
     def record_history(
         self,
@@ -256,7 +257,7 @@ class FeishuGateway:
         """Read one job record's history. A partial page sequence is not a diff."""
         if key != "jobs":
             reject("Record history for preference learning reads the production jobs table.")
-        self._require_production_table(key)
+        self._require_configured_table(key)
         if not record_id or not field_id or not 1 <= page_size <= 50 or not 1 <= max_pages <= 50:
             reject("Record history needs one record, one field, and an explicit page budget.")
         directory = OperatorDirectory.model_validate(operators.model_dump())
@@ -287,7 +288,7 @@ class FeishuGateway:
         """Create the first memory row for a candidate and domain, then read it back."""
         if key not in {"search_memory", "greeting_memory"}:
             reject("Record creation is limited to the two production memory tables.")
-        table = self._require_production_table(key)
+        table = self._require_configured_table(key)
         if not fields:
             reject("Memory append requires the semantic columns.")
         allowed = set(table.writable.get("memory", []))

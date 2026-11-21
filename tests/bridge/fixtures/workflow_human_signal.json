@@ -1,9 +1,9 @@
 {
-  "source_table": "tbl0m4LpWgeGuZEd",
+  "source_table": "tbl_jobs_fixture",
   "source_record_id": "rec_job_data",
   "job_title": "Data Platform Engineer",
   "field_name": "匹配档位",
-  "field_id": "flddtn4pvI",
+  "field_id": "fld_match_fixture",
   "signal_type": "matching_correction",
   "memory_domain": "search_match",
   "learning_status": "pending_history_enrichment",

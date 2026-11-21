@@ -38,6 +38,7 @@ If there are no eligible signals, skip the model call and do not create a Dream 
 ## Publication and no-op behavior
 
 - Complete a batch only with one delta per frozen Signal ID, no missing or extra IDs.
+- The published `jd_digest` is the source job's JD text digest. One source job uses that text digest directly. Several source jobs use a canonical digest of each source record and that job's JD digest. Do not hash the folded keywords, directions or exclusions into this field. A source job with no JD text fails closed.
 - If the folded result is identical to the current baseline, mark the Signals learned without incrementing the Memory version. If there is no baseline and no effective search feature, mark the batch as a no-op without creating an empty Memory row.
 - A no-op is not a failed Dream. Report `no_change=true`, the current version (if any), the learned/pending Signal IDs, and the evidence summary.
 - If attribution, source Job ownership, baseline integrity or write/readback is unknown, fail closed and preserve the previous Memory. Do not manufacture a new feature to make the batch non-empty.

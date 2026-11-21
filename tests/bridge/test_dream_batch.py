@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from jobagent.bridge.shared_memory import SharedMemoryService
+from jobagent.digest import canonical_digest, canonical_json, text_digest
 from jobagent.errors import ContractValidationError
 from jobagent.memory.snapshot import decode_source_signal_ids
 from jobagent.schemas.shared_memory import (
@@ -15,7 +16,16 @@ from jobagent.schemas.shared_memory import (
     SearchRoundInput,
     SignalPreferenceDelta,
 )
-from tests.bridge.test_shared_memory_alignment import FakeBase, config, service
+from tests.bridge.test_shared_memory_alignment import (
+    GREETING_FIELD,
+    JOBS,
+    MATCH_FIELD,
+    PROGRESS_FIELD,
+    SYNTHETIC_JD,
+    FakeBase,
+    config,
+    service,
+)
 
 CUTOFF = "2026-11-20T12:00:00+00:00"
 WINDOW_START = "2026-11-09T00:00:00+00:00"
@@ -40,13 +50,14 @@ def _ready(
         "greeting": "",
         "progress": "",
         "candidate_id": candidate_id,
+        "jd_text": SYNTHETIC_JD,
     })
     base.signals[record_id] = {
-        "source_table": "tbl0m4LpWgeGuZEd",
+        "source_table": JOBS,
         "source_record_id": source_record_id,
         "job_title": title,
         "field_name": "匹配档位",
-        "field_id": "flddtn4pvI",
+        "field_id": MATCH_FIELD,
         "signal_type": "matching_correction",
         "memory_domain": "search_match",
         "learning_status": "pending_dream",
@@ -143,7 +154,7 @@ def test_signals_outside_the_rolling_ten_workday_window_stay_pending() -> None:
     assert base.signals["rec_old"]["learning_status"] == "pending_dream"
 
 
-def test_two_successive_edits_on_one_job_both_remain() -> None
+def test_two_successive_edits_on_one_job_both_remain() -> None:
     base, store = service()
     _ready(base, "rec_cb", "2026-11-20T08:00:00+00:00", before="C", after="B")
     _ready(base, "rec_ba", "2026-11-20T09:00:00+00:00", before="B", after="A")
@@ -374,14 +385,14 @@ def test_search_dream_excludes_greeting_and_workflow_signals() -> None:
     _ready(base, "rec_greeting", "2026-11-20T08:10:00+00:00")
     base.signals["rec_greeting"].update({
         "field_name": "招呼语",
-        "field_id": "fld0jsS3ei",
+        "field_id": GREETING_FIELD,
         "signal_type": "greeting_revision",
         "memory_domain": "greeting",
     })
     _ready(base, "rec_workflow", "2026-11-20T08:20:00+00:00")
     base.signals["rec_workflow"].update({
         "field_name": "处理进度",
-        "field_id": "fldarFiHsF",
+        "field_id": PROGRESS_FIELD,
         "signal_type": "workflow_outcome",
         "memory_domain": "workflow_context",
     })
@@ -563,3 +574,68 @@ def test_empty_net_delta_without_baseline_does_not_create_memory() -> None:
     assert result.memory_record_id is None
     assert base.search_rows == {}
     assert base.signals["rec_noop"]["learning_status"] == "learned"
+
+
+def test_dream_jd_digest_is_the_source_job_text() -> None:
+    base, store = service()
+    jd_text = "Synthetic JD: data platform engineer."
+    _ready(base, "rec_early", "2026-11-20T08:00:00+00:00")
+    base.jobs["rec_job_data"]["jd_text"] = jd_text
+    snapshot = _start(store, 10)
+    result = _finish(store, snapshot, [_delta("rec_early", "Early grade.", add=["backend"])])
+    assert result.verified is True
+    row = next(iter(base.search_rows.values()))
+    preference_hash = text_digest(canonical_json({
+        "keywords": result.keywords,
+        "role_directions": result.role_directions,
+        "exclusions": result.exclusions,
+    }))
+    assert row["jd_digest"] == text_digest(jd_text)
+    assert row["jd_digest"] != preference_hash
+
+
+def test_dream_jd_digest_binds_every_distinct_source_job() -> None:
+    base, store = service()
+    _ready(base, "rec_one", "2026-11-20T08:00:00+00:00", source_record_id="rec_job_one")
+    _ready(
+        base, "rec_two", "2026-11-20T09:00:00+00:00",
+        source_record_id="rec_job_two", before="B", after="A",
+    )
+    base.jobs["rec_job_one"]["jd_text"] = "Synthetic JD one for data platforms."
+    base.jobs["rec_job_two"]["jd_text"] = "Synthetic JD two for distributed systems."
+    snapshot = _start(store, 10)
+    result = _finish(store, snapshot, [
+        _delta("rec_one", "First job.", add=["pipelines"]),
+        _delta("rec_two", "Second job.", add=["distributed systems"]),
+    ])
+    assert result.verified is True
+    row = next(iter(base.search_rows.values()))
+    expected = canonical_digest({
+        "source_context": [
+            {
+                "source_record_id": "rec_job_one",
+                "jd_digest": text_digest("Synthetic JD one for data platforms."),
+            },
+            {
+                "source_record_id": "rec_job_two",
+                "jd_digest": text_digest("Synthetic JD two for distributed systems."),
+            },
+        ]
+    })
+    assert row["jd_digest"] == expected
+    assert row["jd_digest"] != text_digest(canonical_json({
+        "keywords": result.keywords,
+        "role_directions": result.role_directions,
+        "exclusions": result.exclusions,
+    }))
+
+
+def test_dream_refuses_to_invent_a_jd_digest_without_job_text() -> None:
+    base, store = service()
+    _ready(base, "rec_early", "2026-11-20T08:00:00+00:00")
+    base.jobs["rec_job_data"]["jd_text"] = "   "
+    snapshot = _start(store, 10)
+    with pytest.raises(ContractValidationError, match="JD text"):
+        _finish(store, snapshot, [_delta("rec_early", "Early grade.", add=["backend"])])
+    assert base.search_rows == {}
+    assert base.signals["rec_early"]["learning_status"] == "pending_dream"

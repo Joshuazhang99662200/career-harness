@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field, JsonValue, model_validator
 
 from jobagent.schemas.common import ContractModel, Digest, NonEmptyString
+from jobagent.schemas.shared_memory import DisabledWorkflowBinding
 
 FeishuRole = Literal["generation", "execution", "memory"]
 
@@ -32,11 +33,29 @@ class FeishuTable(ContractModel):
 
 
 class FeishuConfig(ContractModel):
+    """Private setup mapping. Table and workflow ids are the user's, not a built-in Base."""
+
     base_token: NonEmptyString
     identity: Literal["user", "bot"]
     executable: NonEmptyString
     timeout_seconds: float = Field(gt=0, le=300)
     tables: dict[NonEmptyString, FeishuTable] = Field(min_length=1)
+    workflows: list[DisabledWorkflowBinding] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def workflows_do_not_alias(self) -> "FeishuConfig":
+        ids = [item.workflow_id for item in self.workflows]
+        types = [item.signal_type for item in self.workflows]
+        fields = [item.field_id for item in self.workflows]
+        if (
+            len(set(ids)) != len(ids)
+            or len(set(types)) != len(types)
+            or len(set(fields)) != len(fields)
+        ):
+            raise ValueError(
+                "Disabled workflows must not reuse an id, signal type, or field id."
+            )
+        return self
 
 
 class FeishuRecord(ContractModel):

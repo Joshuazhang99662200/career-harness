@@ -22,26 +22,26 @@ from jobagent.schemas.memory_signal import (
     PublishedMemory,
 )
 from jobagent.schemas.shared_memory import (
-    DISABLED_WORKFLOWS,
     GREETING_MEMORY_FIELDS,
-    HUMAN_SIGNAL_FIELD_COUNT,
     HUMAN_SIGNAL_FIELDS,
     HUMAN_SIGNAL_MUTABLE_FIELDS,
-    PRODUCTION_TABLE_IDS,
     SEARCH_MEMORY_FIELDS,
+    SHARED_MEMORY_TABLE_KEYS,
     MemoryPublishRequest,
     RecordHistoryRequest,
     SearchRoundInput,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "workflow_human_signal.json"
-JOBS = PRODUCTION_TABLE_IDS["jobs"]
-SIGNALS = PRODUCTION_TABLE_IDS["human_signals"]
-SEARCH = PRODUCTION_TABLE_IDS["search_memory"]
-GREETING = PRODUCTION_TABLE_IDS["greeting_memory"]
-MATCH_FIELD = "flddtn4pvI"
-GREETING_FIELD = "fld0jsS3ei"
-PROGRESS_FIELD = "fldarFiHsF"
+SYNTHETIC_JD = "Synthetic JD: data platform engineer."
+JOBS = "tbl_jobs_fixture"
+SIGNALS = "tbl_signals_fixture"
+SEARCH = "tbl_search_memory_fixture"
+GREETING = "tbl_greeting_memory_fixture"
+MATERIALS = "tbl_materials_fixture"
+MATCH_FIELD = "fld_match_fixture"
+GREETING_FIELD = "fld_greeting_fixture"
+PROGRESS_FIELD = "fld_progress_fixture"
 OPERATORS = OperatorDirectory(
     bot_open_ids=["ou_bot_fixture"],
     human_open_ids=["ou_human_fixture"],
@@ -77,7 +77,12 @@ def config() -> FeishuConfig:
                     "greeting": GREETING_FIELD,
                     "progress": PROGRESS_FIELD,
                     "candidate_id": _field("candidate_id"),
+                    "jd_text": _field("jd_text"),
                 },
+            },
+            "materials": {
+                "table_id": MATERIALS,
+                "fields": {"resume_index": "fld_resume_index_fixture"},
             },
             "human_signals": {
                 "table_id": SIGNALS,
@@ -95,6 +100,29 @@ def config() -> FeishuConfig:
                 "writable": {"memory": list(GREETING_MEMORY_FIELDS)},
             },
         },
+        "workflows": [
+            {
+                "workflow_id": "wkf_match_fixture",
+                "signal_type": "matching_correction",
+                "memory_domain": "search_match",
+                "field_name": "匹配档位",
+                "field_id": MATCH_FIELD,
+            },
+            {
+                "workflow_id": "wkf_greeting_fixture",
+                "signal_type": "greeting_revision",
+                "memory_domain": "greeting",
+                "field_name": "招呼语",
+                "field_id": GREETING_FIELD,
+            },
+            {
+                "workflow_id": "wkf_progress_fixture",
+                "signal_type": "workflow_outcome",
+                "memory_domain": "workflow_context",
+                "field_name": "处理进度",
+                "field_id": PROGRESS_FIELD,
+            },
+        ],
     })
 
 
@@ -138,7 +166,7 @@ def _page(items: list[dict[str, object]], *, more: bool = False, cursor: int | N
 class FakeBase:
     """In-memory Base. No subprocess and no live token."""
 
-    def __init__(self) -> None:
+    def __init__(self, settings: FeishuConfig | None = None) -> None:
         self.calls: list[list[str]] = []
         self.fail_history = False
         self.fail_writes = False
@@ -146,16 +174,23 @@ class FakeBase:
         self.fail_after_source_context_writes: int | None = None
         self.partial_memory_update_fields: int | None = None
         self.timeout_after_apply = 0
-        self.signal_field_count = HUMAN_SIGNAL_FIELD_COUNT
+        self.signal_field_count = len(HUMAN_SIGNAL_FIELDS) + 4
+        self.omit_signal_fields: set[str] = set()
         self.changed_at_type = "datetime"
-        self.revisions = {JOBS: 7, SIGNALS: 11, SEARCH: 3, GREETING: 4}
         self.jobs: dict[str, dict[str, object]] = {}
         self.signals: dict[str, dict[str, object]] = {}
         self.search_rows: dict[str, dict[str, object]] = {}
         self.greeting_rows: dict[str, dict[str, object]] = {}
         self.history: dict[tuple[str, str], list[dict[str, object]]] = {}
         self._seq = 0
-        settings = config()
+        settings = settings or config()
+        self.settings = settings
+        self.revisions = {
+            table.table_id: {
+                "jobs": 7, "human_signals": 11, "search_memory": 3, "greeting_memory": 4,
+            }.get(key, 1)
+            for key, table in settings.tables.items()
+        }
         self.names = {
             table.table_id: {field_id: name for name, field_id in table.fields.items()}
             for table in settings.tables.values()
@@ -181,10 +216,18 @@ class FakeBase:
             return self._create(argv, table_id)
         raise AssertionError(argv)
 
+    def _key(self, table_id: str) -> str:
+        for key, table in self.settings.tables.items():
+            if table.table_id == table_id:
+                return key
+        raise AssertionError(table_id)
+
     def _fields(self, table_id: str) -> dict[str, object]:
-        if table_id == SIGNALS:
+        if self._key(table_id) == "human_signals":
             rows = []
             for name in HUMAN_SIGNAL_FIELDS:
+                if name in self.omit_signal_fields:
+                    continue
                 kind = self.changed_at_type if name == "changed_at" else "text"
                 rows.append({"id": _field(name), "name": name, "type": kind})
             for index in range(self.signal_field_count - len(HUMAN_SIGNAL_FIELDS)):
@@ -199,15 +242,16 @@ class FakeBase:
         return {"fields": rows, "total": len(rows)}
 
     def _store(self, table_id: str) -> dict[str, dict[str, object]]:
-        if table_id == JOBS:
-            return self.jobs
-        if table_id == SIGNALS:
-            return self.signals
-        if table_id == SEARCH:
-            return self.search_rows
-        if table_id == GREETING:
-            return self.greeting_rows
-        raise AssertionError(table_id)
+        stores = {
+            "jobs": self.jobs,
+            "human_signals": self.signals,
+            "search_memory": self.search_rows,
+            "greeting_memory": self.greeting_rows,
+        }
+        key = self._key(table_id)
+        if key not in stores:
+            raise AssertionError(table_id)
+        return stores[key]
 
     def _matrix(
         self, table_id: str, rows: list[tuple[str, dict[str, object]]], *, more: bool
@@ -359,9 +403,25 @@ def no_real_process(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(subprocess, "run", boom)
 
 
-def service(base: FakeBase | None = None) -> tuple[FakeBase, SharedMemoryService]:
-    transport = base or FakeBase()
-    return transport, SharedMemoryService(FeishuGateway(config(), transport), OPERATORS)
+def service(
+    base: FakeBase | None = None, settings: FeishuConfig | None = None,
+) -> tuple[FakeBase, SharedMemoryService]:
+    if base is None:
+        settings = settings or config()
+        base = FakeBase(settings)
+    elif settings is None:
+        settings = base.settings
+    return base, SharedMemoryService(FeishuGateway(settings, base), OPERATORS)
+
+
+def _parse(record_id: str, fields: dict[str, object]):
+    settings = config()
+    return parse_workflow_signal(
+        record_id,
+        fields,
+        jobs_table_id=settings.tables["jobs"].table_id,
+        workflows=settings.workflows,
+    )
 
 
 def _put_signal(
@@ -379,6 +439,7 @@ def _put_signal(
         "greeting": "",
         "progress": "",
         "candidate_id": candidate_id,
+        "jd_text": SYNTHETIC_JD,
     })
 
 
@@ -408,27 +469,36 @@ def _memory(
             ["retail floor"] if exclusions is None and kind == "search" else list(exclusions or [])
         ),
         "notes": list(notes or []),
-        "jd_digest": text_digest("Synthetic JD: data platform engineer."),
+        "jd_digest": text_digest(SYNTHETIC_JD),
     }
     draft["memory_id"] = published_memory_id(draft, signal_record_id)
     return PublishedMemory.model_validate(draft)
 
 
-def test_production_tables_and_workflows_stay_disabled() -> None:
-    assert set(PRODUCTION_TABLE_IDS) == {
-        "jobs", "materials", "records", "human_signals", "search_memory", "greeting_memory",
+def test_memory_mapping_comes_from_private_setup_and_keeps_materials() -> None:
+    settings = config()
+    assert set(SHARED_MEMORY_TABLE_KEYS) <= set(settings.tables)
+    assert "records" not in SHARED_MEMORY_TABLE_KEYS
+    assert "records" not in settings.tables
+    assert settings.tables["materials"].table_id == MATERIALS
+    assert {item.signal_type for item in settings.workflows} == {
+        "matching_correction", "greeting_revision", "workflow_outcome",
     }
+    assert all(item.enabled is False for item in settings.workflows)
     assert len(HUMAN_SIGNAL_FIELDS) == 15
-    assert HUMAN_SIGNAL_FIELD_COUNT == 19
-    assert len(DISABLED_WORKFLOWS) == 3
-    assert {item.workflow_id for item in DISABLED_WORKFLOWS} == {
-        "wkfjRzrXEgmYazMu", "wkfYItz0dO451i0C", "wkf7gZH53nNP5f6y",
-    }
-    assert all(item.enabled is False for item in DISABLED_WORKFLOWS)
+    raw = settings.model_dump()
+    del raw["tables"]["materials"]
+    bare = FeishuConfig.model_validate(raw)
+    base = FakeBase(bare)
+    _put_signal(base, "rec_signal_grade")
+    with pytest.raises(ContractValidationError, match="materials"):
+        SharedMemoryService(FeishuGateway(bare, base), OPERATORS).page_workflow_signals(
+            limit=1, offset=0,
+        )
 
 
 def test_parse_workflow_written_human_signal_and_reject_native_event() -> None:
-    signal = parse_workflow_signal("rec_signal_grade", _signal_row())
+    signal = _parse("rec_signal_grade", _signal_row())
     assert signal.signal_record_id == "rec_signal_grade"
     assert signal.signal_id is None
     assert signal.field_id == MATCH_FIELD
@@ -439,7 +509,7 @@ def test_parse_workflow_written_human_signal_and_reject_native_event() -> None:
     native_path = native_path / "drive_file_bitable_record_changed_v1.json"
     native = json.loads(native_path.read_text(encoding="utf-8"))
     with pytest.raises(ContractValidationError):
-        parse_workflow_signal("rec_signal_grade", native)
+        _parse("rec_signal_grade", native)
     assert SignalInbox.__doc__ is not None
     assert "test tool" in SignalInbox.__doc__.lower()
     workflow_source = Path(parse_workflow_signal.__code__.co_filename)
@@ -449,15 +519,13 @@ def test_parse_workflow_written_human_signal_and_reject_native_event() -> None:
 
 def test_signal_ledger_is_idempotent_and_rejects_conflicting_content() -> None:
     ledger = WorkflowSignalLedger()
-    first = ledger.receive(parse_workflow_signal("rec_signal_grade", _signal_row()))
-    second = ledger.receive(parse_workflow_signal("rec_signal_grade", _signal_row()))
+    first = ledger.receive(_parse("rec_signal_grade", _signal_row()))
+    second = ledger.receive(_parse("rec_signal_grade", _signal_row()))
     assert first.duplicate is False
     assert second.duplicate is True
     assert second.content_digest == first.content_digest
     with pytest.raises(ContractValidationError):
-        ledger.receive(parse_workflow_signal(
-            "rec_signal_grade", _signal_row(job_title="Other title")
-        ))
+        ledger.receive(_parse("rec_signal_grade", _signal_row(job_title="Other title")))
 
 
 def test_page_reads_pending_workflow_rows_without_writing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -626,10 +694,13 @@ def test_memory_schema_version_publish_and_idempotent_replay() -> None:
     assert only["publication_status"] == "published"
     assert "distributed systems" in str(only["keywords"])
 
-    base.signal_field_count = 18
+    base.signal_field_count = len(HUMAN_SIGNAL_FIELDS) + 12
+    extra = store.page_workflow_signals(limit=1, offset=0)
+    assert extra.signals == []
+    base.omit_signal_fields = {"before_value"}
     with pytest.raises(ContractValidationError):
         store.page_workflow_signals(limit=1, offset=0)
-    base.signal_field_count = 19
+    base.omit_signal_fields = set()
     base.changed_at_type = "select"
     with pytest.raises(ContractValidationError):
         store.page_workflow_signals(limit=1, offset=0)
@@ -1052,3 +1123,34 @@ def test_cli_commands_use_the_mock_transport(
     assert plan["grants_fetch"] is False
     assert not list(tmp_path.glob("*.sqlite*"))
     assert all("BASE_SYNTHETIC" in call for call in base.calls if "--base-token" in call)
+
+
+def test_another_private_base_is_accepted_and_records_is_not_human_signals() -> None:
+    raw = config().model_dump()
+    raw["tables"]["jobs"]["table_id"] = "tbl_jobs_other"
+    raw["tables"]["materials"]["table_id"] = "tbl_materials_other"
+    raw["tables"]["human_signals"]["table_id"] = "tbl_signals_other"
+    raw["tables"]["search_memory"]["table_id"] = "tbl_search_other"
+    raw["tables"]["greeting_memory"]["table_id"] = "tbl_greeting_other"
+    raw["tables"]["records"] = {
+        "table_id": "tbl_records_retired",
+        "fields": {"note": "fld_note_fixture"},
+    }
+    settings = FeishuConfig.model_validate(raw)
+    _base, store = service(settings=settings)
+    transport = store.gateway.transport
+    assert isinstance(transport, FakeBase)
+    _put_signal(transport, "rec_other")
+    transport.signals["rec_other"]["source_table"] = "tbl_jobs_other"
+    page = store.page_workflow_signals(limit=10, offset=0)
+    assert [item.signal_record_id for item in page.signals] == ["rec_other"]
+
+    raw["tables"]["records"]["table_id"] = "tbl_signals_other"
+    collided = FeishuConfig.model_validate(raw)
+    collided_base = FakeBase(collided)
+    _put_signal(collided_base, "rec_other")
+    collided_base.signals["rec_other"]["source_table"] = "tbl_jobs_other"
+    with pytest.raises(ContractValidationError, match="not Human Signals"):
+        SharedMemoryService(
+            FeishuGateway(collided, collided_base), OPERATORS,
+        ).page_workflow_signals(limit=1, offset=0)

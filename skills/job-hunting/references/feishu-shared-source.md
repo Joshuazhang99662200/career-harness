@@ -102,7 +102,9 @@ jobagent feishu patch --config <private-config.json> --request <patch.json>
 
 ## 记录历史与事件
 
-生产人工信号来自已存在且保持 Disabled 的三条 Base Workflow。它们只在 Human Signals 表追加一行，写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain` 和 `learning_status=pending_history_enrichment`。该行的 record_id 是唯一标识。`memory signal-receive` 只解析本地 `drive.file.bitable_record_changed_v1` fixture，不是生产入口。本仓库不提供建表、改字段类型或启用 Workflow 的命令。
+生产人工信号来自私有 `FeishuConfig` 里登记、且保持 Disabled 的三条 Workflow。表 ID、Workflow ID 和字段 ID 都来自首次接入时读到的本人 Base，代码不写死某一张 Base。记忆配置必须映射 Jobs、Materials、Human Signals、搜索记忆和招呼语记忆；旧 Records 活动表不是 Human Signals，不作为这项配置的必需表。Materials 保留。三条 Workflow 只在 Human Signals 表追加一行，写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain` 和 `learning_status=pending_history_enrichment`。该行的 record_id 是唯一标识。`memory signal-receive` 只解析本地 `drive.file.bitable_record_changed_v1` fixture，不是生产入口。本仓库不提供建表、改字段类型或启用 Workflow 的命令。
+
+Dream 写入搜索记忆时，`jd_digest` 是来源岗位 JD 正文的摘要。只有一个来源岗位时，它等于该正文的 `text_digest`。多个来源岗位时，它是这些岗位 record id 及其 JD 摘要的来源上下文摘要。它不是关键词、方向或排除项对象的哈希。来源岗位没有 JD 正文时拒绝发布，不编造摘要。
 
 `jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。只有整段历史里该字段恰好一次可读的 before/after，并且操作者能用 open_id 或 union_id 唯一对照名单时，结果才是 matched。仅有显示名、名单对不上、前后值不唯一，都是 unknown，不猜测，也不把 Bot 写成人工偏好。历史没有读完时直接失败，不把不完整结果当成 unknown 后推进状态。
 

@@ -1,6 +1,6 @@
 """Parse Workflow-written Human Signals rows. Not a native event subscription."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Never
 
 from pydantic import JsonValue, ValidationError
@@ -8,10 +8,9 @@ from pydantic import JsonValue, ValidationError
 from jobagent.digest import canonical_digest
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.shared_memory import (
-    DISABLED_WORKFLOWS,
     HUMAN_SIGNAL_ENRICHMENT_FIELDS,
     HUMAN_SIGNAL_FIELDS,
-    PRODUCTION_TABLE_IDS,
+    DisabledWorkflowBinding,
     WorkflowSignal,
 )
 
@@ -43,7 +42,11 @@ def _optional(value: object) -> str | None:
 
 
 def parse_workflow_signal(
-    signal_record_id: str, fields: Mapping[str, JsonValue]
+    signal_record_id: str,
+    fields: Mapping[str, JsonValue],
+    *,
+    jobs_table_id: str,
+    workflows: Sequence[DisabledWorkflowBinding],
 ) -> WorkflowSignal:
     """Read one Human Signals record. The record id is the unique signal id."""
     if not isinstance(signal_record_id, str) or not signal_record_id:
@@ -69,17 +72,18 @@ def parse_workflow_signal(
     for name in _OPTIONAL:
         normalized[name] = _optional(fields[name])
     workflow = next(
-        (item for item in DISABLED_WORKFLOWS if item.signal_type == normalized["signal_type"]),
+        (item for item in workflows if item.signal_type == normalized["signal_type"]),
         None,
     )
     if (
         workflow is None
+        or workflow.enabled is not False
         or workflow.memory_domain != normalized["memory_domain"]
         or workflow.field_id != normalized["field_id"]
         or workflow.field_name != normalized["field_name"]
-        or normalized["source_table"] != PRODUCTION_TABLE_IDS["jobs"]
+        or normalized["source_table"] != jobs_table_id
     ):
-        _reject("Human Signal row does not match a known workflow.")
+        _reject("Human Signal row does not match the configured disabled workflow.")
     try:
         return WorkflowSignal.model_validate({
             "signal_record_id": signal_record_id,
@@ -90,7 +94,7 @@ def parse_workflow_signal(
         })
     except ValidationError as error:
         raise ContractValidationError(
-            "Human Signal row does not match a known workflow."
+            "Human Signal row does not match the configured disabled workflow."
         ) from error
 
 

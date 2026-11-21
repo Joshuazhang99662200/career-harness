@@ -1,7 +1,10 @@
-"""Production memory tables and Workflow-written Human Signals.
+"""Shared memory contracts for Workflow-written Human Signals.
 
-Table ids are the existing Base. This module does not create tables, enable
-workflows, or call a model. GPT still owns attribution and Dream.
+Table ids, workflow ids and field ids come from the host's private Feishu
+setup. This module names the semantic tables and columns. It does not create
+tables, enable workflows, or call a model. GPT still owns attribution and Dream.
+The retired activity table ``records`` is not part of this mapping and is not
+Human Signals. Materials stays in the mapping.
 """
 
 from typing import Literal
@@ -38,16 +41,15 @@ HistoryReason = Literal[
 ]
 EnrichmentReason = Literal[HistoryReason, "duplicate", "write_unverified"]
 
-PRODUCTION_TABLE_IDS: dict[str, str] = {
-    "jobs": "tbl0m4LpWgeGuZEd",
-    "materials": "tbldmJLUwgJpqcUI",
-    "records": "tblAw2opMnlGtX8U",
-    "human_signals": "tbldP0Buy3hrwOmT",
-    "search_memory": "tbldfiISJ1zdNByn",
-    "greeting_memory": "tblf1Q2iSfUPyzph",
-}
-
-HUMAN_SIGNAL_FIELD_COUNT = 19
+# Semantic keys the memory path requires from private setup. No personal table ids.
+# ``records`` is intentionally absent: it is a retired activity table, not Human Signals.
+SHARED_MEMORY_TABLE_KEYS: tuple[str, ...] = (
+    "jobs",
+    "materials",
+    "human_signals",
+    "search_memory",
+    "greeting_memory",
+)
 HUMAN_SIGNAL_WRITTEN_FIELDS = (
     "source_table",
     "source_record_id",
@@ -109,8 +111,11 @@ GREETING_MEMORY_FIELDS = (
 )
 
 
-class DisabledWorkflow(ContractModel):
-    """One existing Base workflow. Infrastructure assumes it stays disabled."""
+class DisabledWorkflowBinding(ContractModel):
+    """One workflow the private setup already has, kept disabled.
+
+    Ids are whatever that Base uses. Enabling a workflow is outside this contract.
+    """
 
     workflow_id: NonEmptyString
     signal_type: SignalType
@@ -119,30 +124,16 @@ class DisabledWorkflow(ContractModel):
     field_id: NonEmptyString
     enabled: Literal[False] = False
 
-
-DISABLED_WORKFLOWS: tuple[DisabledWorkflow, ...] = (
-    DisabledWorkflow(
-        workflow_id="wkfjRzrXEgmYazMu",
-        signal_type="matching_correction",
-        memory_domain="search_match",
-        field_name="匹配档位",
-        field_id="flddtn4pvI",
-    ),
-    DisabledWorkflow(
-        workflow_id="wkfYItz0dO451i0C",
-        signal_type="greeting_revision",
-        memory_domain="greeting",
-        field_name="招呼语",
-        field_id="fld0jsS3ei",
-    ),
-    DisabledWorkflow(
-        workflow_id="wkf7gZH53nNP5f6y",
-        signal_type="workflow_outcome",
-        memory_domain="workflow_context",
-        field_name="处理进度",
-        field_id="fldarFiHsF",
-    ),
-)
+    @model_validator(mode="after")
+    def domain_matches_signal(self) -> "DisabledWorkflowBinding":
+        expected = {
+            "matching_correction": "search_match",
+            "greeting_revision": "greeting",
+            "workflow_outcome": "workflow_context",
+        }[self.signal_type]
+        if self.memory_domain != expected:
+            raise ValueError("Workflow memory domain does not match its signal type.")
+        return self
 
 
 class WorkflowSignal(ContractModel):

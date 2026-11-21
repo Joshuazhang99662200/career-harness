@@ -9,11 +9,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import JsonValue
 
 from jobagent.bridge.feishu_gateway import FeishuGateway
-from jobagent.digest import canonical_digest, canonical_json, text_digest
+from jobagent.digest import canonical_digest, canonical_json
 from jobagent.errors import ContractValidationError
 from jobagent.memory.publication import (
     assert_publishable,
     decode_memory_row,
+    memory_jd_digest,
     memory_row_fields,
     published_memory_id,
 )
@@ -28,11 +29,11 @@ from jobagent.schemas.feishu import FeishuPatch, FeishuRecord
 from jobagent.schemas.memory_signal import OperatorDirectory, PublishedMemory
 from jobagent.schemas.shared_memory import (
     GREETING_MEMORY_FIELDS,
-    HUMAN_SIGNAL_FIELD_COUNT,
     HUMAN_SIGNAL_FIELDS,
     HUMAN_SIGNAL_MUTABLE_FIELDS,
-    PRODUCTION_TABLE_IDS,
     SEARCH_MEMORY_FIELDS,
+    SHARED_MEMORY_TABLE_KEYS,
+    DisabledWorkflowBinding,
     DreamBatchComplete,
     DreamBatchResult,
     DreamBatchSnapshot,
@@ -98,7 +99,7 @@ class SharedMemoryService:
             expected_table_revision=expected_table_revision,
         )
         signals = [
-            self.ledger.receive(parse_workflow_signal(record.record_id, record.fields))
+            self.ledger.receive(self._parse_signal(record.record_id, record.fields))
             for record in page.records
         ]
         return WorkflowSignalPage(
@@ -111,7 +112,7 @@ class SharedMemoryService:
     def enrich_signal(self, signal_record_id: str, *, max_pages: int = 20) -> SignalEnrichment:
         self._validate_human_signals()
         current = self.gateway.get("human_signals", signal_record_id)
-        parsed = parse_workflow_signal(current.record_id, current.fields)
+        parsed = self._parse_signal(current.record_id, current.fields)
         if parsed.learning_status != "pending_history_enrichment":
             return SignalEnrichment(
                 signal_record_id=signal_record_id,
@@ -134,7 +135,7 @@ class SharedMemoryService:
             fresh.content_digest != current.content_digest
             or fresh.fields.get("learning_status") != "pending_history_enrichment"
         ):
-            refreshed = parse_workflow_signal(fresh.record_id, fresh.fields)
+            refreshed = self._parse_signal(fresh.record_id, fresh.fields)
             return SignalEnrichment(
                 signal_record_id=signal_record_id,
                 duplicate=True,
@@ -185,7 +186,7 @@ class SharedMemoryService:
         self._validate_memory_table(key)
         self._validate_human_signals()
         current = self.gateway.get("human_signals", request.signal_record_id)
-        parsed = parse_workflow_signal(current.record_id, current.fields)
+        parsed = self._parse_signal(current.record_id, current.fields)
         if parsed.source_record_id != memory.record_id:
             _reject("Memory publication points at a different job record than the signal.")
         if self._candidate_id_for_signal(parsed) != memory.candidate_id:
@@ -278,7 +279,7 @@ class SharedMemoryService:
     def _start_dream_batch(self, request: DreamBatchStart) -> DreamBatchSnapshot:
         self._validate_human_signals()
         records, data_version = self._pending_signal_page()
-        parsed = [parse_workflow_signal(record.record_id, record.fields) for record in records]
+        parsed = [self._parse_signal(record.record_id, record.fields) for record in records]
         open_batches = [
             item for item in parsed
             if _search_dream_signal(item)
@@ -360,7 +361,9 @@ class SharedMemoryService:
             or not isinstance(data_version, str)
             or not data_version
         ):
-            _reject("Unfinished Dream batch does not name its complete 10-workday observation window.")
+            _reject(
+                "Unfinished Dream batch does not name its complete 10-workday observation window."
+            )
         if _aware(window_start) > _aware(cutoff):
             _reject("Unfinished Dream batch has an invalid observation window.")
         try:
@@ -379,7 +382,7 @@ class SharedMemoryService:
             candidate_id=candidate_id,
             window_start=window_start,
             window_timezone=window_timezone,
-            window_business_days=window_business_days,
+            window_business_days=10,
             cutoff=cutoff,
             data_version=data_version,
             signal_ids=signal_ids,
@@ -392,7 +395,7 @@ class SharedMemoryService:
         # source_context cells; conflicting context is never overwritten.
         for signal_id in signal_ids:
             record = self.gateway.get("human_signals", signal_id)
-            signal = parse_workflow_signal(record.record_id, record.fields)
+            signal = self._parse_signal(record.record_id, record.fields)
             if not _human_ready(signal, self.operators, allow_learned=True):
                 _reject("Frozen Dream signal is no longer eligible human search feedback.")
             if self._candidate_id_for_signal(signal) != snapshot.candidate_id:
@@ -482,11 +485,7 @@ class SharedMemoryService:
             "role_directions": directions,
             "exclusions": exclusions,
             "notes": [],
-            "jd_digest": text_digest(canonical_json({
-                "keywords": keywords,
-                "role_directions": directions,
-                "exclusions": exclusions,
-            })),
+            "jd_digest": memory_jd_digest(self._source_jd_texts(ordered)),
         }
         draft["memory_id"] = published_memory_id(draft, anchor.signal_record_id)
         memory = PublishedMemory.model_validate({
@@ -534,7 +533,7 @@ class SharedMemoryService:
         expected_stamp = _batch_checkpoint(snapshot)
         for signal_id in snapshot.signal_ids:
             record = self.gateway.get("human_signals", signal_id)
-            signal = parse_workflow_signal(record.record_id, record.fields)
+            signal = self._parse_signal(record.record_id, record.fields)
             if _batch_stamp(signal) != expected_stamp:
                 _reject("Frozen Dream signal does not match the complete batch snapshot.")
             if not _human_ready(signal, self.operators, allow_learned=True):
@@ -559,7 +558,7 @@ class SharedMemoryService:
         body = canonical_json({"dream_batch": expected})
         for signal_id in snapshot.signal_ids:
             current = self.gateway.get("human_signals", signal_id)
-            signal = parse_workflow_signal(current.record_id, current.fields)
+            signal = self._parse_signal(current.record_id, current.fields)
             if not _human_ready(signal, self.operators, allow_learned=True):
                 _reject("Only eligible human search signals can be frozen for Dream.")
             if self._candidate_id_for_signal(signal) != snapshot.candidate_id:
@@ -870,37 +869,82 @@ class SharedMemoryService:
             if len(found) > 5000:
                 _reject("Shared table read stopped before the page sequence finished.")
 
+    def _parse_signal(self, record_id: str, fields: dict[str, JsonValue]) -> WorkflowSignal:
+        jobs_table_id, workflows = self._workflow_binding()
+        return parse_workflow_signal(
+            record_id, fields, jobs_table_id=jobs_table_id, workflows=workflows,
+        )
+
+    def _workflow_binding(self) -> tuple[str, list[DisabledWorkflowBinding]]:
+        jobs = self.gateway.config.tables.get("jobs")
+        workflows = list(self.gateway.config.workflows)
+        if jobs is None:
+            _reject("Private setup is missing the Jobs table mapping.")
+        expected = {
+            "matching_correction",
+            "greeting_revision",
+            "workflow_outcome",
+        }
+        if {item.signal_type for item in workflows} != expected:
+            _reject("Private setup must name exactly the three disabled workflows.")
+        mapped_fields = set(jobs.fields.values())
+        for item in workflows:
+            if item.field_id not in mapped_fields:
+                _reject("Workflow field id must be a mapped Jobs field.")
+        return jobs.table_id, workflows
+
+    def _validate_setup(self) -> None:
+        tables = self.gateway.config.tables
+        missing = [key for key in SHARED_MEMORY_TABLE_KEYS if key not in tables]
+        if missing:
+            _reject(
+                "Private setup is missing a shared table mapping: " + ", ".join(missing) + "."
+            )
+        records = tables.get("records")
+        if records is not None and records.table_id == tables["human_signals"].table_id:
+            _reject("The retired records table is not Human Signals.")
+        if "jd_text" not in tables["jobs"].fields:
+            _reject("Jobs mapping must include jd_text before a JD digest can be recorded.")
+        self._workflow_binding()
+
+    def _source_jd_texts(self, signals: list[WorkflowSignal]) -> list[tuple[str, str]]:
+        jobs = self.gateway.config.tables.get("jobs")
+        if jobs is None or "jd_text" not in jobs.fields:
+            _reject("Jobs mapping must include jd_text before a JD digest can be recorded.")
+        if self.gateway.schema("jobs")["jd_text"].get("type") != "text":
+            _reject("Jobs jd_text must be a text field.")
+        found: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for signal in signals:
+            if signal.source_record_id in seen:
+                continue
+            seen.add(signal.source_record_id)
+            record = self.gateway.get("jobs", signal.source_record_id)
+            jd_text = record.fields.get("jd_text")
+            if not isinstance(jd_text, str) or not jd_text.strip():
+                _reject("Source job record has no JD text; refusing to invent a jd_digest.")
+            found.append((signal.source_record_id, jd_text))
+        return found
+
     def _validate_human_signals(self) -> None:
-        table = self.gateway.config.tables.get("human_signals")
-        if table is None or table.table_id != PRODUCTION_TABLE_IDS["human_signals"]:
-            _reject("Human Signals is not bound to the production table.")
+        self._validate_setup()
+        table = self.gateway.config.tables["human_signals"]
         if set(table.fields) != set(HUMAN_SIGNAL_FIELDS):
             _reject("Human Signals mapping must be exactly the known semantic fields.")
         if set(table.writable.get("memory", [])) != set(HUMAN_SIGNAL_MUTABLE_FIELDS):
             _reject("Memory role may only update enrichment and learning_status.")
-        live = self.gateway.catalog("human_signals")
-        if len(live) != HUMAN_SIGNAL_FIELD_COUNT:
-            _reject("Human Signals schema does not have the 19 existing fields.")
-        seen: set[str] = set()
-        for field in live:
-            field_id = field.get("id")
-            kind = field.get("type")
-            if not isinstance(field_id, str) or field_id in seen:
-                _reject("Human Signals fields must stay text or datetime.")
-            if kind not in {"text", "datetime"}:
-                _reject("Human Signals fields must stay text or datetime.")
-            seen.add(field_id)
         mapped = self.gateway.schema("human_signals")
         for name in HUMAN_SIGNAL_FIELDS:
             expected = "datetime" if name == "changed_at" else "text"
             if mapped[name].get("type") != expected:
-                _reject("Human Signals field type does not match the existing column.")
+                _reject("Human Signals field type does not match the semantic column.")
 
     def _validate_memory_table(self, key: str) -> None:
+        self._validate_setup()
         names = GREETING_MEMORY_FIELDS if key == "greeting_memory" else SEARCH_MEMORY_FIELDS
         table = self.gateway.config.tables.get(key)
-        if table is None or table.table_id != PRODUCTION_TABLE_IDS[key]:
-            _reject("Memory table is not bound to the production table.")
+        if table is None:
+            _reject("Private setup is missing this memory table mapping.")
         if set(table.fields) != set(names):
             _reject("Memory mapping does not match the semantic contract.")
         if set(table.writable.get("memory", [])) != set(names):

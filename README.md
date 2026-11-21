@@ -90,7 +90,7 @@ jobagent --help
   <img src="docs/assets/readme/trace-dream-review.png" alt="操作记录、定期归纳、两类记忆更新与月度复盘" width="900" />
 </p>
 
-定期归纳时，会过滤智能体自己写入的记录，只学习真实的人类操作，并分别更新两类记忆：
+按宿主设置，记忆归纳会在本地时区凌晨运行：过滤智能体自己写入的记录，只学习真实的人类操作，并分别更新两类记忆：
 
 - **搜索与匹配记忆**：让下一轮岗位搜索更贴近你的方向和取舍。
 - **招呼语表达记忆**：让下一次沟通更接近你的表达习惯。
@@ -107,7 +107,6 @@ jobagent --help
 - [岗位搜索与执行说明](skills/job-hunting/references/em-execution.md)
 - [记忆归纳机制](skills/job-hunting/references/memory-dream.md)
 - [隐私说明](PRIVACY.md)
-- [给编码智能体的说明](AGENTS.md)
 
 ## 隐私与使用授权
 
@@ -115,7 +114,7 @@ jobagent --help
 
 个人为自己求职，以及协议允许的其他非商业用途，可以免费使用。商业用途请先取得书面授权，详见[使用许可](LICENSE)与[商业授权说明](COMMERCIAL_LICENSE.md)。
 
-欢迎用合成数据反馈问题、改进文档和补充测试。参与前请阅读[贡献指南](CONTRIBUTING.md)；安全问题请按[安全策略](SECURITY.md)私下报告。
+欢迎用合成数据反馈问题、改进文档和补充测试。参与前请阅读[贡献指南](CONTRIBUTING.md)；安全问题请按[安全策略](SECURITY.md)私下报告。使用编码助手参与开发前，请先读 [AGENTS.md](AGENTS.md)。
 
 ---
 

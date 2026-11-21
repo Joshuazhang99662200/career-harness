@@ -85,7 +85,7 @@ jobagent feishu get --config <private-config.json> --table jobs --record-id <rec
   "role": "generation",
   "expected_digest": "sha256:<exact-get-result>",
   "fields": {"assessment": "Synthetic grounded result"},
-  "evidence_reference": "SYNTHETIC_REVIEW_1"
+  "source_reference": "SYNTHETIC_REVIEW_1"
 }
 ```
 
@@ -93,7 +93,7 @@ jobagent feishu get --config <private-config.json> --table jobs --record-id <rec
 jobagent feishu patch --config <private-config.json> --request <patch.json>
 ```
 
-只写显式字段，不改其他字段；先核对 live Schema、角色白名单与写前摘要，再更新并读回准确值。角色参数是宿主调用约束，不是飞书身份认证或本人批准证明。`evidence_reference` 保留宿主提供的引用，不代表已验证平台动作。
+只写显式字段，不改其他字段；先核对 live Schema、角色白名单与写前摘要，再更新并读回准确值。角色参数是宿主调用约束，不是飞书身份认证或本人批准证明。`source_reference` 保留宿主提供的引用，不代表已验证平台动作。
 
 - `verified`：所请求字段的正向回读一致；不证明已发送或全部业务完成。
 - `unverified`：字段被忽略或回读不一致，不能当成功。

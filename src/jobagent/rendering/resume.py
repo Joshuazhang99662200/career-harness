@@ -1,8 +1,8 @@
-"""Render a verified resume variant to PDF and Word, without changing a word of it.
+"""Render the final CV text to PDF and Word, without changing a word of it.
 
 Layout is decided here, content never is: every visible line is either a header
-line the person supplied or the verbatim text of a verified item, in variant
-order, so the rendered PDF passes `harness check-pdf`. The conventions are fixed:
+line the person supplied or the verbatim text of an item, in document order, so
+the rendered PDF passes `harness check-pdf`. The conventions are fixed:
 
 - items whose id ends in `_ROLE` are the "company | title | dates" line of a role;
 - items in a summary section are plain paragraphs;
@@ -21,7 +21,7 @@ from xml.sax.saxutils import escape
 
 from jobagent.errors import ContractValidationError
 from jobagent.schemas.harness import ResumeHeader
-from jobagent.schemas.optimizer import ResumeVariant
+from jobagent.schemas.resume import ResumeDocument
 
 DEFAULT_SUMMARY_SECTIONS = frozenset({"个人简介", "Summary"})
 MAX_LEAD_CHARS = 14
@@ -55,17 +55,12 @@ def _lead(text: str) -> str | None:
 
 
 def layout(
-    variant: ResumeVariant, *, summary_sections: Collection[str] = DEFAULT_SUMMARY_SECTIONS
+    resume: ResumeDocument, *, summary_sections: Collection[str] = DEFAULT_SUMMARY_SECTIONS
 ) -> list[Block]:
-    """Turn verified items into ordered blocks. No text is added or altered."""
-    if not variant.verification.passed:
-        raise ContractValidationError(
-            "Only a verified resume variant can be rendered.",
-            details={"variant": variant.id},
-        )
+    """Turn items into ordered blocks. No text is added or altered."""
     blocks: list[Block] = []
     section: str | None = None
-    for item in variant.items:
+    for item in resume.items:
         if item.section != section:
             section = item.section
             blocks.append(Block("heading", section))
@@ -86,7 +81,7 @@ def default_cjk_font() -> tuple[str, str] | None:
 
 
 def render_pdf(
-    variant: ResumeVariant,
+    resume: ResumeDocument,
     header: ResumeHeader,
     path: Path,
     *,
@@ -94,7 +89,7 @@ def render_pdf(
     bold_font_path: str | None = None,
     summary_sections: Collection[str] = DEFAULT_SUMMARY_SECTIONS,
 ) -> None:
-    blocks = layout(variant, summary_sections=summary_sections)
+    blocks = layout(resume, summary_sections=summary_sections)
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
@@ -176,19 +171,19 @@ def render_pdf(
         rightMargin=14 * mm,
         topMargin=13 * mm,
         bottomMargin=11 * mm,
-        title=variant.id,
+        title=resume.id,
     ).build(story)
 
 
 def render_docx(
-    variant: ResumeVariant,
+    resume: ResumeDocument,
     header: ResumeHeader,
     path: Path,
     *,
     font_name: str,
     summary_sections: Collection[str] = DEFAULT_SUMMARY_SECTIONS,
 ) -> None:
-    blocks = layout(variant, summary_sections=summary_sections)
+    blocks = layout(resume, summary_sections=summary_sections)
     try:
         from docx import Document
         from docx.enum.text import WD_ALIGN_PARAGRAPH

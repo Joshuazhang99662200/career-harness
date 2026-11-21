@@ -86,7 +86,7 @@ class FeishuPatch(ContractModel):
     role: FeishuRole
     expected_digest: Digest
     fields: dict[NonEmptyString, JsonValue] = Field(min_length=1, repr=False)
-    evidence_reference: NonEmptyString
+    source_reference: NonEmptyString
 
 
 class FeishuQuery(ContractModel):
@@ -133,7 +133,7 @@ class FeishuWriteReceipt(ContractModel):
     status: Literal["verified", "unverified", "unknown"]
     verified: bool
     dispatched: bool
-    evidence_reference: str
+    source_reference: str
     record: FeishuRecord | None = None
     diagnostic: str | None = None
     concurrency_guarantee: Literal["pre_read_only"] = "pre_read_only"

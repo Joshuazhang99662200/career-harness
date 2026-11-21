@@ -206,7 +206,7 @@ class FeishuGateway:
             reject("Approved material cannot be edited in place; resolve its approval first.")
         receipt = FeishuWriteReceipt(record_id=request.record_id, status="unverified",
                                      verified=False, dispatched=False,
-                                     evidence_reference=request.evidence_reference)
+                                     source_reference=request.source_reference)
         if all(current.fields[name] == value for name, value in request.fields.items()):
             return receipt.model_copy(update={"status": "verified", "verified": True,
                                                "record": current})

@@ -1,22 +1,15 @@
-from datetime import date
-
 import pytest
 from pydantic import ValidationError
 
-from jobagent.errors import MissingEvidenceError
-from jobagent.schemas.common import SourceReference, SourceType, TimeRange
+from jobagent.errors import ContractValidationError
+from jobagent.schemas.harness import ResumeHeader
 
 
 def test_contracts_forbid_unknown_fields() -> None:
     with pytest.raises(ValidationError):
-        SourceReference(type=SourceType.RESUME, reference="page:1", surprise=True)
-
-
-def test_time_range_rejects_reverse_dates() -> None:
-    with pytest.raises(ValidationError):
-        TimeRange(start=date(2025, 1, 1), end=date(2024, 1, 1))
+        ResumeHeader(lines=["Ada Lovelace"], surprise=True)
 
 
 def test_domain_error_has_stable_code() -> None:
-    error = MissingEvidenceError("RAG implementation evidence is absent")
-    assert error.code == "MISSING_EVIDENCE"
+    error = ContractValidationError("The resume file could not be read.")
+    assert error.code == "CONTRACT_VALIDATION_ERROR"

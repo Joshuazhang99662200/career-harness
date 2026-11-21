@@ -52,7 +52,6 @@ python -m pytest -q
 - 编写绕过登录、CAPTCHA、验证码、风控、限流或反爬的代码；
 - 让任何 Agent 写入 `已批准` / `已拒绝`、冒充本人操作，或在本人批准前外发；
 - 让 GM 写入材料里没有的经历、成果、数字或动机；
-- 在能力索引编译期动态 import 或执行被索引的入口点；
 - 让领域模块依赖 Typer、浏览器自动化、DOM 选择器或平台 SDK；
 - 把真实简历、联系方式、`.env`、数据库、Base / 表 / 字段标识或 Tunnel 标识写进仓库或提交信息。
 
@@ -75,11 +74,11 @@ python -m pytest -q
 
 ## 重构进行中
 
-仓库正从旧的代码层（SQLite、浏览器壳、worker、Console / React、Evidence 模型）迁到上述轻量架构。决定与差距见[轻量化架构](docs/architecture/lightweight-skill-architecture.md)，分阶段顺序见[全局重构计划](docs/architecture/global-refactor-plan.md)。
+仓库已从旧的代码层（SQLite、浏览器壳、worker、Console / React、Evidence 模型）迁到上述轻量架构，旧代码已删除。决定与差距见[轻量化架构](docs/architecture/lightweight-skill-architecture.md)，分阶段顺序与剩余工作见[全局重构计划](docs/architecture/global-refactor-plan.md)。
 
-- 旧实现仍在仓库里，按计划逐步退役；不要再为它们新增功能。
-- `skills/job-hunting/references/capability-catalog.md` 仍记录旧代码的能力状态，调用旧命令前先查它；新增 CLI 命令时必须同步更新它，`tests/test_capability_status.py` 会双向断言两者一致。
-- Evidence 概念已废止，统一改称材料表中的个人资料；旧文档与代码里的说法按计划逐步清理。
+- 不要恢复已删除的模块，也不要为它们新增功能。
+- `skills/job-hunting/references/capability-catalog.md` 只登记仍在的命令与按 Skill 完成的工作；新增或删除 CLI 命令时必须同步更新它，`tests/test_capability_status.py` 会双向断言两者一致。
+- Evidence 概念已废止。个人资料只有材料表里的一份简历和一份材料 md；写作 Skill 里统一称“材料事实”，`tests/test_skill_context.py` 会拦下旧术语。
 
 ## 技能上下文
 
@@ -89,7 +88,6 @@ python -m pytest -q
 - `roles/` 下是 GM、EM 两份角色说明，只加载当前角色那一份；
 - `references/` 是按需加载的策略文件，**只加载当前任务需要的那几份**；
 - `greeting/SKILL.md` 与 `optimizer/SKILL.md` 是写招呼语、改简历的嵌套技能；
-- `optimizer/index/*.yaml` 是契约数据不是文档，修改规则见 CONTRIBUTING.md。
 
 不要一次性把整棵树读进上下文，那正是这套结构要避免的。
 

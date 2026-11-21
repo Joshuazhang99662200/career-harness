@@ -71,7 +71,7 @@ def patch(digest, **changes):
     return FeishuPatch.model_validate({
         "table": "jobs", "record_id": "recSynthetic", "role": "generation",
         "expected_digest": digest, "fields": {"assessment": "Grounded synthetic result"},
-        "evidence_reference": "SYNTHETIC_REVIEW_1", **changes,
+        "source_reference": "SYNTHETIC_REVIEW_1", **changes,
     })
 
 

@@ -1,4 +1,4 @@
-"""CLI for the CV PDF: render a verified variant and check the PDF text."""
+"""CLI for the CV PDF: render the final CV text and check the PDF text."""
 
 import json
 from pathlib import Path
@@ -10,9 +10,9 @@ from pydantic import ValidationError
 from jobagent.errors import ContractValidationError, JobAgentError
 from jobagent.harness.pdf import check_pdf
 from jobagent.schemas.harness import ResumeHeader
-from jobagent.schemas.optimizer import ResumeVariant
+from jobagent.schemas.resume import ResumeDocument
 
-harness_app = typer.Typer(help="Render a CV PDF and check that its text matches the variant.")
+harness_app = typer.Typer(help="Render a CV PDF and check that its text matches the final CV text.")
 
 
 def _fail(error: JobAgentError | ValidationError) -> Never:
@@ -23,7 +23,7 @@ def _fail(error: JobAgentError | ValidationError) -> Never:
 
 @harness_app.command("check-pdf")
 def check_pdf_command(
-    variant_path: Path,
+    resume_path: Path,
     pdf_path: Path,
     max_pages: Annotated[int, typer.Option("--max-pages", min=1)] = 2,
     header_path: Annotated[
@@ -32,26 +32,26 @@ def check_pdf_command(
     ] = None,
 ) -> None:
     try:
-        variant = ResumeVariant.model_validate_json(variant_path.read_bytes())
+        resume = ResumeDocument.model_validate_json(resume_path.read_bytes())
         header = (
             None
             if header_path is None
             else ResumeHeader.model_validate_json(header_path.read_bytes())
         )
-        report = check_pdf(variant, pdf_path, max_pages=max_pages, header=header)
+        report = check_pdf(resume, pdf_path, max_pages=max_pages, header=header)
         typer.echo(report.model_dump_json(indent=2))
         if not report.passed:
             raise typer.Exit(1)
     except (JobAgentError, ValidationError) as error:
         _fail(error)
     except OSError:
-        typer.echo(json.dumps({"error": {"message": "Variant file unavailable."}}))
+        typer.echo(json.dumps({"error": {"message": "Resume file unavailable."}}))
         raise typer.Exit(1) from None
 
 
 @harness_app.command("render")
 def render(
-    variant_path: Annotated[Path, typer.Argument(help="Verified ResumeVariant JSON.")],
+    resume_path: Annotated[Path, typer.Argument(help="Final ResumeDocument JSON.")],
     header_path: Annotated[Path, typer.Argument(help='ResumeHeader JSON: {"lines": [...]}.')],
     pdf: Annotated[Path | None, typer.Option("--pdf", help="Where to write the PDF.")] = None,
     docx: Annotated[
@@ -68,7 +68,7 @@ def render(
     ] = None,
     max_pages: Annotated[int, typer.Option("--max-pages", min=1)] = 1,
 ) -> None:
-    """Lay out a verified variant as PDF and/or Word, then run the PDF text gate.
+    """Lay out the final CV text as PDF and/or Word, then run the PDF text gate.
 
     Layout only: every visible line is a header line or verbatim item text. A Word
     file cannot be checked directly; export it to PDF and run `harness check-pdf`.
@@ -83,15 +83,15 @@ def render(
         if pdf is None and docx is None:
             raise ContractValidationError("Choose at least one output: --pdf or --docx.")
         try:
-            variant = ResumeVariant.model_validate_json(variant_path.read_bytes())
+            resume = ResumeDocument.model_validate_json(resume_path.read_bytes())
             header = ResumeHeader.model_validate_json(header_path.read_bytes())
         except (OSError, ValidationError):
             raise ContractValidationError(
-                "The variant or header file could not be read.",
-                details={"variant": variant_path.name, "header": header_path.name},
+                "The resume or header file could not be read.",
+                details={"resume": resume_path.name, "header": header_path.name},
             ) from None
         sections = set(summary_section) if summary_section else DEFAULT_SUMMARY_SECTIONS
-        result: dict[str, object] = {"variant_id": variant.id}
+        result: dict[str, object] = {"resume_id": resume.id}
         if pdf is not None:
             regular, bold = font, bold_font
             if font is None:
@@ -104,17 +104,17 @@ def render(
             elif font.lower() == "none":
                 regular, bold = None, None
             render_pdf(
-                variant,
+                resume,
                 header,
                 pdf,
                 font_path=regular,
                 bold_font_path=bold,
                 summary_sections=sections,
             )
-            report = check_pdf(variant, pdf, max_pages=max_pages, header=header)
+            report = check_pdf(resume, pdf, max_pages=max_pages, header=header)
             result.update({"pdf": str(pdf), "check": report.model_dump(mode="json")})
         if docx is not None:
-            render_docx(variant, header, docx, font_name=word_font, summary_sections=sections)
+            render_docx(resume, header, docx, font_name=word_font, summary_sections=sections)
             result["docx"] = str(docx)
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
         check = result.get("check")

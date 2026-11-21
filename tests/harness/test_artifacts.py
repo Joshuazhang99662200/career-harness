@@ -1,4 +1,3 @@
-
 import pytest
 from docx import Document
 from pypdf import PdfReader, PdfWriter
@@ -6,11 +5,11 @@ from pypdf.annotations import Text
 from reportlab.pdfgen import canvas
 
 from jobagent.harness.pdf import check_pdf
-from tests.harness.test_pdf import render, variant
+from tests.harness.test_pdf import render, resume
 
 
 def test_pdf_rejects_internal_note_even_if_it_was_in_verified_text(tmp_path):
-    document = variant()
+    document = resume()
     document.items[0].text = "Internal note: source needs owner confirmation."
     path = tmp_path / "resume.pdf"
     render(path, document.items[0].text)
@@ -19,7 +18,7 @@ def test_pdf_rejects_internal_note_even_if_it_was_in_verified_text(tmp_path):
 
 @pytest.mark.parametrize("extra", ["annotation", "attachment", "metadata"])
 def test_pdf_rejects_non_employer_review_payload(tmp_path, extra):
-    document = variant()
+    document = resume()
     path = tmp_path / "resume.pdf"
     render(path, document.items[0].text)
     writer = PdfWriter(clone_from=PdfReader(path))
@@ -35,7 +34,7 @@ def test_pdf_rejects_non_employer_review_payload(tmp_path, extra):
 
 
 def test_pdf_preserves_normal_hyperlinks(tmp_path):
-    document = variant()
+    document = resume()
     path = tmp_path / "resume.pdf"
     pdf = canvas.Canvas(str(path))
     pdf.drawString(50, 700, document.items[0].text)
@@ -45,7 +44,7 @@ def test_pdf_preserves_normal_hyperlinks(tmp_path):
 
 
 def test_internal_software_name_is_not_a_review_annotation(tmp_path):
-    document = variant()
+    document = resume()
     document.items[0].text = "Built an internal note-taking tool for research teams."
     path = tmp_path / "resume.pdf"
     render(path, document.items[0].text)
@@ -55,7 +54,7 @@ def test_internal_software_name_is_not_a_review_annotation(tmp_path):
 def test_pdf_link_cannot_hide_javascript_action(tmp_path):
     from pypdf.generic import DictionaryObject, NameObject, TextStringObject
 
-    document = variant()
+    document = resume()
     path = tmp_path / "resume.pdf"
     render(path, document.items[0].text)
     writer = PdfWriter(clone_from=PdfReader(path))
@@ -79,7 +78,7 @@ def test_pdf_link_cannot_hide_javascript_action(tmp_path):
 def test_pdf_xmp_metadata_cannot_carry_internal_notes(tmp_path):
     from pypdf.generic import DecodedStreamObject, NameObject
 
-    document = variant()
+    document = resume()
     path = tmp_path / "resume.pdf"
     render(path, document.items[0].text)
     writer = PdfWriter(clone_from=PdfReader(path))

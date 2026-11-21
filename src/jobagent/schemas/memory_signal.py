@@ -4,16 +4,14 @@ The captured names match the official ``drive.file.bitable_record_changed_v1``
 body (schema 2.0): header ``event_id`` / ``create_time``, event ``operator_id``,
 ``action_list[].record_id``, ``before_value`` / ``after_value`` ``field_id`` and
 ``field_value``, and ``update_time``. Display names are not part of that body
-and are not accepted as operator evidence. This contract does not grant a send.
+and do not identify the operator. This contract does not grant a send.
 """
 
 from typing import Literal
 
 from pydantic import Field, model_validator
 
-from jobagent.schemas.candidate import CandidateId
-from jobagent.schemas.common import ContractModel, Digest, NonEmptyString
-from jobagent.schemas.jobs import JobId
+from jobagent.schemas.common import CandidateId, ContractModel, Digest, JobId, NonEmptyString
 
 PreferenceLabel = Literal[
     "Matching Preference / Calibration",

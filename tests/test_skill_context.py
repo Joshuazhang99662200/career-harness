@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -72,17 +73,64 @@ def test_resume_skill_keeps_mode_choice_and_has_no_delivery_route() -> None:
     text = read("optimizer/SKILL.md")
     assert "这次简历优化，您倾向哪种方式？" in text  # noqa: RUF001
     assert "材料" in text
-    for forbidden in ("send application", "bypass captcha", "perform login", "canonical Evidence"):
+    for forbidden in ("send application", "bypass captcha", "perform login"):
         assert forbidden not in text.casefold()
 
 
 def test_greeting_skill_keeps_the_first_contact_quality_guards() -> None:
     review = read("greeting/references/quality-review.md")
-    reasoning = read("greeting/references/evidence-reasoning.md")
+    selection = read("greeting/references/fact-selection.md")
     assert "First-contact overproduction" in review
-    assert "evidence_collapse" in review
-    assert "Evidence Selection Counterfactual" in reasoning
-    assert "Causal Grounding Check" in reasoning
+    assert "Causal Grounding Check" in selection
+
+
+RETIRED_EVIDENCE = re.compile(r"(?i)\bevidence|EVID_|证据|candidate core|candidate ingest")
+RETIRED_CODE_CONTRACTS = re.compile(
+    r"GreetingReview|style_ok|target_relevant|full_text_supported|no_missing_claims|"
+    r"RecruiterInfo|VerificationStatus|KeywordCoverageReport|ResumeVariant"
+)
+
+
+def skill_files() -> list[Path]:
+    roots = (SKILL, ROOT / "skills" / "jd-grounded-template-tailoring")
+    return sorted(
+        path for root in roots for path in root.rglob("*") if path.suffix in {".md", ".yaml"}
+    )
+
+
+def test_skill_tree_no_longer_speaks_the_retired_evidence_model() -> None:
+    hits = [
+        f"{path.relative_to(ROOT)}: {match.group(0)}"
+        for path in skill_files()
+        for pattern in (RETIRED_EVIDENCE, RETIRED_CODE_CONTRACTS)
+        for match in pattern.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert not hits, hits
+
+
+def test_package_code_no_longer_carries_the_evidence_model() -> None:
+    source = ROOT / "src" / "jobagent"
+    assert not (source / "schemas" / "candidate.py").exists()
+    assert not (source / "schemas" / "optimizer.py").exists()
+    hits = [
+        f"{path.relative_to(ROOT)}: {match.group(0)}"
+        for path in sorted(source.rglob("*.py"))
+        for match in RETIRED_EVIDENCE.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert not hits, hits
+
+
+def test_retired_connector_sources_are_gone() -> None:
+    assert not (SKILL / "sources").exists()
+
+
+def test_greeting_skill_keeps_its_guards_under_material_fact_names() -> None:
+    review = read("greeting/references/quality-review.md")
+    selection = read("greeting/references/fact-selection.md")
+    for label in ("depth_collapse", "narrative_collage", "unsupported_causal_link"):
+        assert label in review, label
+    assert "Fact Selection Counterfactual" in selection
+    assert "need_materials" in read("greeting/SKILL.md")
 
 
 def test_reference_only_source_is_explicit() -> None:

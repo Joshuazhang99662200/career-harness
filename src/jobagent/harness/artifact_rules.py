@@ -5,7 +5,7 @@ import re
 from pypdf import PdfReader
 
 from jobagent.schemas.harness import ResumeHeader
-from jobagent.schemas.optimizer import ResumeVariant
+from jobagent.schemas.resume import ResumeDocument
 
 _BULLETS = "•▸▪·◦"
 _INTERNAL_NOTE = re.compile(
@@ -20,14 +20,12 @@ def internal_note_issues(text: str) -> list[str]:
     return ["internal_annotation"] if _INTERNAL_NOTE.search(text) else []
 
 
-def compare_variant_text(
+def compare_resume_text(
     text: str,
-    variant: ResumeVariant,
+    resume: ResumeDocument,
     header: ResumeHeader | None = None,
 ) -> list[str]:
     issues: list[str] = []
-    if not variant.verification.passed or not variant.items or not variant.claim_ledger.claims:
-        issues.append("variant_not_verified")
     remainder = "".join(text.split())
     if not remainder:
         issues.append("missing_text")
@@ -37,7 +35,7 @@ def compare_variant_text(
             remainder = remainder[len(supplied) :]
         else:
             issues.append("header_missing_or_altered")
-    for item in variant.items:
+    for item in resume.items:
         heading = "".join(item.section.split())
         if remainder.startswith(heading):
             remainder = remainder[len(heading) :]

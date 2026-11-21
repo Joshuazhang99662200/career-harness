@@ -131,7 +131,8 @@ P1 内的 `AGENTS.md` 改写、角色 md、数据契约三份文档相互独立�
 - **P3 文档门禁已收口。** 修正了失效的内部链接（lens-routing、resume-builder、oss-review、PRIVACY），`optimizer` 视角文档的 `EVID_*` 改称“材料事实”，两处 RUF001 全角标点以 `noqa` 标注；pytest、ruff、mypy 均绿。
 - **已提交** `28a1b48`（P1–P3 检查点，含旧代码退役删除）。
 - **`SKILL.md` 已改为角色路由入口：** 先读私有 `settings.json` 认角色，缺设置转 Initial Setup，再按 GM / EM 分表加载；EM 不加载写作与 Dream 技能。`lens-routing.md` 补上四个视角正文的链接，`agents/openai.yaml` 去掉“证据接地”旧说法。新增 3 个路由测试，门禁 91 passed。
-- **未完成的 P3 项：** 能力目录未按新路径重写；`sources/*.yaml` 与 `references/oss/` 下的研究笔记未从入口链接，待能力目录重写时一并决定去留；greeting 与 `resume-builder.md` 中仍有 Evidence 术语（greeting 的 `evidence_collapse` 等标识符被测试锁定，改名需同步测试，暂未动）。
-- **暂存区与测试数量需本人确认。** 工作区暂存了约 665 个删除（`src/jobagent` 303 个、`tests` 约 200 个、`frontend` 约 50 个），这些属于 P6 范围，但计划中 P6 尚未开始。当前 `pytest` 仅收集到 88 个测试，与上文 2154 的基线不再可比。
+- **已提交** `24c90f9`（角色路由）。
+- **Evidence 依赖已全部退役（P3 收口）。** 代码：删除 `schemas/candidate.py`、`schemas/optimizer.py`、`schemas/jobs.py` 与其测试；简历核对改用只含最终正文的 `schemas/resume.py`（`ResumeDocument` / `ResumeItem`），不再要求证据台账或校验报告，内容真假交给本人批准与 Dream；`errors.py` 只留两个错误类；`feishu patch` 的 `evidence_reference` 改名 `source_reference`。Skill：greeting 的 `evidence-reasoning.md` 改为 `fact-selection.md`，复核标签改为 `depth_collapse`、`substance_gap`、`fact_selection`，`need_evidence` 改为 `need_materials`，不再引用已删除的 `GreetingReview` 字段；optimizer 质量门禁、视角路由与渲染策略改为以材料 md 为唯一事实来源，视角改按岗位表里的招聘方信息选择。删除 `sources/*.yaml`。`SECURITY.md`、`PRIVACY.md`、`AGENTS.md` 去掉 SQLite、能力索引与 Evidence 写入口的旧描述。`test_skill_context` 新增断言拦下旧术语。门禁 83 passed。
+- **未完成的 P3 项：** 能力目录已只登记现存命令，无需再改；`references/oss/` 下的研究笔记作为许可证登记保留，不从入口链接。`skills/job-hunting/scripts/` 只剩一个被 gitignore 的 `__pycache__`，不在版本库中，留给本人决定是否删除。
 - **已恢复** `frontend/THIRD_PARTY_NOTICES.md` 的工作区文件并取消暂存：`docs/licensing.md` 与 `CONTRIBUTING.md` 要求第三方 notices 保留，删除它之前须先确认许可证义务已另有安排。
 - 未提交、未推送。

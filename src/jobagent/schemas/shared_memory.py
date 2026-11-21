@@ -11,9 +11,7 @@ from typing import Literal
 
 from pydantic import Field, JsonValue, model_validator
 
-from jobagent.schemas.candidate import CandidateId
-from jobagent.schemas.common import ContractModel, Digest, NonEmptyString
-from jobagent.schemas.jobs import JobId
+from jobagent.schemas.common import CandidateId, ContractModel, Digest, JobId, NonEmptyString
 from jobagent.schemas.memory_signal import (
     OperatorDirectory,
     OperatorKind,

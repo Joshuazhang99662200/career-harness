@@ -74,8 +74,30 @@ def test_em_writes_only_gpt_column_and_never_drafts_replies() -> None:
 
 def test_initial_setup_asks_each_platform_and_keeps_numbers_private() -> None:
     setup = read("references/first-use.md")
-    for item in ("em-execution.md", "每个平台", "超时", "排除词", "settings.json"):
+    for item in (
+        "em-execution.md", "每个平台", "超时", "排除词", "settings.json",
+        "feishu-schema-bootstrap.md", "简历模板", "技能栈", "事实整理",
+    ):
         assert item in setup, item
+
+
+def test_initial_setup_requires_user_created_base_before_business_skills() -> None:
+    entry = read("SKILL.md")
+    setup = read("references/first-use.md")
+    schema = read("references/feishu-schema-bootstrap.md")
+    assert "references/feishu-schema-bootstrap.md" in entry
+    assert "先在飞书建立 Base" in setup
+    assert setup.index("## 1. 请用户先在飞书建立 Base") < setup.index(
+        "## 6. 业务 Skill 解锁与首次运行"
+    )
+    for table in ("岗位", "材料", "Human Signals", "搜索与匹配记忆", "招呼语表达记忆"):
+        assert f"### {table}" in schema, table
+    for material in ("简历模板", "技能栈", "事实整理"):
+        assert material in setup and material in schema
+    assert "Muse处理" in schema and "GPT处理" in schema
+    assert "批准状态" in schema and "处理进度" in schema
+    assert "四个 Human Signals 自动化 Workflow" in schema
+    assert "不重复要求创建" in setup or "不要求重新建立" in schema
 
 
 def test_greeting_skill_is_v1_2_with_memory_scope_rules() -> None:
@@ -92,6 +114,60 @@ def test_resume_skill_reuses_a_private_default_mode_and_never_widens_edits() -> 
     assert "不自动扩大" in router
     template = read("references/optimizer/template-tailoring.md")
     assert "截图" in template
+
+
+def test_timeout_clock_is_the_last_progress_change_not_any_row_edit() -> None:
+    closing = section(read("references/em-execution.md"), "## 6. 状态收束")
+    for rule in ("record-history", "处理进度", "已终止", "已超时", "工作日", "create"):
+        assert rule in closing, rule
+    assert "不重置" in closing
+    for paused in ("待你批准", "招聘方来信", "登录失效"):
+        assert paused in closing, paused
+    assert "已废弃" not in closing.split("目标状态")[-1].split("\n")[0]
+
+
+def test_every_bot_timeout_spawns_one_evidence_probe_through_gpt_column() -> None:
+    probe = read("references/em-execution.md")
+    contract = read("references/bitable-contract.md")
+    for item in ("CH10D", "system_timeout", "GPT处理", "追加", "读回", "unobservable"):
+        assert item in probe, item
+    assert "request_id" in contract and "CH10D" in contract
+    assert "先看" in section(probe, "## 6A. 超时后补证")
+
+
+def test_dream_keeps_timeouts_and_employer_rejections_out_of_preferences() -> None:
+    dream = read("references/memory-dream.md")
+    for item in ("system_timeout", "employer_rejected", "已超时", "record-history"):
+        assert item in dream, item
+
+
+def test_ten_workday_skill_is_lazy_gm_only_and_never_writes_memory() -> None:
+    entry = read("SKILL.md")
+    assert "performance-intervention/SKILL.md" in section(entry, "## GM 的任务")
+    assert "performance-intervention" not in section(entry, "## EM 的任务")
+    skill = read("performance-intervention/SKILL.md")
+    for ref in ("metrics.md", "attribution.md", "em-probe.md", "intervention-approval.md"):
+        assert f"references/{ref}" in skill, ref
+        assert (SKILL / "performance-intervention" / "references" / ref).is_file(), ref
+    for rule in ("静默", "两个", "不写 Memory", "本人批准"):
+        assert rule in skill, rule
+
+
+def test_ten_workday_metrics_never_count_unknown_or_immature_as_miss() -> None:
+    metrics = read("performance-intervention/references/metrics.md")
+    for state in ("hit", "miss", "pending", "unknown", "unobservable"):
+        assert f"`{state}`" in metrics, state
+    for rule in ("2 个工作日", "10 个工作日", "不重叠", "Wilson", "0.8", "C", "D"):
+        assert rule in metrics, rule
+
+
+def test_intervention_needs_explicit_approval_and_never_auto_rolls_back() -> None:
+    approval = read("performance-intervention/references/intervention-approval.md")
+    for rule in ("本人", "批准范围", "不等于批准发送", "读回", "回滚", "pending"):
+        assert rule in approval, rule
+    attribution = read("performance-intervention/references/attribution.md")
+    for factor in ("匹配档位", "薪资", "招聘方活跃", "平台", "材料版本", "crossover"):
+        assert factor in attribution, factor
 
 
 def test_lens_routing_links_every_lens_policy() -> None:

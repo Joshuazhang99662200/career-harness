@@ -114,7 +114,7 @@ jobagent --help
 
 个人为自己求职，以及协议允许的其他非商业用途，可以免费使用。商业用途请先取得书面授权，详见 [使用许可](LICENSE) 与[商业授权说明](COMMERCIAL_LICENSE.md)。
 
-欢迎用合成数据反馈问题、改进文档和补充测试。参与前请阅读[贡献指南](CONTRIBUTING.md)；安全问题请按[安全策略](SECURITY.md)私下报告。
+欢迎用合成数据反馈问题、改进文档和补充测试。参与前请阅读[贡献指南](CONTRIBUTING.md)；编码智能体请先读 [AGENTS.md](AGENTS.md)。安全问题请按[安全策略](SECURITY.md)私下报告。
 
 ---
 

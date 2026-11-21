@@ -1,26 +1,16 @@
-from datetime import UTC, datetime
-
+import pytest
+from pydantic import ValidationError
 from reportlab.pdfgen import canvas
 
 from jobagent.harness.pdf import check_pdf
 from jobagent.schemas.harness import ResumeHeader
-from jobagent.schemas.optimizer import ResumeDiff, ResumeVariant, VerificationReport
-from tests.optimizer.test_review import draft
+from jobagent.schemas.resume import ResumeDocument, ResumeItem
 
 
-def variant():
-    document = draft()
-    return ResumeVariant(
+def resume() -> ResumeDocument:
+    return ResumeDocument(
         id="RESUME_1",
-        target_job_id="JOB_1",
-        target_role="Engineer",
-        items=document.items,
-        claim_ledger=document.claim_ledger,
-        keyword_coverage=document.keyword_coverage,
-        verification=VerificationReport(passed=True, evidence_coverage=1),
-        diff=ResumeDiff(),
-        prompt_bundle_digest="sha256:test",
-        generated_at=datetime.now(UTC),
+        items=[ResumeItem(id="ITEM_1", section="experience", text="Led a platform migration.")],
     )
 
 
@@ -33,29 +23,36 @@ def render(path, text, *, pages=1):
     pdf.save()
 
 
-def test_pdf_requires_all_approved_text_and_rejects_extra_claims(tmp_path):
+def test_resume_document_carries_only_final_text_without_a_fact_ledger() -> None:
+    assert set(ResumeItem.model_fields) == {"schema_version", "id", "section", "text"}
+    assert set(ResumeDocument.model_fields) == {"schema_version", "id", "items"}
+    with pytest.raises(ValidationError):
+        ResumeDocument(id="RESUME_1", items=[])
+
+
+def test_pdf_requires_all_final_text_and_rejects_extra_claims(tmp_path):
     path = tmp_path / "resume.pdf"
-    document = variant()
+    document = resume()
     render(path, document.items[0].text)
-    assert check_pdf(document, path).passed
+    report = check_pdf(document, path)
+    assert report.passed
+    assert report.resume_id == "RESUME_1"
     render(path, "Managed 900 engineers.")
     assert not check_pdf(document, path).passed
     render(path, document.items[0].text + " Invented new growth.")
     assert not check_pdf(document, path).passed
 
 
-def test_pdf_limits_pages_and_refuses_unverified_variant(tmp_path):
+def test_pdf_limits_pages(tmp_path):
     path = tmp_path / "resume.pdf"
-    document = variant()
+    document = resume()
     render(path, document.items[0].text, pages=3)
     assert "page_limit" in check_pdf(document, path, max_pages=2).issues
-    document.verification = VerificationReport(passed=False, evidence_coverage=0)
-    assert "variant_not_verified" in check_pdf(document, path).issues
 
 
 def test_pdf_rejects_reordered_text_and_unreadable_file(tmp_path):
     path = tmp_path / "resume.pdf"
-    document = variant()
+    document = resume()
     document.items.append(
         document.items[0].model_copy(update={"id": "ITEM_2", "text": "Built a Python service."})
     )
@@ -76,7 +73,7 @@ def render_lines(path, lines):
 
 def test_pdf_header_lines_are_allowed_only_verbatim_at_the_top(tmp_path):
     path = tmp_path / "resume.pdf"
-    document = variant()
+    document = resume()
     header = ResumeHeader(lines=["Ada Lovelace", "ada@example.com | Engineer"])
     body = document.items[0].text
 
@@ -94,7 +91,7 @@ def test_pdf_header_lines_are_allowed_only_verbatim_at_the_top(tmp_path):
 
 def test_pdf_allows_bullet_glyphs_but_no_other_decoration(tmp_path):
     path = tmp_path / "resume.pdf"
-    document = variant()
+    document = resume()
     render(path, "· " + document.items[0].text)
     assert check_pdf(document, path).passed
     render(path, "NEW " + document.items[0].text)

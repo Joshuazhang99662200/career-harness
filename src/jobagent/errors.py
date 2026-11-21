@@ -1,4 +1,4 @@
-"""Stable domain failures shared by JobAgent capabilities."""
+"""Stable failures shared by the remaining JobAgent commands."""
 
 from collections.abc import Mapping
 from typing import Any, ClassVar
@@ -22,69 +22,3 @@ class JobAgentError(Exception):
 
 class ContractValidationError(JobAgentError):
     code = "CONTRACT_VALIDATION_ERROR"
-
-
-class MissingEvidenceError(JobAgentError):
-    code = "MISSING_EVIDENCE"
-
-
-class EvidenceConflictError(JobAgentError):
-    code = "EVIDENCE_CONFLICT"
-
-
-class PolicyRejectionError(JobAgentError):
-    code = "POLICY_REJECTION"
-
-
-class UserInterventionRequiredError(JobAgentError):
-    code = "USER_INTERVENTION_REQUIRED"
-
-
-class InvalidProviderOutputError(JobAgentError):
-    code = "INVALID_PROVIDER_OUTPUT"
-
-
-class StaleApprovalError(JobAgentError):
-    code = "STALE_APPROVAL"
-
-
-class StorageError(JobAgentError):
-    code = "STORAGE_ERROR"
-
-
-class ResumeParseError(JobAgentError):
-    code = "RESUME_PARSE_ERROR"
-
-
-class JobNotFoundError(JobAgentError):
-    code = "JOB_NOT_FOUND"
-
-
-class JobNormalizationError(JobAgentError):
-    code = "NORMALIZATION_ERROR"
-
-
-class CapabilityRegistryError(JobAgentError):
-    code = "CAPABILITY_REGISTRY_INVALID"
-
-
-class AgentHandoffRequiredError(JobAgentError):
-    """A reasoning step is waiting for the calling agent to produce typed output.
-
-    This is a pause, not a failure: the workflow emitted a complete request and
-    will resume once the agent writes the requested contract back.
-    """
-
-    code = "AGENT_HANDOFF_REQUIRED"
-
-
-class ApprovalRequiredError(JobAgentError):
-    """No human approval covers this exact application."""
-
-    code = "APPROVAL_REQUIRED"
-
-
-class UnverifiedResumeVariantError(JobAgentError):
-    """A variant that failed its quality gates must never reach a reviewer."""
-
-    code = "UNVERIFIED_RESUME_VARIANT"

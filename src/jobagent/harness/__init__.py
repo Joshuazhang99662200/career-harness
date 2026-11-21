@@ -1,1 +1,1 @@
-"""Deterministic workflow support; the host supplies reasoning and interaction."""
+"""Deterministic CV PDF checks."""

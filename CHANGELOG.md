@@ -1,5 +1,15 @@
 # 版本记录
 
+## 0.5.0（未发布）— 轻量 Skill 化：GM、EM 与本人共用一张多维表格
+
+- **不兼容**：仓库改为轻量 Skill。飞书多维表格是唯一业务状态源；GM 写，EM 做，只有本人填“已批准”/“已拒绝”。新增 `roles/GM.md`、`roles/EM.md` 与 `references/bitable-contract.md`；`first-use.md` 改为 Initial Setup。
+- **不兼容**：移除 SQLite 存储与全部迁移、Console / React 前端、MCP 服务、岗位流水线、浏览器连接器、巡检、本地 harness 账本、旧 Memory 实现与 Evidence 模型。CLI 只保留 `jobagent feishu`（字段白名单读写）与 `jobagent harness render / check-pdf`（简历 PDF）。
+- `jobagent feishu patch` 支持 `pending_approval_value`：只有 generation 角色可以把批准字段写成“待你批准”，任何角色都不能写其他批准值或“你的决定”。
+- Evidence 概念废止，个人资料改为材料表里的一份简历与一份由 GM 维护的 md；材料与 Memory 不要求本人审阅，错误经本人驳回或修改被 trace 捕捉后由 GM 查证写入 Memory。
+- **不兼容**：`jobagent harness render / check-pdf` 改读 `ResumeDocument`（只含 `id` 与按序排列的 `items`），不再接受 `ResumeVariant` 及其证据台账与校验报告；`PdfCheckReport` 的 `variant_id` / `variant_digest` 改为 `resume_id` / `resume_digest`。`feishu patch` 请求与回执的 `evidence_reference` 改名 `source_reference`。
+- 写作 Skill 不再使用 Evidence 术语：greeting 的 `evidence-reasoning.md` 改为 `fact-selection.md`，状态 `need_evidence` 改为 `need_materials`，复核标签改为 `depth_collapse`、`substance_gap`、`fact_selection`；简历视角改按岗位表里的招聘方信息选择。删除旧连接器的 `sources/*.yaml`。
+- `memory-dream.md` 改为 GM 用 CLI 直接执行的归纳方法；Skill references 精简为表格、Setup、Dream、写招呼语与简历相关的几份。
+
 ## 未发布 — 前端不限平台，飞书多维表格是其中之一
 
 - `console decide` 新增 `--panel`：`react`、`muse`（默认）、`feishu_bitable`，或本人点名的任意前端 `other:<名称>`。各前端同级：本人在所选前端写下的决定由宿主经 `console decide` 提交，仍只批准提问时的准确原文和当前版本，批准记录写明来自哪个前端；空名称或含控制字符的名称拒绝。飞书消息与卡片里的点击仍只是通知。

@@ -1,3 +1,3 @@
-"""Evidence-grounded, human-approved job hunting capabilities."""
+"""CareerHarness helpers: shared Bitable access and CV PDF rendering."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"

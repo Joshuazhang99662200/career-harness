@@ -20,7 +20,7 @@ Keep a short internal note:
 - When a role mixes directions, don't force a single profile. Compare how much weight each responsibility carries, and keep the uncertainty.
 - Similar or near-duplicate JDs still deserve a fresh angle based on where their duties differ. Never copy the previous result.
 
-## 3. Write a need statement for evidence search
+## 3. Write a need statement for choosing facts
 
 Internally, form a short `need statement`:
 

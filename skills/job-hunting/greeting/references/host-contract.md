@@ -14,7 +14,7 @@ Try to identify the following. Use whatever is present, and mark what is missing
 - `preferences`: the personal style rules the host **selected for this request**, and where they apply. Preferences are never a source of facts.
 - `revision`: the user's specific feedback on this draft, or the rewrite goal.
 
-These are semantic labels, not required field names, APIs, folders or back ends. A sample payload is in the repo at `examples/host-context.example.json`.
+These are semantic labels, not required field names, APIs, folders or back ends. In CareerHarness the host reads `job` from the 岗位 table, `candidate` from the materials md and original CV, and `preferences` from the current 招呼语表达记忆.
 
 ## Source strength
 
@@ -28,9 +28,9 @@ Every specific, checkable claim about experience or results should point to a pi
 
 - The JD lacks responsibilities and goals → `need_jd`. Do not guess the whole job from its title.
 - Part of the JD is visible and the core duties are clear → a `provisional` draft is allowed, stating clearly that the full requirements were not checked.
-- The candidate has no credible experience on file → `need_evidence`. Ask only for the facts you need. Do not write a fictional bio.
+- The candidate has no credible experience on file → `need_materials`. Ask only for the facts you need. Do not write a fictional bio.
 - Nothing supplied supports the core need → `low_fit`, with one line on why. The user decides whether to draft anyway.
-- Important evidence conflicts → avoid the conflicting claim. If it is the only key evidence, mark `blocked`.
+- Important facts conflict → avoid the conflicting claim. If it is the only key fact, mark `blocked`.
 - A platform character limit is unconfirmed → do not present any number as the platform's rule.
 
 ## What stays with the host

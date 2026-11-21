@@ -19,13 +19,13 @@ sources:
     allowed_material: "rendering pipeline, Chinese template selection, resume writing craft"
     required_attribution: "retain MIT notice and name the project"
     prohibited_use: >-
-      replacing the evidence contract or entailment verification;
+      replacing GM's quality-gate self-check against the materials;
       its claim-map records whether a source exists, not whether a written
-      claim is entailed by the evidence it cites
+      claim is supported by the materials md
     risk: >-
       its repackaging guidance is looser than this project's semantic-scope rule,
       and its "bare description is as good as nothing" stance pressures toward
-      unevidenced numbers; this project's zero-unsupported-metric gate wins
+      numbers the materials do not contain; this project's no-unsupported-number gate wins
   - project: "liepin-cli"
     repository: "https://github.com/liepin-tech-2026/liepin-cil"
     context_file: "liepin-cli.md"
@@ -94,7 +94,7 @@ sources:
     allowed_material: "client React source, CSS and RPC view shapes; current share-page presentation"
     required_attribution: "retain provenance manifest and dependency notices"
     prohibited_use: "publishing private snapshots, CV assets, SDK or database implementation"
-    risk: "static demo state changes are not evidence of real approvals or execution"
+    risk: "static demo state changes do not prove real approvals or execution"
 
   - project: "Career Ops"
     repository: "https://github.com/career-ops-hq/career-ops"
@@ -105,4 +105,4 @@ sources:
     allowed_material: "providers/greenhouse.mjs, providers/ashby.mjs, providers/_http.mjs, providers/_ip-guard.mjs; modes/pdf.md, modes/_writing.md, modes/pdf/hm-audit.md"
     required_attribution: "NOTICE and LICENSES/Career-Ops-MIT.txt"
     prohibited_use: "upstream scan, automatic application, retries after controls, personal defaults, templates"
-    risk: "independent Python adapters require local transport and accounting tests; resume guidance cannot invent evidence"
+    risk: "independent Python adapters require local transport and accounting tests; resume guidance cannot invent facts"

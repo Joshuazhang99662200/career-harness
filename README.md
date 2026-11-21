@@ -107,6 +107,7 @@ jobagent --help
 - [岗位搜索与执行说明](skills/job-hunting/references/em-execution.md)
 - [记忆归纳机制](skills/job-hunting/references/memory-dream.md)
 - [隐私说明](PRIVACY.md)
+- [给编码智能体的说明](AGENTS.md)
 
 ## 隐私与使用授权
 

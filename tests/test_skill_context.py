@@ -116,6 +116,60 @@ def test_resume_skill_reuses_a_private_default_mode_and_never_widens_edits() -> 
     assert "截图" in template
 
 
+def test_timeout_clock_is_the_last_progress_change_not_any_row_edit() -> None:
+    closing = section(read("references/em-execution.md"), "## 6. 状态收束")
+    for rule in ("record-history", "处理进度", "已终止", "已超时", "工作日", "create"):
+        assert rule in closing, rule
+    assert "不重置" in closing
+    for paused in ("待你批准", "招聘方来信", "登录失效"):
+        assert paused in closing, paused
+    assert "已废弃" not in closing.split("目标状态")[-1].split("\n")[0]
+
+
+def test_every_bot_timeout_spawns_one_evidence_probe_through_gpt_column() -> None:
+    probe = read("references/em-execution.md")
+    contract = read("references/bitable-contract.md")
+    for item in ("CH10D", "system_timeout", "GPT处理", "追加", "读回", "unobservable"):
+        assert item in probe, item
+    assert "request_id" in contract and "CH10D" in contract
+    assert "先看" in section(probe, "## 6A. 超时后补证")
+
+
+def test_dream_keeps_timeouts_and_employer_rejections_out_of_preferences() -> None:
+    dream = read("references/memory-dream.md")
+    for item in ("system_timeout", "employer_rejected", "已超时", "record-history"):
+        assert item in dream, item
+
+
+def test_ten_workday_skill_is_lazy_gm_only_and_never_writes_memory() -> None:
+    entry = read("SKILL.md")
+    assert "performance-intervention/SKILL.md" in section(entry, "## GM 的任务")
+    assert "performance-intervention" not in section(entry, "## EM 的任务")
+    skill = read("performance-intervention/SKILL.md")
+    for ref in ("metrics.md", "attribution.md", "em-probe.md", "intervention-approval.md"):
+        assert f"references/{ref}" in skill, ref
+        assert (SKILL / "performance-intervention" / "references" / ref).is_file(), ref
+    for rule in ("静默", "两个", "不写 Memory", "本人批准"):
+        assert rule in skill, rule
+
+
+def test_ten_workday_metrics_never_count_unknown_or_immature_as_miss() -> None:
+    metrics = read("performance-intervention/references/metrics.md")
+    for state in ("hit", "miss", "pending", "unknown", "unobservable"):
+        assert f"`{state}`" in metrics, state
+    for rule in ("2 个工作日", "10 个工作日", "不重叠", "Wilson", "0.8", "C", "D"):
+        assert rule in metrics, rule
+
+
+def test_intervention_needs_explicit_approval_and_never_auto_rolls_back() -> None:
+    approval = read("performance-intervention/references/intervention-approval.md")
+    for rule in ("本人", "批准范围", "不等于批准发送", "读回", "回滚", "pending"):
+        assert rule in approval, rule
+    attribution = read("performance-intervention/references/attribution.md")
+    for factor in ("匹配档位", "薪资", "招聘方活跃", "平台", "材料版本", "crossover"):
+        assert factor in attribution, factor
+
+
 def test_lens_routing_links_every_lens_policy() -> None:
     text = read("references/optimizer/lens-routing.md")
     for lens in ("general", "headhunter", "internal-hr", "hiring-manager"):

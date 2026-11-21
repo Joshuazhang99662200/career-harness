@@ -27,5 +27,7 @@
 | EM 执行链路 | 已落地 | [em-execution.md](em-execution.md)：取数、去重入库、按 `批准状态` 执行、回执核对、超时收束、四行汇报 |
 | BOSS / 猎聘 / 智联 / LinkedIn 取数与执行 | 委托外部技能 | EM 用本人选定的 Chrome 插件、云浏览器或 MCP 完成；各平台建设进度见 [em-execution.md](em-execution.md) 第 1 节，勾选不代表已完成实际操作验收 |
 | 凌晨 Dream | 已落地 | GM 按 [memory-dream.md](memory-dream.md) 用 CLI 读写表格；调度由宿主承担 |
+| 超时收束与超时后补证 | 已落地 | [em-execution.md](em-execution.md) 第 6、6A 节：时钟取原生历史里最近一次 `处理进度` 变化或入库时间，交接字段写入不重置；每次超时派生一次 CH10D 补证，回执写 `GPT处理`；宿主实际运行未验收 |
+| 10 日谈 | 仅契约 | [performance-intervention](../performance-intervention/SKILL.md)：10 工作日闭合窗口、两窗持续偏低才提案、本人批准后执行与复核；GM 宿主的定时触发尚未配置与验收 |
 | 本人信号的 Workflow | 已落地 | 四条 Workflow 分别监听 `匹配档位`、`招呼语`、`处理进度`、`批准状态`，各向 Human Signals 追加一行；2026-11-21 经本人授权用 `lark-cli` 启用并读回 |
 | 钉钉多维表格 | 未开始 | 钉钉 CLI 的表格读写尚未核验 |

@@ -107,6 +107,8 @@ jobagent feishu patch --config <private-config.json> --request <patch.json>
 
 `jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。所有 Agent 以同一个 Bot 身份写表，所以操作者是登记的 Bot 就不是本人；Dream 第一步丢弃这些行。历史没有读完时直接失败，不把不完整结果当成已知。
 
+历史还提供两件表里没有的事：每条记录 `create` 那一条的时间就是入库时间，每条 `update` 带改动的字段名与前后值。EM 的超时时钟用的是“最近一次 `处理进度` 变化，否则入库”的时间（见 [EM 执行链路](em-execution.md) 第 6 节），所以超时检查要读历史，不看整行的 `更新时间`。
+
 事件订阅只提示对应宿主刷新当前记录；各侧仍按表里的最新值处理。不能虚构 event consume 命令。
 
 ## 可用性验收

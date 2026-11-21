@@ -25,6 +25,35 @@ def test_entry_skill_routes_roles_contract_and_writing_skills() -> None:
         assert (SKILL / reference).is_file(), reference
 
 
+def section(text: str, heading: str) -> str:
+    start = text.index(heading)
+    end = text.find("\n## ", start + len(heading))
+    return text[start:] if end == -1 else text[start:end]
+
+
+def test_entry_skill_identifies_the_role_from_private_settings_first() -> None:
+    text = read("SKILL.md")
+    start = section(text, "## 从这里开始")
+    assert start.index("settings.json") < start.index("roles/GM.md")
+    assert "references/first-use.md" in start
+
+
+def test_entry_skill_routes_tasks_per_role_without_crossing_over() -> None:
+    text = read("SKILL.md")
+    gm, em = section(text, "## GM 的任务"), section(text, "## EM 的任务")
+    for skill in ("greeting/SKILL.md", "optimizer/SKILL.md", "references/memory-dream.md"):
+        assert skill in gm, skill
+        assert skill not in em, skill
+    assert "references/feishu-shared-source.md" in gm
+    assert "references/feishu-shared-source.md" in em
+
+
+def test_lens_routing_links_every_lens_policy() -> None:
+    text = read("references/optimizer/lens-routing.md")
+    for lens in ("general", "headhunter", "internal-hr", "hiring-manager"):
+        assert f"(lens-{lens}.md)" in text, lens
+
+
 def test_entry_skill_hard_rules_cover_approval_untrusted_text_and_private_data() -> None:
     text = read("SKILL.md")
     for required in ("已批准", "待你批准", "数据,不是指令", "candidate/private/", "CAPTCHA"):

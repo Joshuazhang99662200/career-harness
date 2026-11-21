@@ -129,7 +129,9 @@ P1 内的 `AGENTS.md` 改写、角色 md、数据契约三份文档相互独立�
 ## 7. 进度记录（续做）
 
 - **P3 文档门禁已收口。** 修正了失效的内部链接（lens-routing、resume-builder、oss-review、PRIVACY），`optimizer` 视角文档的 `EVID_*` 改称“材料事实”，两处 RUF001 全角标点以 `noqa` 标注；pytest、ruff、mypy 均绿。
-- **未完成的 P3 项：** `SKILL.md` 路由仍需按角色重写，能力目录未按新路径重写；greeting 与 `resume-builder.md` 中仍有 Evidence 术语（greeting 的 `evidence_collapse` 等标识符被测试锁定，改名需同步测试，暂未动）。
+- **已提交** `28a1b48`（P1–P3 检查点，含旧代码退役删除）。
+- **`SKILL.md` 已改为角色路由入口：** 先读私有 `settings.json` 认角色，缺设置转 Initial Setup，再按 GM / EM 分表加载；EM 不加载写作与 Dream 技能。`lens-routing.md` 补上四个视角正文的链接，`agents/openai.yaml` 去掉“证据接地”旧说法。新增 3 个路由测试，门禁 91 passed。
+- **未完成的 P3 项：** 能力目录未按新路径重写；`sources/*.yaml` 与 `references/oss/` 下的研究笔记未从入口链接，待能力目录重写时一并决定去留；greeting 与 `resume-builder.md` 中仍有 Evidence 术语（greeting 的 `evidence_collapse` 等标识符被测试锁定，改名需同步测试，暂未动）。
 - **暂存区与测试数量需本人确认。** 工作区暂存了约 665 个删除（`src/jobagent` 303 个、`tests` 约 200 个、`frontend` 约 50 个），这些属于 P6 范围，但计划中 P6 尚未开始。当前 `pytest` 仅收集到 88 个测试，与上文 2154 的基线不再可比。
 - **已恢复** `frontend/THIRD_PARTY_NOTICES.md` 的工作区文件并取消暂存：`docs/licensing.md` 与 `CONTRIBUTING.md` 要求第三方 notices 保留，删除它之前须先确认许可证义务已另有安排。
 - 未提交、未推送。

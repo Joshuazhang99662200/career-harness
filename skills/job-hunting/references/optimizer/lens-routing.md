@@ -33,6 +33,8 @@
 
 ## 渐进加载
 
+四个视角的正文:[通用](lens-general.md)、[猎头](lens-headhunter.md)、[企业 HR](lens-internal-hr.md)、[用人经理](lens-hiring-manager.md)。
+
 路由只给出**被选中那一条**的 `policy_path`,由调用方加载该 L1 正文。不预加载其余三条,也不把正文内联进路由结果——这是按需加载的 L2 规则。
 
 ## 跨视角不变式

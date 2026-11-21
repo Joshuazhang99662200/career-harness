@@ -13,6 +13,7 @@
 | 整理记忆资料或实验集 | [Muse 资料模板](muse-memory-handoff-request-2026-11-02.md)、[实验字段模板](memory-experiment-data-template-2026-11-02.md)；它们是资料格式，不是每次运行的补件清单 |
 | 理解代码边界 | [架构](architecture.md)、[领域模型](domain-model.md)、[贡献指南](../CONTRIBUTING.md)、[编码 Agent 说明](../AGENTS.md) |
 | 理解岗位后段与运营 | [Pipeline 工程说明](pipeline-flywheel.md)、[执行协议](../skills/job-hunting/references/pipeline.md)、[旧政策退役说明](pipeline-policy-retirement.md) |
+| 全仓重构审计（Phase 0，只读） | [现状审计](architecture/audit-current-state.md)、[旧存储盘点](architecture/legacy-storage-inventory.md)、[Memory 接线](architecture/memory-wiring-inventory.md)、[消费者依赖图](architecture/consumer-dependency-map.md)；审计结论不代表已实施或已验收 |
 | 核对授权与第三方来源 | [项目许可](licensing.md)、[商业授权](../COMMERCIAL_LICENSE.md)、[上游复用评审](oss-review.md) |
 
 `superpowers/` 与 `reviews/` 保存历史设计和审核记录，按其当时版本理解，不作为当前宿主的执行清单。其他设计稿也不能代替能力目录或宣布尚未接入的能力已落地。被替代的独立修订稿、旧图和一次性渲染脚本可从 Git 历史回查，当前目录只保留仍有用途的材料。

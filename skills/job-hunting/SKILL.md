@@ -5,14 +5,14 @@ description: CareerHarness 轻量求职 Skill：生成侧（GM）、执行侧（
 
 # CareerHarness 求职 Skill
 
-三方通过本人的一张多维表格协作：GM 写，EM 做，本人批准。表格是唯一业务状态源。本页只做路由：先认角色，再按任务加载，不要一次读完整棵树。
+三方通过本人先创建并完成 Schema 验收的一份飞书 Base 协作：GM 写，EM 做，本人批准。Base 是唯一业务状态源。本页只做路由：先认角色，再按任务加载，不要一次读完整棵树。
 
 ## 从这里开始
 
-1. **认角色。** 读取本人私有的 `settings.json`，看当前宿主承担 GM、EM 还是两者兼任。
-2. **缺设置就先接入。** 读不到 `settings.json`，或缺角色、表格坐标、执行方式等当前任务要用的设置：按 [references/first-use.md](references/first-use.md) 在对话里完成 Initial Setup，不自己定默认值。
-3. **读三方约定。** [references/bitable-contract.md](references/bitable-contract.md)：前置依赖、五个语义域、单一 Bot 写入、字段归属、交接留言、私有设置。
-4. **只加载当前角色。** GM 读 [roles/GM.md](roles/GM.md)，EM 读 [roles/EM.md](roles/EM.md)；兼任时两份都读，但每一步只按该步所属角色的规则做。
+1. **先看是否已经有可用 Base。** 读取私有 `settings.json` 和已验证的表映射，已有合格 Base 直接复用。没有时先按 [references/feishu-schema-bootstrap.md](references/feishu-schema-bootstrap.md) 请用户在飞书自行建立同一个 Base 内的五张表，等用户建完提供链接。
+2. **Initial Setup 是业务前置关卡。** 只读验证字段类型、单选项、Bot 和角色映射；有缺口就按照 [references/first-use.md](references/first-use.md) 列出差异，不运行查岗、评级、招呼语、投递或 Dream。材料、私有设置未就位也不能宣布已就绪。
+3. **读三方约定。** [references/bitable-contract.md](references/bitable-contract.md)：单一 Bot 写入身份、五个语义域、字段归属、交接留言、用户独立批准。
+4. **只加载当前角色。** Setup 完成后，GM 读 [roles/GM.md](roles/GM.md)，EM 读 [roles/EM.md](roles/EM.md)；兼任时两份都读，但每一步只按对应角色规则做。
 
 ## 硬性规则
 

@@ -74,8 +74,30 @@ def test_em_writes_only_gpt_column_and_never_drafts_replies() -> None:
 
 def test_initial_setup_asks_each_platform_and_keeps_numbers_private() -> None:
     setup = read("references/first-use.md")
-    for item in ("em-execution.md", "每个平台", "超时", "排除词", "settings.json"):
+    for item in (
+        "em-execution.md", "每个平台", "超时", "排除词", "settings.json",
+        "feishu-schema-bootstrap.md", "简历模板", "技能栈", "事实整理",
+    ):
         assert item in setup, item
+
+
+def test_initial_setup_requires_user_created_base_before_business_skills() -> None:
+    entry = read("SKILL.md")
+    setup = read("references/first-use.md")
+    schema = read("references/feishu-schema-bootstrap.md")
+    assert "references/feishu-schema-bootstrap.md" in entry
+    assert "先在飞书建立 Base" in setup
+    assert setup.index("## 1. 请用户先在飞书建立 Base") < setup.index(
+        "## 6. 业务 Skill 解锁与首次运行"
+    )
+    for table in ("岗位", "材料", "Human Signals", "搜索与匹配记忆", "招呼语表达记忆"):
+        assert f"### {table}" in schema, table
+    for material in ("简历模板", "技能栈", "事实整理"):
+        assert material in setup and material in schema
+    assert "Muse处理" in schema and "GPT处理" in schema
+    assert "批准状态" in schema and "处理进度" in schema
+    assert "四个 Human Signals 自动化 Workflow" in schema
+    assert "不重复要求创建" in setup or "不要求重新建立" in schema
 
 
 def test_greeting_skill_is_v1_2_with_memory_scope_rules() -> None:

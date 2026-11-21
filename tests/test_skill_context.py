@@ -61,6 +61,17 @@ def test_em_execution_chain_covers_every_platform_and_method() -> None:
         assert rule in chain, rule
 
 
+def test_em_writes_only_gpt_column_and_never_drafts_replies() -> None:
+    chain = read("references/em-execution.md")
+    for line in chain.splitlines():
+        if "`Muse处理`" in line:
+            assert "写" not in line.split("`Muse处理`")[0][-6:], line
+            assert "看 `Muse处理`" in line, line
+    assert "回复草稿" not in chain
+    assert "待 GPT 回复" in section(chain, "## 5. 回执核对")
+    assert "`GPT处理`" in section(chain, "## 5. 回执核对")
+
+
 def test_initial_setup_asks_each_platform_and_keeps_numbers_private() -> None:
     setup = read("references/first-use.md")
     for item in ("em-execution.md", "每个平台", "超时", "排除词", "settings.json"):

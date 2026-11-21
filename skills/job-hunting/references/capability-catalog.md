@@ -21,8 +21,11 @@
 | 能力 | 状态 | 说明 |
 |---|---|---|
 | Initial Setup | 已落地 | [first-use.md](first-use.md)，在对话里完成 |
-| JD 评级、招呼语、定向简历 | 已落地 | GM 按 [GM.md](../roles/GM.md)、[招呼语 Skill](../greeting/SKILL.md) 与 [简历优化](../optimizer/SKILL.md) 完成 |
-| 检索岗位、执行已批准动作 | 委托外部技能 | EM 用宿主自己的云端浏览器、MCP 或浏览器插件完成，见 [EM.md](../roles/EM.md) |
+| JD 评级 | 已落地 | GM 按 [GM.md](../roles/GM.md) 的档位口径完成 |
+| 首条招呼 | 已落地 | [jd-greeting v1.2.0](../greeting/SKILL.md)：一条主线、逐条主张追溯、按作用域使用招呼语表达记忆；本人写作偏好只来自 Memory，不写进仓库 |
+| 定向简历 | 已落地 | [简历优化](../optimizer/SKILL.md)：沿用私有设置里的母版与默认模式，不自动扩大可改范围；锁版 PDF 逐页比对与 `jobagent harness check-pdf` 分别报告 |
+| EM 执行链路 | 已落地 | [em-execution.md](em-execution.md)：取数、去重入库、按 `批准状态` 执行、回执核对、超时收束、四行汇报 |
+| BOSS / 猎聘 / 智联 / LinkedIn 取数与执行 | 委托外部技能 | EM 用本人选定的 Chrome 插件、云浏览器或 MCP 完成；各平台建设进度见 [em-execution.md](em-execution.md) 第 1 节，勾选不代表已完成实际操作验收 |
 | 凌晨 Dream | 已落地 | GM 按 [memory-dream.md](memory-dream.md) 用 CLI 读写表格；调度由宿主承担 |
 | 本人信号的 Workflow | 已落地 | 四条 Workflow 分别监听 `匹配档位`、`招呼语`、`处理进度`、`批准状态`，各向 Human Signals 追加一行；2026-11-21 经本人授权用 `lark-cli` 启用并读回 |
 | 钉钉多维表格 | 未开始 | 钉钉 CLI 的表格读写尚未核验 |

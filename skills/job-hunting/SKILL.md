@@ -38,8 +38,7 @@ description: CareerHarness 轻量求职 Skill：生成侧（GM）、执行侧（
 
 | 任务 | 加载 |
 |---|---|
-| 按设置检索岗位、填基本信息 | 只用 [roles/EM.md](roles/EM.md) 与私有 `settings.json`，不另加载 |
-| 执行已批准的动作、回写处理进度 | [roles/EM.md](roles/EM.md) 的“执行已批准的动作” |
+| 按设置检索岗位、填基本信息、执行已批准的动作、核对回执、状态收束、每轮汇报 | [references/em-execution.md](references/em-execution.md) 与私有 `settings.json` |
 | 读写表格、字段白名单、记录历史 | [references/feishu-shared-source.md](references/feishu-shared-source.md) |
 
 EM 不加载写作与 Dream 的技能；需要改招呼语、简历或档位时，写进 `GPT处理` 交给 GM。

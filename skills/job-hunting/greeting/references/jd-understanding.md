@@ -22,7 +22,7 @@ Keep a short internal note:
 
 ## 3. Write a need statement for choosing facts
 
-Internally, form a short `need statement`:
+Internally, form a short `need statement` in the shape `core task → important constraint or capability → outcome the employer would recognise`:
 
 - the work that must get done (verb and object)
 - the important constraint or ability involved
@@ -36,5 +36,6 @@ You may mark one to three short verbatim fragments of the JD as anchors, but the
 - Only nouns are recognised; the result the role owns is missing.
 - Requirements in the JD are written up as the candidate's experience.
 - Clients, organisation or internal processes are inferred before the JD has been read in full.
+- The employer's internal roadmap, product defects, strategy or team priorities are guessed and written into the message.
 - Target-domain terms are forced onto the candidate's past work, creating the impression they have already done the target job.
 - The candidate's *source*-domain details (their old industry's jargon, product names, client types) dominate a message to an unrelated industry, so the reader concludes "wrong background" before seeing the transferable capability.

@@ -26,9 +26,9 @@
 
 ## 采信边界
 
-- 它的 `SKILL.md` 与 `references/` 是**参考资料**,不内联进本项目的运行时指令;运行时指令仍按 [prompt-routing.md](../optimizer/prompt-routing.md) 从本项目策略文档组装
+- 它的 `SKILL.md` 与 `references/` 是**参考资料**,不内联进本项目的运行时指令;运行时指令仍由本项目 optimizer 策略文档组装
 - 交给它渲染的必须是**已通过本项目校验**的变体
-- 它的「重包装」口径略松、「引导给数字」会制造出数字压力;冲突时一律以 [evidence-policy.md](../evidence-policy.md) 与 [quality-gates.md](../optimizer/quality-gates.md) 为准,**没有数字就留白**
+- 它的「重包装」口径略松、「引导给数字」会制造出数字压力;冲突时一律以 [事实边界](../../optimizer/SKILL.md#事实边界) 与 [quality-gates.md](../optimizer/quality-gates.md) 为准,**没有数字就留白**
 - 它自带的 PDF 解析与信息收集流程不使用,本项目由 `candidate ingest` 承担
 - 它会 `git clone` 模板仓库到工作区;模板仓库各有自己的许可证,分发本项目产物时需分别核对
 - 复制其兼容素材时保留 MIT notice 与署名

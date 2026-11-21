@@ -1,1 +1,1 @@
-"""Adapters that let other front ends read the local ledger."""
+"""Adapter for the shared Bitable through the official CLI."""

@@ -4,8 +4,36 @@ from reportlab.pdfgen import canvas
 
 from jobagent.harness.pdf import check_pdf
 from jobagent.schemas.harness import ResumeHeader
-from jobagent.schemas.optimizer import ResumeDiff, ResumeVariant, VerificationReport
-from tests.optimizer.test_review import draft
+from jobagent.schemas.optimizer import (
+    ClaimLedger,
+    ClaimRecord,
+    KeywordCoverageReport,
+    OptimizedResumeItem,
+    ResumeDiff,
+    ResumeVariant,
+    TailoredDraft,
+    VerificationReport,
+    VerificationStatus,
+)
+
+
+def draft():
+    claim = ClaimRecord(
+        claim_id="CLAIM_1",
+        resume_item_id="ITEM_1",
+        text="Led a platform migration.",
+        claim_type="experience",
+        evidence_ids=["EVID_A"],
+        metric_facts=[],
+        verification_status=VerificationStatus.SUPPORTED,
+    )
+    return TailoredDraft(
+        items=[OptimizedResumeItem(
+            id="ITEM_1", section="experience", text=claim.text, evidence_ids=["EVID_A"]
+        )],
+        claim_ledger=ClaimLedger(claims=[claim]),
+        keyword_coverage=KeywordCoverageReport(),
+    )
 
 
 def variant():

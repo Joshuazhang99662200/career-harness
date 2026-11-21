@@ -152,6 +152,63 @@ def test_config_cannot_grant_an_agent_approval_write_permission():
         FeishuConfig.model_validate(config)
 
 
+def pending_settings():
+    config = settings().model_dump()
+    jobs = config["tables"]["jobs"]
+    jobs["writable"]["generation"].append("approval")
+    jobs["pending_approval_value"] = "WAIT"
+    return FeishuConfig.model_validate(config)
+
+
+def test_generation_may_only_mark_a_job_as_awaiting_the_human():
+    transport = Transport()
+    gateway = FeishuGateway(pending_settings(), transport)
+    current = gateway.get("jobs", "recSynthetic")
+    result = gateway.patch(patch(current.content_digest, fields={
+        "assessment": "Grounded synthetic result", "approval": ["WAIT"],
+    }))
+    assert result.verified
+
+
+def test_pending_value_works_on_the_real_approval_column_name():
+    class NamedTransport(Transport):
+        def call(self, argv):
+            if "+field-list" in argv:
+                fields = [dict(field) for field in SCHEMA["fields"]]
+                fields[2]["name"] = "批准状态"
+                return {"fields": fields, "total": 3}
+            return super().call(argv)
+
+    transport = NamedTransport()
+    gateway = FeishuGateway(pending_settings(), transport)
+    current = gateway.get("jobs", "recSynthetic")
+    assert gateway.patch(patch(current.content_digest, fields={
+        "assessment": "Grounded synthetic result", "approval": ["WAIT"],
+    })).verified
+
+
+@pytest.mark.parametrize("changes", [
+    {"fields": {"approval": ["YES"]}},
+    {"role": "execution", "fields": {"approval": ["WAIT"]}},
+])
+def test_no_agent_can_write_a_human_decision_value(changes):
+    transport = Transport()
+    gateway = FeishuGateway(pending_settings(), transport)
+    current = gateway.get("jobs", "recSynthetic")
+    with pytest.raises(ContractValidationError):
+        gateway.patch(patch(current.content_digest, **changes))
+    assert not any("+record-batch-update" in call for call in transport.calls)
+
+
+@pytest.mark.parametrize("role, pending", [("execution", "WAIT"), ("generation", None)])
+def test_only_generation_with_a_pending_value_may_touch_approval(role, pending):
+    config = settings().model_dump()
+    config["tables"]["jobs"]["writable"].setdefault(role, []).append("approval")
+    config["tables"]["jobs"]["pending_approval_value"] = pending
+    with pytest.raises(ValueError):
+        FeishuConfig.model_validate(config)
+
+
 def test_unknown_write_is_not_retried_and_readback_mismatch_is_not_success():
     for fail, ignore, status in [(True, False, "unknown"), (False, True, "unverified")]:
         transport = Transport()

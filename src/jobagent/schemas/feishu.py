@@ -16,14 +16,19 @@ class FeishuTable(ContractModel):
     writable: dict[FeishuRole, list[NonEmptyString]] = Field(default_factory=dict)
     material_fields: list[NonEmptyString] = Field(default_factory=list)
     approved_values: list[NonEmptyString] = Field(default_factory=list)
+    pending_approval_value: NonEmptyString | None = None
 
     @model_validator(mode="after")
     def validate_permissions(self) -> "FeishuTable":
         if len(set(self.fields.values())) != len(self.fields):
             raise ValueError("Field mappings must not alias the same field ID.")
-        for names in self.writable.values():
-            if "approval" in names or not set(names) <= set(self.fields):
-                raise ValueError("Agent writes must name mapped, non-approval fields.")
+        for role, names in self.writable.items():
+            pending_only = role == "generation" and self.pending_approval_value is not None
+            if ("approval" in names and not pending_only) or not set(names) <= set(self.fields):
+                raise ValueError(
+                    "Agent writes must name mapped fields; only generation may set the "
+                    "configured pending approval value."
+                )
         if self.material_fields and (
             not set(self.material_fields) <= set(self.fields)
             or "approval" not in self.fields or not self.approved_values

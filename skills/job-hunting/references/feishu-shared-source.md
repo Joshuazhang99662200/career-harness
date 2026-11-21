@@ -20,7 +20,7 @@
 ```json
 {
   "base_token": "BASE_SYNTHETIC",
-  "identity": "user",
+  "identity": "bot",
   "executable": "/installed/native/lark-cli",
   "timeout_seconds": 30,
   "tables": {
@@ -33,17 +33,18 @@
         "greeting": "fldGreeting"
       },
       "writable": {
-        "generation": ["assessment", "greeting"],
+        "generation": ["assessment", "greeting", "approval"],
         "execution": ["progress"]
       },
       "material_fields": ["greeting"],
-      "approved_values": ["APPROVED_SYNTHETIC"]
+      "approved_values": ["APPROVED_SYNTHETIC"],
+      "pending_approval_value": "PENDING_SYNTHETIC"
     }
   }
 }
 ```
 
-`timeout_seconds` 是传输超时，示例不确定本人业务频次/Batch Size。`identity=user` 的 AI 操作仍可能在飞书历史中显示为本人身份，不能据此推断本人偏好或批准；来源归因需另外核验。
+`timeout_seconds` 是传输超时，示例不确定本人业务频次/Batch Size。GM 与 EM 统一用 `identity=bot` 写表，记录历史里不是该 Bot 的操作就是本人操作。`pending_approval_value` 是本人表里“待你批准”的选项：只有 generation 角色可以把批准字段写成这个值，任何角色都不能写其他批准值或 `你的决定`。
 
 ## 生成侧与执行侧查询
 
@@ -102,15 +103,11 @@ jobagent feishu patch --config <private-config.json> --request <patch.json>
 
 ## 记录历史与事件
 
-生产人工信号来自私有 `FeishuConfig` 里登记、且保持 Disabled 的三条 Workflow。表 ID、Workflow ID 和字段 ID 都来自首次接入时读到的本人 Base，代码不写死某一张 Base。记忆配置必须映射 Jobs、Materials、Human Signals、搜索记忆和招呼语记忆；旧 Records 活动表不是 Human Signals，不作为这项配置的必需表。Materials 保留。三条 Workflow 只在 Human Signals 表追加一行，写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain` 和 `learning_status=pending_history_enrichment`。该行的 record_id 是唯一标识。`memory signal-receive` 只解析本地 `drive.file.bitable_record_changed_v1` fixture，不是生产入口。本仓库不提供建表、改字段类型或启用 Workflow 的命令。
+人类信号来自本人 Base 里的 Signal Workflow：字段被改动时向 Human Signals 表追加一行（`source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain` 等）。表、Workflow 与字段坐标来自 Initial Setup 时读到的本人 Base，代码不写死某一张 Base；本仓库不提供建表、改字段类型或启用 Workflow 的命令。
 
-Dream 写入搜索记忆时，`jd_digest` 是来源岗位 JD 正文的摘要。只有一个来源岗位时，它等于该正文的 `text_digest`。多个来源岗位时，它是这些岗位 record id 及其 JD 摘要的来源上下文摘要。它不是关键词、方向或排除项对象的哈希。来源岗位没有 JD 正文时拒绝发布，不编造摘要。
+`jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。所有 Agent 以同一个 Bot 身份写表，所以操作者是登记的 Bot 就不是本人；Dream 第一步丢弃这些行。历史没有读完时直接失败，不把不完整结果当成已知。
 
-`jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。只有整段历史里该字段恰好一次可读的 before/after，并且操作者能用 open_id 或 union_id 唯一对照名单时，结果才是 matched。仅有显示名、名单对不上、前后值不唯一，都是 unknown，不猜测，也不把 Bot 写成人工偏好。历史没有读完时直接失败，不把不完整结果当成 unknown 后推进状态。
-
-`pending_history_enrichment` 只在状态回写正向核对后改为 `pending_dream` 或 `unknown`。查询失败或回写失败保持原状态。`learned` 只在调用方交来的记忆草稿完成版本写入和回读之后更新。Dream 仍由 GPT 执行，本适配器不调用模型。
-
-事件订阅仅提示对应宿主刷新当前记录；各侧仍按业务条件重新查询。不能把 CLI 事件目录的空缺写成平台没有该事件，也不能虚构 event consume 命令。官方 SDK 的长连接路线见 [Node SDK](https://github.com/larksuite/node-sdk)。本页不证明事件长连接已经启用。
+事件订阅只提示对应宿主刷新当前记录；各侧仍按表里的最新值处理。不能虚构 event consume 命令。
 
 ## 可用性验收
 

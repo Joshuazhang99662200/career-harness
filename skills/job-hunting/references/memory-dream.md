@@ -1,49 +1,38 @@
-# Search Memory Dream — Host Instruction
+# Memory Dream：把本人的修改归纳成 Memory
 
-This reference is the reasoning contract for the GPT/Muse host. The repository service validates, freezes, folds and publishes caller-supplied deltas; it does not call a model or decide whether a behavior is a stable preference.
+GM 在本地时区凌晨执行（见 [GM.md](../roles/GM.md)），用 CLI 直接读写本人的多维表格。EM 下一轮搜索前读取搜索与匹配记忆，GM 写招呼语、简历前读取招呼语表达记忆。
 
-## Observation window
+## 在三方架构中的位置
 
-- Each Search Dream observes the most recent **10 completed business days**, not 10 calendar days.
-- Compute `window_start` and `cutoff` from the host's configured timezone and business calendar. Pass both as offset-aware ISO-8601 timestamps, together with `window_timezone` and `window_business_days=10`, to `DreamBatchStart`.
-- If the host has no holiday calendar, use Monday–Friday as the explicit fallback and record that public holidays were not excluded. Never silently treat 10 calendar days as 10 business days.
-- The batch freezes its window and signal IDs. Later signals wait for a later batch. A resumed batch must reuse its original window; do not recalculate it.
-- Signals outside the window remain in the source unchanged. Falling outside the observation window does not retire or delete an existing Learned Feature.
+- 所有 Agent 以同一个 Bot 身份写表（见 [多维表格契约](bitable-contract.md)），所以第一步就丢弃操作者是该 Bot 的 Signal 行，只归纳本人操作。
+- `批准状态` 的更新也是本人信号，但批准只说明本人同意那一份内容，不直接等于搜索或写作偏好。
+- Memory 由 GM 直接发布，不等本人审批，也不把长 Memory 交给本人审阅。本人驳回或修改中涉及事实不对、不清或越界的，GM 回材料与 JD 查明依据后写入 Memory，必要时同步修正材料 md。
+- Memory 是否有效，看上线后的批准通过率；通过率仍然很低时回头重查 Memory，不额外加自动校验。
 
-## Eligible evidence
+## 读什么
 
-Consume only signals already admitted by the service as:
-- `signal_type=matching_correction`;
-- `memory_domain=search_match`;
-- verified Human operator, not Bot or unknown;
-- source Job belongs to the requested candidate;
-- complete, attributable before/after change;
-- `changed_at` within the frozen window.
+1. 观察窗口与运行时间来自本人私有设置，不在公共规则里写死；窗口按工作日计时就按工作日算，没有节假日历时说明只排除了周末。
+2. 读取上次处理之后、窗口之内的 Human Signals，丢弃 Bot 行和操作者不明的行。
+3. 按 `memory_domain` 分开：搜索与匹配相关的修改（如 `匹配档位`、`处理进度`）进搜索与匹配记忆；`招呼语` 的修改进招呼语表达记忆。两边互不推导。
+4. 没有可用信号就跳过，不调用模型，不发新版本。
 
-Never reinterpret `greeting_revision`, `workflow_outcome`, message feedback, a Bot write, an unknown actor, or an unattributed history row as search preference. Greeting Memory is a separate domain and must use its own publisher. Workflow context is operational trace, not a search feature.
+## 怎么归纳
 
-If there are no eligible signals, skip the model call and do not create a Dream completion request.
+1. 以当前已发布的 Memory 为基线，不只凭本次窗口重建。
+2. 按实际改动的特征聚类（岗位方向、关键词、排除项、表达重点、语气等），每条结论都附上来源 Signal 与岗位记录。
+3. 区分跨岗位、跨日期的重复与同一岗位上的连续修改：同一岗位改了几次，仍只算一个岗位情境。
+4. 先写观察（本人改了什么），再推测动机，并保留其他可能的解释；推测不等于本人明确说过。
+5. 把结论分成稳定重复、特定岗位或行业才成立、一次性、互相矛盾或不明几类，写明观察到的信号数、岗位数、天数。不发明本人没有设定的固定次数门槛。
+6. 跨独立情境重复且没有可比反例时，才作为规则写进 Memory；保留例外与反例，不把一个岗位的修改推广到所有岗位。
+7. 只有本人的修改明确推翻某条规则时才移除它；某条规则在本窗口没再出现，不是删除理由。
+8. 事实错误（经历、数字、归属写错）先回材料 md 核对并修正，再在 Memory 里记下要避免的写法；不把事实纠错当成风格偏好。
 
-## How to reason over the signals
+## 怎么写回
 
-1. Read the current published Search Memory as the baseline. Do not rebuild from the 10-day window alone.
-2. Cluster corrections by the actual feature being changed (role direction, keyword, exclusion or hard preference). Keep each source Signal ID and source Job record attached.
-3. Distinguish a repeated preference across independent Jobs/days from multiple sequential edits on one Job. A chain such as C→B→A is two real transitions, but it is one Job context, not two independent Job samples.
-4. Classify evidence as stable/repeated, role- or industry-specific, one-off/job-specific, contradictory, or unknown. State the observed counts (Signals, distinct Jobs, distinct days) and cite the supporting Signal IDs. Do not invent a numeric frequency threshold that the owner has not configured.
-5. Treat high-frequency behavior as a candidate Learned Feature only when the pattern repeats across independent contexts and is not contradicted by comparable evidence. Preserve exceptions and counterexamples; do not generalize one role's correction to every role.
-6. Translate supported changes into the existing `SignalPreferenceDelta` contract. Every frozen Signal must have exactly one delta; a Signal with no net search change gets empty add/remove lists and a concise reason. Keep evidence references and the pattern summary in `reason`.
-7. Merge deltas into the existing full baseline. Remove a feature only when an attributable correction explicitly reverses it or the owner-approved policy supports retirement. Never remove a feature merely because it did not recur in the latest 10-day window.
-8. Do not change hard constraints, candidate identity, approval, pipeline status, message content or send permissions. GPT proposes search preference deltas; the service owns actor validation, candidate ownership, batch identity and publication.
+- 每个 Memory 表只有一条当前记录：在同一条记录上原地更新完整内容，`version` 加一，写上内容摘要与来源 Signal。
+- 归纳结果与基线相同时不加版本，只把这批信号记为已处理。
+- 写入后读回确认，再把用到的信号标为已学习；写入失败就保留旧版本和未处理的信号，下次再来。
 
-## Publication and no-op behavior
+## 报告
 
-- Complete a batch only with one delta per frozen Signal ID, no missing or extra IDs.
-- The published `jd_digest` is the source job's JD text digest. One source job uses that text digest directly. Several source jobs use a canonical digest of each source record and that job's JD digest. Do not hash the folded keywords, directions or exclusions into this field. A source job with no JD text fails closed.
-- If the folded result is identical to the current baseline, mark the Signals learned without incrementing the Memory version. If there is no baseline and no effective search feature, mark the batch as a no-op without creating an empty Memory row.
-- A no-op is not a failed Dream. Report `no_change=true`, the current version (if any), the learned/pending Signal IDs, and the evidence summary.
-- If attribution, source Job ownership, baseline integrity or write/readback is unknown, fail closed and preserve the previous Memory. Do not manufacture a new feature to make the batch non-empty.
-- The host must hold one candidate-level Dream lease across the entire start → model reasoning → complete lifecycle, and serialize direct Memory publication against that lifecycle. The code's process-wide lock covers independent Service instances in one process only; it is not a distributed lock across CLI processes or machines.
-
-## Required host report
-
-Report the frozen 10-business-day window and timezone, eligible/excluded Signal counts with reasons, distinct Jobs/days, stable and contested feature candidates, baseline changes, no-op or published version, exact source Signal IDs, pending writebacks and recovery point. Do not report a successful learning loop until the next Search Fetch round actually consumes the published version.
+在对话里用几句话说明：本次窗口、用了多少条本人信号与丢弃了多少、新增或修改了哪些规则及依据、发布的版本号或“无变化”。下一轮 EM / GM 实际读到新版本之前，不要说学习闭环已完成。

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "full-stack-ai-jobagent"
-version = "0.4.0"
-description = "CareerHarness: always-on AI job search workflows with human-approved actions"
+version = "0.5.0"
+description = "CareerHarness: a lightweight job-search skill where GM, EM and the person share one Bitable"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "PolyForm-Noncommercial-1.0.0"
@@ -16,25 +16,17 @@ license-files = [
 dependencies = [
   "pydantic>=2.11,<3",
   "pypdf>=6.14,<7",
-  "PyYAML>=6,<7",
   "typer>=0.16,<1",
-  # Windows ships no IANA time-zone database; zoneinfo needs it for POLL_TIMEZONE.
-  "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [project.scripts]
 jobagent = "jobagent.cli.app:app"
 
 [project.optional-dependencies]
-# Resume rendering (`jobagent optimizer render`); layout only, never content.
+# Resume rendering (`jobagent harness render`); layout only, never content.
 render = [
   "python-docx>=1.1,<2",
   "reportlab>=5,<6",
-]
-# Model-backed extraction (`candidate onboard --provider claude`); the default
-# `--provider agent` hands reasoning to the host and needs no SDK.
-reasoning = [
-  "anthropic>=0.40,<3",
 ]
 dev = [
   "mypy>=1.17,<2",
@@ -42,7 +34,6 @@ dev = [
   "python-docx>=1.1,<2",
   "reportlab>=5,<6",
   "ruff>=0.12,<1",
-  "types-PyYAML>=6,<7",
 ]
 
 [tool.pytest.ini_options]
@@ -66,12 +57,6 @@ module = ["pypdf", "pypdf.*"]
 follow_imports = "skip"
 
 # Optional rendering dependencies ship no type information.
-# Optional SDK: the adapter types its client as Any, so the gate must not
-# depend on the 'reasoning' extra being installed.
-[[tool.mypy.overrides]]
-module = ["anthropic", "anthropic.*"]
-ignore_missing_imports = true
-
 [[tool.mypy.overrides]]
 module = ["reportlab", "reportlab.*", "docx", "docx.*"]
 ignore_missing_imports = true

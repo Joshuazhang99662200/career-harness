@@ -1,1 +1,1 @@
-"""Unified derived memory, without facts, approvals, or external execution."""
+"""Record-history attribution used by the Bitable gateway."""

@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from jobagent.errors import ContractValidationError, JobAgentError
 from jobagent.schemas.common import ContractModel
-from jobagent.storage.database import Database
 
 ModelT = TypeVar("ModelT", bound=ContractModel)
 
@@ -22,13 +21,6 @@ def read_model(path: Path, model: type[ModelT]) -> ModelT:
             "Private input does not satisfy the contract.",
             details={"file_name": path.name, "contract": model.__name__},
         ) from error
-
-
-def open_database(path: Path) -> Database:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    database = Database(path)
-    database.migrate()
-    return database
 
 
 def fail(error: JobAgentError) -> Never:

@@ -1,4 +1,4 @@
-"""CLI for portable progress and artifact checkpoints."""
+"""CLI for the CV PDF: render a verified variant and check the PDF text."""
 
 import json
 from pathlib import Path
@@ -9,99 +9,16 @@ from pydantic import ValidationError
 
 from jobagent.errors import ContractValidationError, JobAgentError
 from jobagent.harness.pdf import check_pdf
-from jobagent.harness.reporting import build_report
-from jobagent.harness.service import HarnessService
-from jobagent.schemas.applications import ApplicationPackage
-from jobagent.schemas.harness import Host, ResumeHeader, RunPhase
+from jobagent.schemas.harness import ResumeHeader
 from jobagent.schemas.optimizer import ResumeVariant
-from jobagent.storage.application_repository import SqliteApplicationAuditRepository
-from jobagent.storage.database import Database
 
-harness_app = typer.Typer(help="Portable workflow state; no approval or delivery actions.")
-Workspace = Annotated[Path, typer.Option("--workspace")]
-Session = Annotated[str, typer.Option("--session-id")]
+harness_app = typer.Typer(help="Render a CV PDF and check that its text matches the variant.")
 
 
 def _fail(error: JobAgentError | ValidationError) -> Never:
     message = error.message if isinstance(error, JobAgentError) else "Invalid run contract."
     typer.echo(json.dumps({"error": {"message": message}}))
     raise typer.Exit(1)
-
-
-@harness_app.command("start")
-def start(
-    candidate_id: str, host: Host, session_id: Session, workspace: Workspace = Path(".")
-) -> None:
-    try:
-        typer.echo(
-            HarnessService(workspace).start(candidate_id, host, session_id).model_dump_json()
-        )
-    except (JobAgentError, ValidationError) as error:
-        _fail(error)
-
-
-@harness_app.command("status")
-def status(run_id: str, workspace: Workspace = Path(".")) -> None:
-    try:
-        typer.echo(HarnessService(workspace).status(run_id).model_dump_json(indent=2))
-    except JobAgentError as error:
-        _fail(error)
-
-
-@harness_app.command("resume")
-def resume(
-    run_id: str,
-    host: Host,
-    session_id: Session,
-    workspace: Workspace = Path("."),
-    recover: Annotated[bool, typer.Option("--recover")] = False,
-) -> None:
-    try:
-        typer.echo(
-            HarnessService(workspace)
-            .resume(
-                run_id,
-                host,
-                session_id,
-                recover=recover,
-            )
-            .model_dump_json()
-        )
-    except (JobAgentError, ValidationError) as error:
-        _fail(error)
-
-
-@harness_app.command("checkpoint")
-def checkpoint(
-    run_id: str,
-    phase: RunPhase,
-    session_id: Session,
-    workspace: Workspace = Path("."),
-    artifact: Annotated[Path | None, typer.Option("--artifact")] = None,
-    contract: Annotated[str | None, typer.Option("--contract")] = None,
-) -> None:
-    try:
-        typer.echo(
-            HarnessService(workspace)
-            .checkpoint(
-                run_id,
-                session_id,
-                phase,
-                artifact,
-                contract,
-            )
-            .model_dump_json()
-        )
-    except (JobAgentError, ValidationError) as error:
-        _fail(error)
-
-
-@harness_app.command("release")
-def release(run_id: str, session_id: Session, workspace: Workspace = Path(".")) -> None:
-    try:
-        typer.echo(HarnessService(workspace).release(run_id, session_id).model_dump_json())
-    except JobAgentError as error:
-        _fail(error)
 
 
 @harness_app.command("check-pdf")
@@ -129,36 +46,6 @@ def check_pdf_command(
         _fail(error)
     except OSError:
         typer.echo(json.dumps({"error": {"message": "Variant file unavailable."}}))
-        raise typer.Exit(1) from None
-
-
-@harness_app.command("report")
-def report(
-    run_id: str,
-    workspace: Workspace = Path("."),
-    database: Annotated[Path, typer.Option("--database")] = Path(".jobagent/jobagent.sqlite3"),
-) -> None:
-    try:
-        service = HarnessService(workspace)
-        run = service.status(run_id)
-        packages = []
-        for artifact in run.artifacts:
-            if artifact.contract == "ApplicationPackage":
-                path = service.workspace / artifact.path
-                if service._artifact(path, artifact.contract) != artifact:
-                    raise ValueError("Saved application artifact changed")
-                packages.append(ApplicationPackage.model_validate_json(path.read_bytes()))
-        path = database if database.is_absolute() else service.workspace / database
-        audits = (
-            SqliteApplicationAuditRepository(Database(path)).list_audits() if path.exists() else []
-        )
-        typer.echo(build_report(run_id, packages, audits).model_dump_json(indent=2))
-    except (JobAgentError, ValidationError) as error:
-        _fail(error)
-    except (OSError, ValueError):
-        typer.echo(
-            json.dumps({"error": {"message": "Saved application artifact changed or unavailable."}})
-        )
         raise typer.Exit(1) from None
 
 

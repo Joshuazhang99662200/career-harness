@@ -191,6 +191,11 @@ class FeishuGateway:
             if (field.get("name") in {"招呼语", "邮件正文", "准确全文"}
                     and name not in table.material_fields):
                 reject("Material writes require an explicit current-approval guard configuration.")
+            if name == "approval":
+                if value != [table.pending_approval_value]:
+                    reject("Agents may only mark a job as awaiting the human's decision.")
+                _reject_cell(field, name, value, pending=True)
+                continue
             _reject_cell(field, name, value)
         current = self.get(request.table, request.record_id)
         if current.content_digest != request.expected_digest:
@@ -338,8 +343,11 @@ class FeishuGateway:
         return receipt
 
 
-def _reject_cell(field: dict[str, Any], name: str, value: JsonValue) -> None:
-    if name == "approval" or field.get("name") in {"批准状态", "你的决定"}:
+def _reject_cell(
+    field: dict[str, Any], name: str, value: JsonValue, *, pending: bool = False
+) -> None:
+    human_only = {"你的决定"} if pending else {"批准状态", "你的决定"}
+    if (name == "approval" and not pending) or field.get("name") in human_only:
         reject("Human decision fields cannot be changed by an agent.")
     kind = field.get("type")
     if kind == "text":

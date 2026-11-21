@@ -3,7 +3,7 @@ name: jd-greeting
 description: Draft, rewrite or review the first outreach message a job seeker sends to a recruiter or hiring manager about a specific job posting (JD) — greeting, intro note, InMail, opening chat line — for any profession, industry, language or channel. Use when the user shares a JD and asks for a greeting / first message / 招呼语 / 打招呼, wants one revised, or wants a batch drafted. Grounded only in candidate facts the host or user supplies. Does not store memory, scrape jobs or send messages.
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # JD Greeting
@@ -54,12 +54,14 @@ See [host-contract.md](references/host-contract.md) for the full input and outpu
 ## Hard rules
 
 - Do not turn what the JD says the ideal candidate has into things the candidate has done.
+- Do not conflate past experience, current employment status and future intentions.
 - Do not invent employers, projects, features, clients, numbers, years, degrees, awards, launch status, business results, or knowledge of the employer's internal affairs.
 - Do not upgrade "contributed" to "led", turn team results into personal ones, present offline metrics as live performance, present correlation as cause, or change how a metric is defined.
 - "Understands the principles", "uses the tool", "built a prototype alone" and "shipped to production" are different levels of capability. Keep them distinct.
 - Do not impose a default length, form of address, technical vocabulary, sign-off or favourite experience. Follow the user's and channel's constraints; otherwise be clear, brief and natural.
 - Preferences shape how the message is written. They are never sources of facts.
 - The message must not read as a JD analysis, a lecture, flattery, a list of achievements, or several unrelated projects stitched together.
+- No self-rating ("perfect match", "highly suitable"), no third-party voice ("this JD is a strong fit"), and no volunteered list of shortcomings in a first message. Keep real gaps in the internal note.
 - Never send anything or take external actions. Output is always a draft for the user to decide on.
 
 ## Default output

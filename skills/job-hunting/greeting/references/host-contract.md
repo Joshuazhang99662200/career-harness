@@ -16,6 +16,25 @@ Try to identify the following. Use whatever is present, and mark what is missing
 
 These are semantic labels, not required field names, APIs, folders or back ends. In CareerHarness the host reads `job` from the 岗位 table, `candidate` from the materials md and original CV, and `preferences` from the current 招呼语表达记忆.
 
+## Host-owned context and memory (CareerHarness)
+
+In CareerHarness the host reads and maintains these, not this skill:
+
+- candidate facts and the original CV in the `材料` table (one CV plus one materials md);
+- the current job in the `岗位` table;
+- the person's edits in `Human Signals`;
+- role-selection preferences in `搜索与匹配记忆`;
+- writing preferences in `招呼语表达记忆`.
+
+Rules for using them:
+
+1. Facts and preferences stay separate. A preference may change which fact is chosen and how it is worded; it never creates a fact.
+2. Apply only preferences whose scope fits this request: general, a role category, or this job only.
+3. The person's latest explicit instruction in the conversation overrides an older preference.
+4. A row written by the bot or any agent, a synthetic or test row, or an unconfirmed signal is not a human preference.
+5. One local correction stays local to that job unless the person says it is general.
+6. Do not create a second memory system inside this skill.
+
 ## Source strength
 
 File type does not decide which fact wins. Follow the confirmation status the host gives, the user's latest corrections and how credible each source is. When values or employment records conflict, first drop fields already marked invalid; do not simply prefer whatever appeared last. Unconfirmed material can only be stated cautiously or marked `unverified`; never mark it `confirmed`.

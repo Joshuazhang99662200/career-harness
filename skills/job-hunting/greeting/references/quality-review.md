@@ -55,6 +55,22 @@ L1 Claim、L2 Mechanism、L3 Validation只是理解证明深度的可选层次�
 
 两项检查均引用准确连续原文及来源能/不能支持的范围。局部去掉无源关系、收窄或重组主线后重新核实；不让“启发、推动”等词继续携带同一未经确认的因果。只有发生实际表达或针对性问题时才追加相应质量否决，不机械全部否决。Overproduction、删除不补位、事实与准确全文人工审批门禁保持有效。
 
+## A4. Claim trace
+
+For every substantive statement in the final message, keep an internal trace. It is a working note for GM, not a stored contract, and it never goes into the message:
+
+| Item | Meaning |
+|---|---|
+| excerpt | Exact continuous excerpt from the final message |
+| source | Where in the materials md or original CV it comes from (a section name or a short quote; never an invented ID) |
+| support | supported, partial, unsupported or contradicted |
+| scope note | Responsibility, metric, date or domain boundary that must survive |
+| action | Keep, narrow or remove |
+
+Do not leave a claim out of the trace because it is phrased as a credential, a role, a client, a delivery status or a result. Anything not supported is narrowed or removed before the draft is written to `招呼语`.
+
+If a separate reviewer actually runs, give it only the original JD, the materials md and corrections, the applicable preferences, the exact draft and this trace. Do not pass the drafter's self-assessment.
+
 ## B. Seven-dimension content review (works across professions)
 
 | Dimension | Core question | Typical failure |

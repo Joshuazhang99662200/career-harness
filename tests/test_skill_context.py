@@ -49,6 +49,40 @@ def test_entry_skill_routes_tasks_per_role_without_crossing_over() -> None:
     assert "references/feishu-shared-source.md" in em
 
 
+def test_em_execution_chain_covers_every_platform_and_method() -> None:
+    em, chain = read("roles/EM.md"), read("references/em-execution.md")
+    assert "../references/em-execution.md" in em
+    assert "references/em-execution.md" in section(read("SKILL.md"), "## EM 的任务")
+    for platform in ("BOSS", "猎聘", "智联", "LinkedIn"):
+        assert platform in chain, platform
+    for method in ("Chrome 插件", "云浏览器", "MCP"):
+        assert method in chain, method
+    for rule in ("已批准", "不重复发送", "更新时间", "完成", "未完成", "需本人", "恢复点"):
+        assert rule in chain, rule
+
+
+def test_initial_setup_asks_each_platform_and_keeps_numbers_private() -> None:
+    setup = read("references/first-use.md")
+    for item in ("em-execution.md", "每个平台", "超时", "排除词", "settings.json"):
+        assert item in setup, item
+
+
+def test_greeting_skill_is_v1_2_with_memory_scope_rules() -> None:
+    assert 'version: "1.2.0"' in read("greeting/SKILL.md")
+    host = read("greeting/references/host-contract.md")
+    for domain in ("岗位", "材料", "Human Signals", "搜索与匹配记忆", "招呼语表达记忆"):
+        assert domain in host, domain
+    assert "Do not create a second memory system" in host
+
+
+def test_resume_skill_reuses_a_private_default_mode_and_never_widens_edits() -> None:
+    router = read("optimizer/SKILL.md")
+    assert "settings.json" in router
+    assert "不自动扩大" in router
+    template = read("references/optimizer/template-tailoring.md")
+    assert "截图" in template
+
+
 def test_lens_routing_links_every_lens_policy() -> None:
     text = read("references/optimizer/lens-routing.md")
     for lens in ("general", "headhunter", "internal-hr", "hiring-manager"):

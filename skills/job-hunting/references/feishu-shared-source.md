@@ -44,7 +44,7 @@
 }
 ```
 
-`timeout_seconds` 是传输超时，示例不确定本人业务频次/Batch Size。GM 与 EM 统一用 `identity=bot` 写表，记录历史里不是该 Bot 的操作就是本人操作。`pending_approval_value` 是本人表里“待你批准”的选项：只有 generation 角色可以把批准字段写成这个值，任何角色都不能写其他批准值或 `你的决定`。
+`timeout_seconds` 是传输超时。GM 与 EM 统一用 `identity=bot` 写表。原生历史需要将操作者明确归因为本人才能参与学习。`pending_approval_value` 是本人表里“待你批准”的选项，只有 generation 角色可写此值。
 
 ## 生成侧与执行侧查询
 
@@ -103,7 +103,7 @@ jobagent feishu patch --config <private-config.json> --request <patch.json>
 
 ## 记录历史与事件
 
-人类信号来自本人 Base 里的 Signal Workflow：字段被改动时向 Human Signals 表追加一行（`source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain` 等）。表、Workflow 与字段坐标来自 Initial Setup 时读到的本人 Base，代码不写死某一张 Base；本仓库不提供建表、改字段类型或启用 Workflow 的命令。
+人类信号来自本人 Base 里的 Signal Workflow。字段变更时向 Human Signals 追加一行。表、Workflow 与字段坐标由 [Initial Setup](first-use.md) 通过官方 CLI 创建或复用后读回，并保存到私有配置。
 
 `jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。所有 Agent 以同一个 Bot 身份写表，所以操作者是登记的 Bot 就不是本人；Dream 第一步丢弃这些行。历史没有读完时直接失败，不把不完整结果当成已知。
 

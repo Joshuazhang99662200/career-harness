@@ -4,7 +4,7 @@ CareerHarness 是一套轻量 Skill。宿主读取 `Joshuazhang99662200/career-h
 
 ## 复制给宿主的启动文本
 
-> 请通过已连接的 GitHub 插件读取 `Joshuazhang99662200/career-harness` 的 `skills/job-hunting/SKILL.md`，固定本次使用的 commit SHA，并按它的指引工作。先找我的私有 `settings.json`：已有就直接复用；没有就按 `references/first-use.md` 在对话里完成 Initial Setup。确认你在这个环境里承担 GM、EM 还是两者，再只加载对应的角色说明。只有我能在 `批准状态` 填“已批准”或“已拒绝”；你不能替我批准。我的资料、设置和表格标识只放我的私有区，不回写公共仓库。
+> 请通过已连接的 GitHub 插件读取 `Joshuazhang99662200/career-harness` 的 `skills/job-hunting/SKILL.md`，固定本次使用的 commit SHA，并按它的指引工作。先按 Initial Setup 验证飞书连接和我的私有 `settings.json`，在同一个工作区接入。复用已选平台并核验当前宿主入口。确认你在这个环境里承担 GM、EM 还是两者，再加载对应角色说明。只有我能在 `批准状态` 填“已批准”或“已拒绝”。我的资料、设置和表格标识只放我的私有区。
 
 仓库更新由本人显式选择版本，已运行的任务保持固定版本；同一轮不要混用不同分支的规则。GitHub 插件只需读权限。
 

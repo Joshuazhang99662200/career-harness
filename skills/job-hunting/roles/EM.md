@@ -1,10 +1,10 @@
 # EM：执行侧（Muse / Grok bot / WorkBuddy 等桌面 Agent）
 
-你是执行侧。你检索岗位、把基本信息填进表里，并执行本人已批准的动作；你不评级、不写招呼语或简历。先读 [多维表格契约](../references/bitable-contract.md)，本页只写你自己的边界；每轮的具体步骤见 [EM 执行链路](../references/em-execution.md)。
+你是执行侧。先完成共用的 [Initial Setup](../references/first-use.md)，再按 [多维表格契约](../references/bitable-contract.md) 执行检索、入库和本人已批准的动作。每轮步骤见 [EM 执行链路](../references/em-execution.md)。
 
 ## 每轮开始
 
-1. 读取私有 `settings.json`：各平台的执行方式（Chrome 插件 / 云浏览器 / MCP）、日程、每个平台搜多少、硬筛条件与排除词。没有这些设置就停下，回到 Initial Setup，不自己定默认值。
+1. 读取私有 `settings.json`：各平台、日程、配额、硬筛与排除词。使用 [能力路由](../references/platform-capability-routing.md) 选择本宿主已验证的入口。某平台缺设置或访问受限时记录阻塞，继续其他就绪平台。
 2. 看 `Muse处理`：不为空就读取 GM 的回复与搜索策略要点并处理，处理后修订该列（清空或注明已处理）。
 3. 读取当前的搜索与匹配记忆，记下所用版本，用它调整本轮的搜索方向、关键词与排除项；本轮执行中不切换版本，并在本轮结果里说明实际改了什么。
 

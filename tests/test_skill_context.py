@@ -72,24 +72,28 @@ def test_em_writes_only_gpt_column_and_never_drafts_replies() -> None:
     assert "`GPT处理`" in section(chain, "## 5. 回执核对")
 
 
-def test_initial_setup_asks_each_platform_and_keeps_numbers_private() -> None:
+def test_initial_setup_asks_only_for_platform_choices_and_keeps_numbers_private() -> None:
     setup = read("references/first-use.md")
     for item in (
         "em-execution.md", "每个平台", "超时", "排除词", "settings.json",
-        "feishu-schema-bootstrap.md", "简历模板", "技能栈", "事实整理",
+        "platform-capability-routing.md", "简历模板", "技能栈", "事实整理",
+        "routing_mode = auto", "多选", "小红书", "ATS",
     ):
         assert item in setup, item
+    assert "platform-capability-routing.md" in read("references/em-execution.md")
 
 
-def test_initial_setup_requires_user_created_base_before_business_skills() -> None:
+def test_initial_setup_runs_shared_automatic_bootstrap_before_either_role() -> None:
     entry = read("SKILL.md")
     setup = read("references/first-use.md")
     schema = read("references/feishu-schema-bootstrap.md")
-    assert "references/feishu-schema-bootstrap.md" in entry
-    assert "先在飞书建立 Base" in setup
-    assert setup.index("## 1. 请用户先在飞书建立 Base") < setup.index(
-        "## 6. 业务 Skill 解锁与首次运行"
-    )
+    bootstrap = read("references/feishu-provisioning.md")
+    start = section(entry, "## 从这里开始")
+    assert start.index("references/first-use.md") < start.index("roles/GM.md")
+    assert start.index("references/first-use.md") < start.index("roles/EM.md")
+    assert "feishu-provisioning.md" in setup
+    assert "jobagent setup feishu-plan" in bootstrap and "+workflow-enable" in bootstrap
+    assert setup.index("## 1. 检查连接") < setup.index("## 5. 开始使用")
     for table in ("岗位", "材料", "Human Signals", "搜索与匹配记忆", "招呼语表达记忆"):
         assert f"### {table}" in schema, table
     for material in ("简历模板", "技能栈", "事实整理"):
@@ -97,7 +101,15 @@ def test_initial_setup_requires_user_created_base_before_business_skills() -> No
     assert "Muse处理" in schema and "GPT处理" in schema
     assert "批准状态" in schema and "处理进度" in schema
     assert "四个 Human Signals 自动化 Workflow" in schema
-    assert "不重复要求创建" in setup or "不要求重新建立" in schema
+    assert "已有符合条件的资源直接复用" in schema
+
+
+def test_em_uses_only_table_approval_and_current_materials_for_external_send() -> None:
+    chain = read("references/em-execution.md")
+    approval = section(chain, "## 4. 执行已批准的动作")
+    assert "本人在飞书表格" in approval
+    assert "视为批准" not in approval
+    assert "已授权" in approval
 
 
 def test_greeting_skill_is_v1_2_with_memory_scope_rules() -> None:

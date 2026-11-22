@@ -1,18 +1,7 @@
-# Initial Setup · 飞书 Base 最低 Schema（用户自行建立）
+# Initial Setup · 飞书 Base Schema
 
-> 这是一份 **一个飞书 Base 内包含五张数据表** 的建表清单，不是要用户创建五个互不关联的 Base。第一次接入先建表，再运行 CareerHarness。已有符合条件的 Base 直接复用，不要求重新建立或迁移。
->
-> 这是供新用户安装的通用字段契约；表名、ID、Base 链接、Bot 标识及用户材料均留在个人私有配置，不得写成仓库全局值。
-
-## 使用者要做的事
-
-1. 在飞书新建一个多维表格（Base），或打开自己已有的 Base。
-2. 在同一个 Base 内按下列五个语义域创建工作表，**字段名称、字段类型和单选值保持一致**。文本首列可以兼作主字段。
-3. 给运行 CareerHarness 的应用/Bot 授予必要的 Base 访问权限；本人保留实际审批权。所有 Agent 写操作应使用同一个 Bot 身份，避免人类 Trace 混入 Bot 操作。
-4. 创建完成后，把 **Base 链接** 交给 Initial Setup Agent。不要在聊天里传 access token、appSecret、个人简历内容。
-5. Agent 只读核对 schema 并展示差异；缺失/类型不对由本人修正。验收通过才初始化材料、配置 GM/EM、运行 Skill。
-
-**零重复询问：** 已在私有配置里验证过同一 Base 的用户，不重复要求创建；仅检查本次 Skill 所需字段的变化。旧 Base 不因字段顺序不同而失败，类型与已选平台需要的选项才是关键。用户未选择 LinkedIn 等平台时，不因没有其选项而阻塞。不得默默创建第二套业务表。
+本清单是 [Initial Setup](first-use.md) 的 Schema 来源。首次接入在同一份飞书 Base 内自动补齐五张数据表及四条 Workflow，已有符合条件的资源直接复用。
+真实资源 ID、Base 链接、Bot 标识及用户材料存入个人私有配置。每表第一列是文本主字段。表中字段行由 `jobagent setup feishu-plan` 读取，变更类型、枚举或表结构时直接更新本表并运行契约测试。
 
 ## 五张表与字段定义
 
@@ -31,7 +20,7 @@
 | `岗位ID` | 文本（首列） |
 | `岗位名` | 文本 |
 | `公司` | 文本 |
-| `招聘平台` | 单选：BOSS/智联/猎聘/ATS/小红书；LinkedIn 仅在用户启用时追加 |
+| `招聘平台` | 单选：BOSS/智联/猎聘/ATS/小红书/LinkedIn |
 | `原岗位链接` | 网址或文本 |
 | `薪资原文` | 文本 |
 | `JD摘要` | 文本 |
@@ -131,7 +120,7 @@
 
 ## 四个 Human Signals 自动化 Workflow
 
-用户在五张表建好、Bot 身份已确认之后，按照 Base 官方自动化功能建立以下四条监听链：**岗位表指定字段发生变化 → Human Signals 追加记录**。每条至少写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain`、`learning_status`。前后值、操作者身份与真实变更时点应由原生修改历史核实；Workflow 本身没有提供的不要猜测。
+五张表读回通过并确认 Bot 写入权限后，Initial Setup 使用 Base 官方 Workflow 命令建立以下四条监听链。岗位表指定字段发生变化时，向同一 Base 的 Human Signals 追加一行。每条写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain`、`learning_status`。前后值、操作者身份与真实变更时点由原生修改历史核实。
 
 | 监听字段 | signal_type | memory_domain |
 |---|---|---|
@@ -140,7 +129,7 @@
 | `招呼语` | `greeting_revision` | `greeting` |
 | `匹配档位` | `matching_correction` | `search_match` |
 
-上述四条必须逐条验收实际新增的 Signal。Dream 仅消费经过操作者历史核查的用户动作；Bot 动作、未知操作者不得直接形成个人偏好。Workflow 的创建或启用由本人完成或明确授权；Agent 不得越权创建或启用。
+四条 Workflow 均须逐条验收实际新增的 Signal。Dream 仅消费经原生历史确认的本人动作。首次自动配置授权覆盖 Workflow 创建与启用。
 
 ## 10 日谈与 48 小时运营不另起核心 Schema
 

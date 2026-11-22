@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Never, TypeVar
 
 import typer
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from jobagent.errors import ContractValidationError, JobAgentError
-from jobagent.schemas.common import ContractModel
 
-ModelT = TypeVar("ModelT", bound=ContractModel)
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def read_model(path: Path, model: type[ModelT]) -> ModelT:

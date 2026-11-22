@@ -9,8 +9,8 @@ description: CareerHarness 轻量求职 Skill：生成侧（GM）、执行侧（
 
 ## 从这里开始
 
-1. **先看是否已经有可用 Base。** 读取私有 `settings.json` 和已验证的表映射，已有合格 Base 直接复用。没有时先按 [references/feishu-schema-bootstrap.md](references/feishu-schema-bootstrap.md) 请用户在飞书自行建立同一个 Base 内的五张表，等用户建完提供链接。
-2. **Initial Setup 是业务前置关卡。** 只读验证字段类型、单选项、Bot 和角色映射；有缺口就按照 [references/first-use.md](references/first-use.md) 列出差异，不运行查岗、评级、招呼语、投递或 Dream。材料、私有设置未就位也不能宣布已就绪。
+1. **先恢复或自动配置工作区。** 读取私有 `settings.json` 和已验证的表映射。GM 与 EM 都走同一份 [Initial Setup](references/first-use.md)。已有已验收的 Base 通过健康检查后直接复用。第一次使用按授权发现、补齐或创建一个 Base 并完成触发验收。
+2. **确认材料、平台和权限。** 首次完成材料与平台选择，自动探测宿主可用入口。平台受限只影响该平台。已有合格设置沿用。Dream 的调度与实际运行另行验证。
 3. **读三方约定。** [references/bitable-contract.md](references/bitable-contract.md)：单一 Bot 写入身份、五个语义域、字段归属、交接留言、用户独立批准。
 4. **只加载当前角色。** Setup 完成后，GM 读 [roles/GM.md](roles/GM.md)，EM 读 [roles/EM.md](roles/EM.md)；兼任时两份都读，但每一步只按对应角色规则做。
 

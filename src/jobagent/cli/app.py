@@ -6,10 +6,11 @@ import typer
 
 from jobagent.cli.feishu import feishu_app
 from jobagent.cli.harness import harness_app
+from jobagent.cli.setup import setup_app
 
 app = typer.Typer(
     name="jobagent",
-    help="CareerHarness helpers: shared Bitable access and CV PDF rendering.",
+    help="CareerHarness helpers: Initial Setup, shared Bitable access, and CV PDF rendering.",
     no_args_is_help=True,
 )
 
@@ -29,6 +30,7 @@ def main() -> None:
 
 app.add_typer(feishu_app, name="feishu")
 app.add_typer(harness_app, name="harness")
+app.add_typer(setup_app, name="setup")
 
 if __name__ == "__main__":
     app()

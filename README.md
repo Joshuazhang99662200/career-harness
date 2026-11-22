@@ -49,7 +49,7 @@ CareerHarness 用一张飞书多维表格，把岗位搜索、内容准备、人
 
 ## 第一次使用
 
-先把个人材料、求职偏好、飞书多维表格和工具入口接好。配置完成后，日常使用就不用反复设置。
+授权飞书后，CareerHarness 会自动寻找现有求职工作区。首次使用会准备所需的五张表和操作记录自动化，已有工作区会优先复用。任一角色都可以先开始。
 
 <p align="center">
   <img src="docs/assets/readme/initial-setup.png" alt="个人材料、求职偏好、飞书多维表格与智能体工具的初始化设置" width="900" />
@@ -59,19 +59,20 @@ CareerHarness 用一张飞书多维表格，把岗位搜索、内容准备、人
 
 - 一份简历，以及经历、技能和成果等个人材料；
 - 目标岗位、工作城市、薪资底线和偏好平台；
-- 一张自己的飞书多维表格；
 - 可使用的个人 AI 助手和内容生成工具。
 
 ### 开始使用
 
 1. 安装并授权飞书 CLI（`lark-cli`）。
-2. 让你的 AI 助手读取[技能入口](skills/job-hunting/SKILL.md)，按[首次设置说明](skills/job-hunting/references/first-use.md)完成接入。
-3. 如需在本地渲染和核对简历文件，再安装仓库附带的小工具：
+2. 让 AI 助手读取[技能入口](skills/job-hunting/SKILL.md)，按[首次设置说明](skills/job-hunting/references/first-use.md)完成自动配置。
+3. 从 BOSS 直聘、猎聘、智联招聘、LinkedIn、企业招聘官网 / ATS 和小红书中选择想使用的平台，也可以跳过。AI 助手会测试可用入口，显示哪些已可搜索、需要登录或暂不可用。
+
+宿主使用以下命令准备 Setup 小工具。需要本地渲染简历时安装 `.[render]`。
 
 ```bash
 git clone https://github.com/Joshuazhang99662200/career-harness.git
 cd career-harness
-python -m pip install -e ".[render]"
+python -m pip install -e .
 jobagent --help
 ```
 
@@ -116,7 +117,7 @@ jobagent --help
 
 ## 小工具与项目说明
 
-仓库附带的小工具主要做两件事：按字段权限读写飞书多维表格，以及渲染、核对简历 PDF / Word。具体命令和当前能力见[能力目录](skills/job-hunting/references/capability-catalog.md)。
+仓库附带的小工具负责首次配置对账、平台路由、飞书字段白名单与简历渲染核对。具体命令见[能力目录](skills/job-hunting/references/capability-catalog.md)。
 
 更多细节：
 

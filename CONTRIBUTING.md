@@ -50,7 +50,7 @@ CAPTCHA != Retry
 具体到代码与文档:
 
 - 能用多维表格、官方 CLI 和已有实现做到的就复用；规则优先写进角色 md 与 Skill reference，不另起炉灶写代码。
-- 仓库代码只保留两项：写前字段白名单（`jobagent feishu patch`）与简历 PDF 渲染核对（`jobagent harness`）。新增代码前先说明为什么文字规则做不到。
+- 仓库代码限于首次配置对账及路由（`jobagent setup`）、写前字段白名单（`jobagent feishu patch`）与简历 PDF 渲染核对（`jobagent harness`）。对账和路由结果可复查、可重放，实际调用由官方 CLI 和宿主工具执行。
 - 任何 Agent 都不写“已批准”/“已拒绝”；GM 对批准字段只能写“待你批准”。
 - 领域模块不得 import Typer、浏览器自动化、DOM 选择器或平台 SDK。
 - 遇到登录、CAPTCHA、验证、风控、平台变更就停下交给本人，不得绕过或自动重试。

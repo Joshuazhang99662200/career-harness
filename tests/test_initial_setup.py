@@ -109,63 +109,98 @@ def test_read_only_audit_identifies_exact_field_without_emitting_writes():
     assert result.next_actions == []
 
 
-def test_existing_workflow_enable_trigger_verification_and_binding_are_separate():
-    common = dict(auth_verified=True, discovery_complete=True, candidates=[workspace()],
-                  observed_base="synthetic-base", configure=True, tables=live_tables(),
-                  workflows_complete=True)
-    assert plan(**common).status == "bot_write_unverified"
-    common["bot_can_write"] = True
-    fresh = plan(**common)
-    assert [action.command for action in fresh.next_actions] == ["+workflow-create"] * 4
-    workflows = [dict(action.payload, workflow_id=f"flow-{i}", status="disabled")
-                 for i, action in enumerate(fresh.next_actions)]
-    result = plan(**common, workflows=workflows)
-    assert [action.command for action in result.next_actions] == ["+workflow-enable"] * 4
-    for workflow in workflows:
-        workflow["status"] = "enabled"
-    verify = plan(**common, workflows=workflows)
-    assert verify.status == "verify_triggers"
-    assert verify.next_actions == []
-    ready = plan(**common, workflows=workflows, verified_workflows=[f"flow-{i}" for i in range(4)])
-    assert ready.status == "ready"
-    assert len(ready.binding.tables) == 5
-    assert len(ready.binding.workflows) == 4
-    assert not ready.dream_verified
+def legacy_workflow(signal_index=0, *, workflow_id="flow-1", status="enabled"):
+    signal = read_contract(CONTRACT).signals[signal_index]
+    fields = {field["name"]: field["id"] for field in live_tables()[0]["fields"]}
+    values = {
+        "source_table": ("text", "岗位"),
+        "source_record_id": ("ref", "$.trigger.recordId"),
+        "job_title": ("ref", f"$.trigger.{fields['岗位名']}"),
+        "field_name": ("text", signal.field),
+        "field_id": ("text", fields[signal.field]),
+        "signal_type": ("text", signal.signal_type),
+        "memory_domain": ("text", signal.domain),
+        "learning_status": ("text", "pending_history_enrichment"),
+    }
+    return {
+        "workflow_id": workflow_id, "status": status, "title": signal.title,
+        "steps": [
+            {"id": "trigger", "type": "SetRecordTrigger", "next": "write",
+             "data": {"table_name": "岗位", "field_watch_info": [{"field_name": signal.field}]}},
+            {"id": "write", "type": "AddRecordAction", "data": {
+                "table_name": "Human Signals", "field_values": [
+                    {"field_name": field, "value": [{"value_type": kind, "value": value}]}
+                    for field, (kind, value) in values.items()
+                ],
+            }},
+        ],
+    }
 
 
-def test_wrong_workflow_reference_and_duplicate_listener_are_conflicts():
-    common = dict(auth_verified=True, discovery_complete=True, candidates=[workspace()],
-                  observed_base="synthetic-base", configure=True, tables=live_tables(),
-                  workflows_complete=True, bot_can_write=True)
-    action = plan(**common).next_actions[0]
-    workflow = dict(action.payload, workflow_id="flow-1", status="enabled")
-    extra = {**workflow, "title": "Duplicate", "workflow_id": "flow-2"}
-    assert plan(**common, workflows=[workflow, extra]).status == "workflow_conflict"
+def trace_snapshot(**overrides):
+    return dict(auth_verified=True, discovery_complete=True, candidates=[workspace()],
+                observed_base="synthetic-base", configure=True, tables=live_tables(),
+                workflows_complete=True, bot_can_write=True) | overrides
+
+
+def test_new_setup_never_creates_or_enables_an_all_actor_workflow():
+    assert plan(**trace_snapshot(bot_can_write=False)).status == "bot_write_unverified"
+    fresh = plan(**trace_snapshot())
+    assert fresh.status == "ready"
+    assert fresh.trace_status == "await_native_trace"
+    assert fresh.next_actions == []
+    assert len(fresh.binding.tables) == 5
+    assert fresh.binding.workflows == {}
+    assert not fresh.dream_verified
+    incomplete = plan(**trace_snapshot(workflows_complete=False))
+    assert incomplete.status == "ready"
+    assert incomplete.trace_status == "inspect_workflows"
+
+
+def test_only_explicit_legacy_cutover_plans_disabling_the_verified_product_workflows():
+    legacy = legacy_workflow()
+    blocked = plan(**trace_snapshot(workflows=[legacy], native_trace_verified=True))
+    assert blocked.status == "ready"
+    assert blocked.trace_status == "legacy_workflows_active"
+    assert blocked.next_actions == []
+    assert not blocked.dream_verified
+    readonly = plan(**trace_snapshot(workflows=[legacy], disable_legacy_trace=True,
+                                    configure=False))
+    assert readonly.next_actions == []
+    cutover = plan(**trace_snapshot(workflows=[legacy], disable_legacy_trace=True))
+    assert [(item.command, item.target) for item in cutover.next_actions] == [
+        ("+workflow-disable", "flow-1"),
+    ]
+    migrated = plan(**trace_snapshot(workflows=[dict(legacy, status="disabled")],
+                                    native_trace_verified=True))
+    assert migrated.trace_status == "ready"
+    assert migrated.next_actions == []
+    assert not migrated.dream_verified
+
+
+def test_wrong_references_and_duplicate_listeners_require_manual_review():
+    workflow = legacy_workflow()
+    extra = legacy_workflow(workflow_id="flow-2")
+    assert plan(**trace_snapshot(workflows=[workflow, extra])).trace_status == "workflow_conflict"
     workflow["steps"][1]["data"]["table_name"] = "Other"
-    assert plan(**common, workflows=[workflow]).status == "workflow_conflict"
+    result = plan(**trace_snapshot(workflows=[workflow], disable_legacy_trace=True))
+    assert result.trace_status == "workflow_conflict"
+    assert result.next_actions == []
 
 
 def test_unrelated_workflows_are_preserved_even_if_they_watch_a_setup_field():
-    common = dict(auth_verified=True, discovery_complete=True, candidates=[workspace()],
-                  observed_base="synthetic-base", configure=True, tables=live_tables(),
-                  workflows_complete=True, bot_can_write=True)
-    actions = plan(**common).next_actions
-    extra = dict(actions[0].payload, title="Unrelated", workflow_id="unrelated", status="enabled")
+    extra = dict(legacy_workflow(), title="Unrelated", workflow_id="unrelated")
     extra["steps"][1]["data"]["table_name"] = "Other"
-    result = plan(**common, workflows=[extra])
-    assert result.status == "reconcile_workflows"
-    assert len(result.next_actions) == 4
+    result = plan(**trace_snapshot(workflows=[extra], disable_legacy_trace=True))
+    assert result.trace_status == "await_native_trace"
+    assert result.next_actions == []
 
 
-def test_same_signal_label_with_wrong_watcher_is_never_created_in_parallel():
-    common = dict(auth_verified=True, discovery_complete=True, candidates=[workspace()],
-                  observed_base="synthetic-base", configure=True, tables=live_tables(),
-                  workflows_complete=True, bot_can_write=True)
-    actions = plan(**common).next_actions
-    extra = dict(actions[0].payload, title="Other title", workflow_id="conflict", status="enabled")
+def test_same_signal_label_with_wrong_watcher_is_always_a_conflict():
+    extra = dict(legacy_workflow(), title="Other title", workflow_id="conflict")
     extra["steps"][0]["data"]["field_watch_info"] = [{"field_name": "公司"}]
-    result = plan(**common, workflows=[extra])
-    assert result.status == "workflow_conflict"
+    result = plan(**trace_snapshot(workflows=[extra]))
+    assert result.trace_status == "workflow_conflict"
     assert result.next_actions == []
 
 

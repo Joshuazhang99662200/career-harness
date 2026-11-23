@@ -7,7 +7,9 @@ CareerHarness 已改为轻量 Skill：GM、EM 与本人通过一张飞书多维�
 | 了解三方怎么协作、谁写哪个字段 | [多维表格契约](../skills/job-hunting/references/bitable-contract.md) |
 | 第一次接入 | [Initial Setup](../skills/job-hunting/references/first-use.md) |
 | 当 GM 或 EM | [GM](../skills/job-hunting/roles/GM.md)、[EM](../skills/job-hunting/roles/EM.md) |
-| 理解这次重构的决定与差距 | [轻量化架构](architecture/lightweight-skill-architecture.md)、[全局重构计划](architecture/global-refactor-plan.md) |
+| 了解 GM 如何建设材料与主动追问 | [个人事实发现](../skills/job-hunting/references/personal-fact-discovery.md) |
+| 核对本人修改如何触发 Trace 和 Dream | [本人 Trace 契约](../skills/job-hunting/references/human-signal-capture.md)、[Memory Dream](../skills/job-hunting/references/memory-dream.md) |
+| 回顾较早的重构决定和基线 | [轻量化架构记录](architecture/lightweight-skill-architecture.md)、[全局重构计划](architecture/global-refactor-plan.md) |
 | 在仓库里改代码或文档 | [编码 Agent 说明](../AGENTS.md)、[贡献指南](../CONTRIBUTING.md) |
 | 在宿主上安排定时任务 | [宿主入口](../hosts/personal-ai/README.md) |
 | 核对授权与第三方来源 | [项目许可](licensing.md)、[商业授权](../COMMERCIAL_LICENSE.md)、[上游复用评审](oss-review.md) |

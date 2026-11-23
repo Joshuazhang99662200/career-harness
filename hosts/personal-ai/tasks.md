@@ -9,7 +9,7 @@
 | 检索入库 | EM | `settings.json`、`Muse处理`、搜索与匹配记忆 | 岗位基本信息、`JD全文`、`GPT处理` | 按平台与数量搜索，不重开已联系或已关闭的岗位 |
 | 执行已批准动作 | EM | `批准状态` 为 `已批准` 的岗位及其最新招呼语、简历 | `处理进度`、`GPT处理` | 结果不明先核实，不重复发送 |
 | 评级与写作 | GM | 新岗位的 `JD全文`、材料 md、招呼语表达记忆、`GPT处理` | `匹配档位`、`匹配理由`、`招呼语`、`简历cv（PDF）`、`批准状态=待你批准`、`Muse处理` | 每看完一份 JD 都写待你批准 |
-| 凌晨 Dream | GM | 新的 Human Signals（丢弃 Bot 行）、两份 Memory | 两份 Memory、必要时材料 md | 按 [Memory Dream](../../skills/job-hunting/references/memory-dream.md) |
+| 凌晨 Dream | GM | 经 [本人 Trace](../../skills/job-hunting/references/human-signal-capture.md) 验收的修订、两份 Memory | 两份 Memory、必要时材料 Markdown | 原生接收或本人身份筛选未就绪时暂停学习，其余定时任务按各自权限运行。见 [Memory Dream](../../skills/job-hunting/references/memory-dream.md) |
 
 ## 每轮结束时说清楚
 

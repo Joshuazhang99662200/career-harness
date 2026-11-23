@@ -1,6 +1,6 @@
 # 飞书自动配置
 
-此流程由 [Initial Setup](first-use.md) 调用，适用于首装、接入另一宿主和 Schema 漂移后的修复。唯一字段与监听清单是 [飞书 Schema](feishu-schema-bootstrap.md)。优先使用官方 lark-cli，`jobagent setup feishu-plan` 将读取结果转为当前阶段的动作。计划输入、输出和临时文件都在私有目录，避免将 Base 坐标、操作者身份与业务值暴露到日志。
+此流程由 [Initial Setup](first-use.md) 调用，适用于首装、接入另一宿主和 Schema 漂移后的修复。唯一字段与信号清单是 [飞书 Schema](feishu-schema-bootstrap.md)。使用官方 lark-cli 获取实表状态，`jobagent setup feishu-plan` 将结果转为本阶段的动作。输入、输出和临时文件留在私有目录。
 
 ## 授权与发现
 
@@ -19,7 +19,7 @@
 - 写入响应检查真实业务成功、结果数量与目标关联。先完成本阶段独立动作再读回已知资源，禁止用计划值替代返回的 ID。结果不明先核实实际对象，不能证明结果时停止对应操作。已有 Base 工具不支持发现或 Workflow 管理时，报告缺失命令或权限；先检查已安装官方 CLI 帮助和受支持 API，再继续。
 - `field-update` 是全量 PUT。执行前用 `+field-get` 读取完整当前定义，检查计划依据仍一致，保留所有现有可写属性和选项 ID、颜色、顺序及名称，仅追加缺项。CLI 的高风险确认走用户已授权且目标明确的追加操作；如无法保留定义则停止。
 - Schema 完整后验证同一个注册 Bot 能访问 Base、按 GM/EM 白名单读写岗位以及履行本宿主角色需要的材料权限。权限不足时，持有用户明确授权与已确认的同一个应用 App ID，可用 `drive +member-add --type bitable --token <base> --member-type appid --member-id <已注册App ID> --perm edit --as user`。先用 `--dry-run` 核对对象、权限和范围，再用 `--yes` 执行并读回。应用或权限无法确定时交给用户处理。用户授权合成行写入和清理后，用 `--as bot` 做可回读的小测试。只在有验收记录后设置 `bot_can_write=true`。
-- 用 `base +workflow-list` 读取 `data.items`，逐个 `+workflow-get` 读取 `data` 中的状态与步骤，传 `workflows=[{workflow_id,title,status,steps}]`，全量读取完成才置 `workflows_complete=true`。复用符合真实引用与业务语义的 Workflow，发现同名错误或语义重复则停止。官方步骤以本 Base 的唯一表/字段名作为配置选择器，写入字段 ID 与动态引用均使用实表 ID。保留 Create 返回的 Workflow ID，回读并重新计划后才能 Enable。
+- 用 `base +workflow-list` 读取 `data.items`，逐个 `+workflow-get` 读取 `data` 中的状态与步骤，传 `workflows=[{workflow_id,title,status,steps}]`，全量读取才置 `workflows_complete=true`。旧的全角色监听只做迁移检查。本人授权停用时才设 `disable_legacy_trace=true`，按计划停用核实的 CareerHarness 监听并读回。发现错误引用、重复监听或未知定义时报告冲突，由本人确认目标。
 
 | 计划动作 | 官方 CLI 参数 |
 |---|---|
@@ -27,15 +27,13 @@
 | `+table-create` | `base +table-create --base-token <base> --name <table> --fields <payload>` |
 | `+field-create` | `base +field-create --base-token <base> --table-id <target> --json <payload>` |
 | `+field-update` | `base +field-update --base-token <base> --table-id <真实表ID> --field-id <target> --json <保留属性后的完整定义> --yes` |
-| `+workflow-create` | `base +workflow-create --base-token <base> --json <payload>` |
-| `+workflow-enable` | `base +workflow-enable --base-token <base> --workflow-id <target>` |
+| `+workflow-disable` | `base +workflow-disable --base-token <base> --workflow-id <target>`，仅限本人授权停用的旧监听 |
 
 管理操作在末尾加 `--as user`。结构化参数用 argv 或官方 `@file` 形式传递，避免 Windows shell shim 损坏 JSON。已有 `jobagent feishu schema/query/get/patch/record-history` 继续使用私有 `FeishuConfig` 和官方 CLI 原生可执行文件。
 
 ## 验收与绑定
 
-1. 独立使用带唯一 Setup 标记、无招聘方关联的合成行。若权限允许，使用注册 Bot 合成入库。记录 ID 和测试标记只存私有文件。设置测试列时，分别验证字段白名单与回读。变更 `批准状态` 只使用 GM 可写的 `待你批准`；EM 更新 `处理进度`；GM 修改合成招呼语与匹配档位。按字段分别发起变更，等本条完成后再触发下一条。
-2. 用 `base +record-list` / `+record-get` 只读取与测试 `source_record_id` 对应的 Human Signals；每一条确认来源表、记录、实际 `field_id`、类型、域且恰有一条对应触发结果。若 CLI 发起的 Bot 更新未触发，按飞书实际能力记录阻塞，核对触发方式。用 `base +record-history-list` 读完整历史并核对操作者与具体字段变动。无法对应历史或操作者未知时保留未核验，禁止 Dream 学习。
-3. 希望验收本人归因时优先使用已授权且可唯一关联的实际历史。需要时请本人用其界面更改合成行上的非审批字段，按相同验收记录读回。明确区分 Bot 写入与本人写入。清理仅限本轮授权合成岗位及其 Signal。使用 `+record-delete` 前校对全部 ID 与测试标记，完成后按 ID 核实已清理；中断恢复时先定位这批测试数据，避免重复插入。
-4. 将各条经验证的 Workflow ID 写进 `verified_workflows`，把当前 Base、字段映射和 Workflow 的 `update_time` 随验收结果私有保存。相应定义、字段 ID 或状态变化时清除对应验收结果。计划返回 `ready` 后，保存回读得到的 `binding`、身份和验收时间到私有 `settings.json`，并按 [共享飞书环境](feishu-shared-source.md) 保存运行所需的语义字段与白名单。Dream 由宿主调度，只有实际调度及运行读回成功时设置 `dream_verified`。自动化启用与 Dream 运行各自报告。
-5. 以后启动先核对绑定的 Base、业务必需字段及 Workflow 是否仍存在且保持同一语义。变更时复跑对账和受影响的验收。材料、平台设置和招聘发送由上层 Skill 按各自权限处理。
+1. 使用经本人授权且无招聘方关联的合成行核对 Bot 的角色字段白名单与实际读回。测试的批准列仅允许用 GM 可写的 `待你批准`。按授权清理本轮合成数据，写入或清理结果不明时先读回。
+2. Base 与必要角色权限通过后，返回 `status=ready`。在私有 `settings.json` 保存实际 `binding`、身份、验收时间与 [共享飞书环境](feishu-shared-source.md) 需要的字段映射。
+3. Trace 用 [仅本人修改触发 Human Signals](human-signal-capture.md) 独立验收。角色过滤、真实事件订阅和受信任接收宿主均验证后才设 `native_trace_verified=true`。旧的 `verified_workflows` 回执不代表原生链路就绪。以最新 `trace_status` 报告迁移、冲突或待接入情况，业务任务范围仍取决于其自身前置条件。
+4. Dream 由宿主调度，实际运行通过才设 `dream_verified`。后续启动分别核对业务字段、原生事件和接收宿主状态；配置变化时重新核验对应层。

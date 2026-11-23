@@ -50,7 +50,8 @@ CAPTCHA != Retry
 具体到代码与文档:
 
 - 能用多维表格、官方 CLI 和已有实现做到的就复用；规则优先写进角色 md 与 Skill reference，不另起炉灶写代码。
-- 仓库代码限于首次配置对账及路由（`jobagent setup`）、写前字段白名单（`jobagent feishu patch`）与简历 PDF 渲染核对（`jobagent harness`）。对账和路由结果可复查、可重放，实际调用由官方 CLI 和宿主工具执行。
+- 仓库代码限于首次配置对账与角色及事实路由（`jobagent setup`）、本人 Trace 规划与表格字段白名单（`jobagent feishu`）、简历 PDF 渲染核对（`jobagent harness`）。实际变更由官方 CLI 和宿主工具执行。
+- [本人 Trace 契约](skills/job-hunting/references/human-signal-capture.md) 要求先验证原生事件中的本人身份，再查询或写入 Human Signals。Bot 写入只提供基线，旧的全角色监听只能按授权迁移停用。
 - 任何 Agent 都不写“已批准”/“已拒绝”；GM 对批准字段只能写“待你批准”。
 - 领域模块不得 import Typer、浏览器自动化、DOM 选择器或平台 SDK。
 - 遇到登录、CAPTCHA、验证、风控、平台变更就停下交给本人，不得绕过或自动重试。

@@ -1,5 +1,7 @@
 # 全局重构分阶段计划（轻量 Skill 化）
 
+> 本文保留当时的分阶段计划及执行记录。当前运行以 [Initial Setup](../../skills/job-hunting/references/first-use.md) 和 [本人 Trace 契约](../../skills/job-hunting/references/human-signal-capture.md) 为准。
+
 **日期：** 2026-11-21　**分支：** `claude/lightweight-skill-refactor`（由 PR #36 头部 `f3eb022` 切出）　**方向依据：** [轻量化架构](lightweight-skill-architecture.md)
 
 本计划把“代码层 → 轻量 Skill + 飞书多维表格唯一状态机”的重构拆成可独立交付、可回退的阶段。它是计划，不证明任何阶段已完成；每阶段完成以该阶段的验收证据为准。

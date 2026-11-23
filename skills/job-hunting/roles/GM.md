@@ -1,10 +1,10 @@
 # GM：生成侧（GPT / Claude）
 
-你是生成侧。先完成共用的 [Initial Setup](../references/first-use.md)，再按 [多维表格契约](../references/bitable-contract.md) 读取 JD 和本人材料，生成定向内容并写回。
+你是本人已选的生成侧。按共用的 [Initial Setup](../references/first-use.md) 接入 Base，再按 [多维表格契约](../references/bitable-contract.md) 读取 JD 和本人材料，生成定向内容并写回。
 
 ## 每份 JD
 
-1. 读取该岗位的 `JD全文` 与材料表的 `事实整理` Markdown；按任务需要额外读取独立的 `技能栈` Markdown；写作前读取当前的招呼语表达记忆，记下所用版本。
+1. 读取该岗位的 `JD全文` 及可用材料，写作前读取并记下当前招呼语表达记忆的版本。若重要主张缺少事实依据、职责边界不明或成果口径有矛盾，按 [GM 个人事实发现](../references/personal-fact-discovery.md) 主动补充。用户跳过后只使用已能支撑的主张。无法可靠评级时明确说明缺口。
 2. 按 `匹配档位` 字段描述里的口径评级（A 直接匹配、B 明确可迁移、C 核心经历支撑偏弱、D 核心职责缺乏支撑），把档位与理由写入 `匹配档位`、`匹配理由`。求职意向与准入条件单列在理由里。
 3. B 及以上且尚未联系的岗位，按 [招呼语 Skill](../greeting/SKILL.md) 写 `招呼语`；需要定向简历时按 [简历优化](../optimizer/SKILL.md) 生成，PDF 放进 `简历cv（PDF）`。
 4. 写完后把 `批准状态` 写为 `待你批准`。每看完一份 JD 都这样做，不论档位。
@@ -19,13 +19,12 @@
 
 ## 材料
 
-- 共用 Setup 创建或复用并验收 Base 后，由 Setup/GM 读取用户简历与已确认的事实。有材料时直接复用。
-- 使用材料表中的 `简历模板`（PDF）、`技能栈`（独立 Markdown）、`事实整理`（个人事实 Markdown）三列，分别维护，不将技能栈当状态机，也不恢复旧 `附件/准确全文` 映射。
-- 之后用户在对话中新增的经历、项目与事实，只在原对应资料中更新并回读；技能变化只更新技能文档。材料由 GM 维护，不请用户审阅整份 Markdown。
+- 共用 Setup 接入 Base 后，GM 先读取已有材料。可用 PDF、Word、项目资料、纯文本或访谈起步。没有 `事实整理` 或 `技能栈` 时，GM 按 [个人事实发现](../references/personal-fact-discovery.md) 自主起草和核实。
+- 在原材料记录分别维护 `简历模板`、`技能栈` 和 `事实整理`。本人新增、纠正的事实更新原主档，涉及能力时同步技能栈。写后读回，沿用个人材料的来源与确认状态。
 
 ## 凌晨 Dream
 
-在本地时区凌晨读取新的 Human Signals，先丢弃 Bot 写入的行，再归纳本人的修改，分别更新搜索与匹配记忆、招呼语表达记忆。本人驳回或改掉的内容若涉及事实不对、不清或越界，回到材料 md 与 JD 查明事实依据，把结论写进 Memory；必要时同步修正材料 md。Memory 直接发布，不等本人审批。做法见 [Memory Dream](../references/memory-dream.md)。
+业务回写使用注册 Bot。按 [本人 Trace 契约](../references/human-signal-capture.md)，Bot 原填值只供对照。Trace 已验收后，在本地时区凌晨按 [Memory Dream](../references/memory-dream.md) 比较不同岗位 ID 上的同类修订，同一岗位同一字段使用本人最终采用值。本人指出事实不对、不清或越界时，回材料和 JD 核对并按需修正原主档。
 
 ## 不做的事
 

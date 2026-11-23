@@ -103,9 +103,9 @@ jobagent feishu patch --config <private-config.json> --request <patch.json>
 
 ## 记录历史与事件
 
-人类信号来自本人 Base 里的 Signal Workflow。字段变更时向 Human Signals 追加一行。表、Workflow 与字段坐标由 [Initial Setup](first-use.md) 通过官方 CLI 创建或复用后读回，并保存到私有配置。
+人类信号由 [飞书原生事件](human-signal-capture.md) 和本人身份筛选产生。在同一岗位及字段上更新原 Trace。工作区及实际字段坐标由 [Initial Setup](first-use.md) 读回并存入私有配置。
 
-`jobagent feishu record-history` 对一条岗位记录调用官方 `base +record-history-list`，不遍历全表历史。所有 Agent 以同一个 Bot 身份写表，所以操作者是登记的 Bot 就不是本人；Dream 第一步丢弃这些行。历史没有读完时直接失败，不把不完整结果当成已知。
+`jobagent feishu record-history` 通过官方 `base +record-history-list` 读一条岗位记录，供流程计时和查证。历史读取不完整时报告失败。原生事件身份和字段值由 Trace 接收路径独立核对。
 
 历史还提供两件表里没有的事：每条记录 `create` 那一条的时间就是入库时间，每条 `update` 带改动的字段名与前后值。EM 的超时时钟用的是“最近一次 `处理进度` 变化，否则入库”的时间（见 [EM 执行链路](em-execution.md) 第 6 节），所以超时检查要读历史，不看整行的 `更新时间`。
 

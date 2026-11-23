@@ -1,0 +1,28 @@
+name: job-hunting
+slug: careerharness-job-hunting
+display_name: CareerHarness 求职协作
+display_name_en: CareerHarness Job Search
+displayName: CareerHarness 求职协作
+version: "0.5.0"
+author: CareerHarness
+license: PolyForm-Noncommercial-1.0.0
+summary: 一键开启全流程托管求职，Agent 找岗位、筛 JD、写招呼语和定向简历，你在飞书逐条批准后由 Agent 投递并回写进度。
+description: >-
+  CareerHarness 一键帮你找工作，提供全流程托管求职。接入飞书多维表格后，Agent 按你的条件持续找岗位、筛 JD、评估岗位匹配度，并依据你的材料起草招聘招呼语和定向简历。你在飞书逐条批准后，Agent 负责发送招呼或投递简历，并回写进度。
+  当用户说「一键帮我找工作」「帮我全托管求职」「帮我找岗位并录入飞书」「写 BOSS 直聘招呼语」「按 JD 改简历」或「投递我已批准的岗位」时调用。
+  Start a managed job search in Feishu Bitable with one request. Use for job discovery, JD screening, recruiter outreach drafts, tailored resumes, or sending messages and applications after the user approves each one.
+description_zh: 一键开启全流程托管求职，Agent 找岗位、筛 JD、写招呼语和定向简历，你在飞书逐条批准后由 Agent 投递并回写进度。
+description_en: Start a managed job search in Feishu Bitable with one request. Get matched roles and tailored drafts, then approve each send.
+examples_zh:
+  - 一键帮我找工作。按我的条件找岗位、筛 JD，把招呼语和定向简历准备好，放进飞书等我批准。
+  - 评估这份 JD 和我的材料的匹配度，帮我写一条招呼语和一份定向简历草稿。
+  - 处理飞书里由我标为已批准的岗位，投递后把结果写回岗位表。
+examples_en:
+  - Run my job search. Find and screen roles that meet my criteria, then put outreach and resume drafts in Feishu for my approval.
+  - Assess this job description against my materials, then draft a recruiter message and a tailored resume.
+  - Submit the applications I approved in Feishu and record the outcomes in the job tracker.
+tags:
+  - job-search
+  - resume-tailoring
+  - recruiter-outreach
+  - feishu-bitable

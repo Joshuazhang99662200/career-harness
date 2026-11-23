@@ -1,6 +1,9 @@
 ---
 name: job-hunting
-description: CareerHarness 轻量求职 Skill：生成侧（GM）、执行侧（EM）与本人通过一张飞书多维表格协作。用于接入多维表格、读 JD 评级、写招呼语与定向简历、检索与执行本人已批准的动作、凌晨归纳 Memory。A lightweight job-search skill where a generator, an executor and the person share one Feishu Bitable. 不用于泛化职业建议或无人值守批量投递。
+description: >-
+  CareerHarness 一键帮你找工作，提供全流程托管求职。接入飞书多维表格后，Agent 按你的条件持续找岗位、筛 JD、评估岗位匹配度，并依据你的材料起草招聘招呼语和定向简历。你在飞书逐条批准后，Agent 负责发送招呼或投递简历，并回写进度。
+  当用户说「一键帮我找工作」「帮我全托管求职」「帮我找岗位并录入飞书」「写 BOSS 直聘招呼语」「按 JD 改简历」或「投递我已批准的岗位」时调用。
+  Start a managed job search in Feishu Bitable with one request. Use for job discovery, JD screening, recruiter outreach drafts, tailored resumes, or sending messages and applications after the user approves each one.
 ---
 
 # CareerHarness 求职 Skill

@@ -8,25 +8,25 @@ CareerHarness 是一套轻量的求职 Skill：生成侧（GM）、执行侧（E
 
 核心主张有两条，你做的任何改动都不能削弱：
 
-- **不编造。** GM 只用材料表里本人的资料写招呼语和简历，不编造经历、成果、数字或动机。写错或越界时，本人在 `批准状态` 驳回或直接修改，这些操作被 trace 捕捉，GM 据此查证事实并写入 Memory。
+- **不编造。** GM 只用可追溯的本人材料写招呼语和简历。发现事实缺口时，由 GM 主动补问并保留待核实状态。本人纠正事实问题后，GM 回到材料来源查证并更新原主档。
 - **本人批准才外发。** 每一次外发都要本人在 `批准状态` 填 `已批准`；任何 Agent 都不写 `已批准` 或 `已拒绝`。
 
 它**不是**批量投递机器人。如果某个改动让流程更接近“无人值守自动投递”，那个方向是错的。
 
 ## 三方与表格
 
-- **GM**（GPT / Claude）：读 JD 与材料，评级、写匹配理由、招呼语与简历，每看完一份 JD 就把 `批准状态` 写为 `待你批准`；凌晨把本人的修改归纳成 Memory。做法见 [GM.md](skills/job-hunting/roles/GM.md)。
-- **EM**（Muse / Grok bot / WorkBuddy 等桌面 Agent）：按私有设置检索岗位、填入基本信息，执行本人已批准的动作并回写结果。做法见 [EM.md](skills/job-hunting/roles/EM.md)。
-- **本人**：除了 `批准状态`，还能直接修改 `匹配档位`、`招呼语`、`处理进度` 三个关键字段；本人在表里的操作就是信号。材料 md 与 Memory 由 GM 维护，不要求本人审批长文档——省事是这套方案存在的理由。
+- **GM**：读取 JD，按[个人事实发现](skills/job-hunting/references/personal-fact-discovery.md)建设或补充材料，按已有事实完成评级、匹配理由、招呼语与简历，填写 `待你批准`。Dream 归纳已验收的本人修订。见 [GM.md](skills/job-hunting/roles/GM.md)。
+- **EM**：按已确认的平台与条件检索、去重和入库，执行本人已批准的动作并回写结果。缺少个人事实时交接 GM，继续事实缺口不影响的工作。见 [EM.md](skills/job-hunting/roles/EM.md)。
+- **本人**：选择当前宿主的角色，可以修订 `匹配档位`、`招呼语`、`处理进度`，并独自填写 `已批准` 或 `已拒绝`。GM 维护材料 Markdown 与 Memory。
 
-三方共用的约定（前置依赖、五个语义域、单一 Bot 写入、字段归属、交接留言、私有设置）见 [多维表格契约](skills/job-hunting/references/bitable-contract.md)。同一宿主可以兼任 GM 与 EM，只要本人允许。
+首次接入按 [Initial Setup](skills/job-hunting/references/first-use.md) 先识别当前宿主并确认 A、B 或 C，再按角色接入同一 Base。已有有效角色绑定直接恢复。三方共用 [多维表格契约](skills/job-hunting/references/bitable-contract.md)。
 
 ## 设计原则：能轻就轻
 
 - 能用多维表格、官方 CLI 和仓库里已有的实现做到的，就复用，不造新轮子。
 - 规则优先写进角色 md 与 Skill reference，不另起炉灶写代码，不加防御性校验层。
 - 出错就如实报错并停下（let it crash），不静默回退、不补造结果。
-- 代码保留首次配置的确定性对账与能力路由、写前字段白名单及简历 PDF 渲染核对。飞书变更和平台探测由 Skill 调用官方或已授权的工具。
+- 代码保留首次配置与角色路由、事实充分性规划、本人 Trace 筛选、写前字段白名单及简历 PDF 渲染核对。飞书变更和平台探测由 Skill 调用官方或已授权的工具。
 
 ## 开始之前
 
@@ -51,6 +51,7 @@ python -m pytest -q
 
 - 编写绕过登录、CAPTCHA、验证码、风控、限流或反爬的代码；
 - 让任何 Agent 写入 `已批准` / `已拒绝`、冒充本人操作，或在本人批准前外发；
+- 在筛出已登记的本人操作之前写入 Human Signals，或默认创建、启用全角色 Trace Workflow。GM 和 EM 共用注册 Bot。Bot 原填值只供对照。同一岗位同一字段更新原 Trace，偏好学习按不同岗位 ID 比较同类修订。见[本人 Trace 契约](skills/job-hunting/references/human-signal-capture.md)；
 - 让 GM 写入材料里没有的经历、成果、数字或动机；
 - 让领域模块依赖 Typer、浏览器自动化、DOM 选择器或平台 SDK；
 - 把真实简历、联系方式、`.env`、数据库、Base / 表 / 字段标识或 Tunnel 标识写进仓库或提交信息。
@@ -78,7 +79,7 @@ python -m pytest -q
 
 - 不要恢复已删除的模块，也不要为它们新增功能。
 - `skills/job-hunting/references/capability-catalog.md` 只登记仍在的命令与按 Skill 完成的工作；新增或删除 CLI 命令时必须同步更新它，`tests/test_capability_status.py` 会双向断言两者一致。
-- Evidence 概念已废止。个人资料只有材料表里的一份简历和一份材料 md；写作 Skill 里统一称“材料事实”，`tests/test_skill_context.py` 会拦下旧术语。
+- 旧 Evidence 模型已退役。材料表沿用 `简历模板`、`技能栈` 和 `事实整理`。缺少附件时由 GM 从已授权资料或访谈逐步补齐，写作 Skill 统一使用“材料事实”。
 
 ## 技能上下文
 

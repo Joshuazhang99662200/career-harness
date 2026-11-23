@@ -1,6 +1,6 @@
 # Initial Setup · 飞书 Base Schema
 
-本清单是 [Initial Setup](first-use.md) 的 Schema 来源。首次接入在同一份飞书 Base 内自动补齐五张数据表及四条 Workflow，已有符合条件的资源直接复用。
+本清单是 [Initial Setup](first-use.md) 的 Schema 来源。首次接入在同一份飞书 Base 内自动补齐五张数据表，已有符合条件的资源直接复用。Human Signals 通过 [飞书原生事件与本人过滤](human-signal-capture.md) 单独接入。
 真实资源 ID、Base 链接、Bot 标识及用户材料存入个人私有配置。每表第一列是文本主字段。表中字段行由 `jobagent setup feishu-plan` 读取，变更类型、枚举或表结构时直接更新本表并运行契约测试。
 
 ## 五张表与字段定义
@@ -8,7 +8,7 @@
 | 表 | 作用 | 首次运行最低要求 |
 |---|---|---|
 | 岗位 | 所有岗位、沟通、审批、终态与 GM↔EM 交接 | 必须 |
-| 材料 | 个人简历 PDF、技能栈 MD、个人事实 MD | 必须 |
+| 材料 | 简历模板及 GM 维护的技能栈与个人事实 Markdown。表结构必备，附件按需补齐 | 必须 |
 | Human Signals | 用户编辑轨迹，供 Dream 分析 | 完整版必须 |
 | 搜索与匹配记忆 | Dream 发布的 Search Memory；PA/EM 消费 | 完整版必须 |
 | 招呼语表达记忆 | Dream 发布的 Greeting Memory；GM 消费 | 完整版必须 |
@@ -44,7 +44,7 @@
 |---|---|
 | `材料ID` | 文本（首列） |
 | `岗位类型` | 文本 |
-| `简历模板` | 附件（PDF） |
+| `简历模板` | 附件（PDF 或 Word 简历） |
 | `技能栈` | 附件（Markdown） |
 | `事实整理` | 附件（Markdown） |
 
@@ -118,9 +118,9 @@
 | `created_at` | 日期时间 |
 | `published_at` | 日期时间 |
 
-## 四个 Human Signals 自动化 Workflow
+## 四种 Human Signals 字段映射
 
-五张表读回通过并确认 Bot 写入权限后，Initial Setup 使用 Base 官方 Workflow 命令建立以下四条监听链。岗位表指定字段发生变化时，向同一 Base 的 Human Signals 追加一行。每条写入 `source_table`、`source_record_id`、`job_title`、`field_name`、`field_id`、`signal_type`、`memory_domain`、`learning_status`。前后值、操作者身份与真实变更时点由原生修改历史核实。
+飞书事件确认是本人修改岗位表中的以下字段时，才写入同一 Base 的 Human Signals。前后值保留 JSON 语义，操作者、原生事件 ID 与编辑时间取自可信的原生事件。岗位和字段相同的后续修改更新现有 Trace。
 
 | 监听字段 | signal_type | memory_domain |
 |---|---|---|
@@ -129,7 +129,7 @@
 | `招呼语` | `greeting_revision` | `greeting` |
 | `匹配档位` | `matching_correction` | `search_match` |
 
-四条 Workflow 均须逐条验收实际新增的 Signal。Dream 仅消费经原生历史确认的本人动作。首次自动配置授权覆盖 Workflow 创建与启用。
+审批与流程结果只保留上下文。匹配和招呼语只有本人修改和 Bot 原值均已核实时，才可进入 Dream。
 
 ## 10 日谈与 48 小时运营不另起核心 Schema
 
@@ -145,7 +145,7 @@
 1. 能打开用户给的 Base，读取表名、字段名、真实类型、单选值，以及实际 Bot 身份。
 2. 同一 Base 内可匹配五个语义域；同名不同类型、缺字段、缺选项要逐项报告；**不要伪称已经修复**。现有更多字段允许存在，不要求删表、重建或强制重命名。
 3. 对 `岗位` 做一次分页只读和单条只读；对 `材料` 读取五个字段；对两份 Memory 表分别读取 Schema；不要读取大量无关个人资料来验结构。
-4. 核查四条 Workflow 是否存在且有正确字段引用。若还没完成启用，必须明示“Dream 未就绪”，不能声称已自动学习。
+4. 独立核查原生事件入口、本人修改验收和旧 Workflow 状态。未切换或未验收时如实显示 Trace 与 Dream 待就绪。
 5. 读取私有 `settings.json` 记录 Base/字段映射、Bot 身份及验证时间；**不要在公开仓库硬编码 ID、URL 或真实个人材料**。
 6. 在用户批准的合成记录上做最小写入/回读验收，确保 GM 能写其允许字段、EM 能写其允许字段，任何 Agent 都不能写 `已批准`、`已拒绝`。没有授权时只读验收足够，但不能标记“写入已验证”。
 7. 初始材料存在/已成功装载，角色和求职配置完整之后才允许进入业务 Skill：查岗、评级、写招呼、定向简历。Dream 和 10 日谈的调度/触发还需要各自独立验收，不能因为 Base 建好就声称已运行。

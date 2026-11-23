@@ -2,7 +2,6 @@
 
 import re
 from dataclasses import dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 
@@ -111,13 +110,15 @@ class BootstrapSnapshot(PrivateInput):
     workflows_complete: bool = False
     workflows: list[dict[str, Any]] = Field(default_factory=list)
     verified_workflows: set[str] = Field(default_factory=set)
+    disable_legacy_trace: bool = False
+    native_trace_verified: bool = False
     dream_verified: bool = False
 
 
 class Action(BaseModel):
     command: Literal[
         "+base-create", "+table-create", "+field-create", "+field-update",
-        "+workflow-create", "+workflow-enable",
+        "+workflow-disable",
     ]
     table: str | None = None
     target: str | None = None
@@ -137,6 +138,11 @@ class BootstrapPlan(BaseModel):
     issues: list[str] = Field(default_factory=list)
     candidate: str | None = None
     binding: Binding | None = None
+    trace_status: Literal[
+        "not_checked", "inspect_workflows", "workflow_conflict",
+        "legacy_workflows_active", "await_native_trace", "ready",
+    ] = "not_checked"
+    legacy_workflow_ids: list[str] = Field(default_factory=list)
     dream_verified: bool = False
 
 
@@ -175,21 +181,29 @@ def plan_bootstrap(contract: Contract, snapshot: BootstrapSnapshot) -> Bootstrap
         return _reconcile(snapshot.configure, "reconcile_schema", selected, actions)
     if not snapshot.bot_can_write:
         return BootstrapPlan(status="bot_write_unverified", candidate=selected)
-    if not snapshot.workflows_complete:
-        return BootstrapPlan(status="inspect_workflows", candidate=selected)
-    workflow_ids, actions, conflicts = _workflow_plan(contract, snapshot, selected, tables, fields)
-    if conflicts:
-        return BootstrapPlan(status="workflow_conflict", candidate=selected, issues=conflicts)
-    if actions:
-        return _reconcile(snapshot.configure, "reconcile_workflows", selected, actions)
-    missing = set(workflow_ids.values()) - snapshot.verified_workflows
-    if missing:
-        return BootstrapPlan(status="verify_triggers", candidate=selected,
-                             issues=sorted(missing))
-    return BootstrapPlan(
-        status="ready", candidate=selected, dream_verified=snapshot.dream_verified,
-        binding=Binding(base_token=selected, tables=tables, fields=fields, workflows=workflow_ids),
+    result = BootstrapPlan(
+        status="ready", candidate=selected,
+        binding=Binding(base_token=selected, tables=tables, fields=fields, workflows={}),
     )
+    if not snapshot.workflows_complete:
+        result.trace_status = "inspect_workflows"
+        return result
+    active, conflicts = _legacy_workflow_plan(contract, snapshot, tables, fields)
+    result.legacy_workflow_ids = list(active)
+    if conflicts:
+        result.trace_status = "workflow_conflict"
+        result.issues = conflicts
+    elif active:
+        result.trace_status = "legacy_workflows_active"
+        if snapshot.configure and snapshot.disable_legacy_trace:
+            result.next_actions = [
+                Action(command="+workflow-disable", table=field, target=workflow_id)
+                for workflow_id, field in active.items()
+            ]
+    else:
+        result.trace_status = "ready" if snapshot.native_trace_verified else "await_native_trace"
+        result.dream_verified = snapshot.native_trace_verified and snapshot.dream_verified
+    return result
 
 
 def _reconcile(
@@ -278,37 +292,31 @@ def _append_options(definition: dict[str, Any], current: dict[str, Any]) -> dict
                               if key in current}, "options": [*options, *missing]}
 
 
-def _workflow_plan(
-    contract: Contract, snapshot: BootstrapSnapshot, base_token: str,
+def _legacy_workflow_plan(
+    contract: Contract, snapshot: BootstrapSnapshot,
     tables: dict[str, str], fields: dict[str, dict[str, str]],
-) -> tuple[dict[str, str], list[Action], list[str]]:
-    ids: dict[str, str] = {}
-    actions: list[Action] = []
+) -> tuple[dict[str, str], list[str]]:
+    active: dict[str, str] = {}
+    seen: set[str] = set()
     conflicts: list[str] = []
     for signal in contract.signals:
-        expected = _workflow_body(signal, base_token, fields)
         matches = [existing for existing in snapshot.workflows
                    if _related_workflow(existing, signal, tables, fields)]
         if not matches:
-            actions.append(Action(command="+workflow-create", table=signal.field, payload=expected))
             continue
-        if len(matches) != 1 or not _workflow_matches(matches[0], expected, tables, fields):
+        if len(matches) != 1 or not _legacy_workflow_matches(matches[0], signal, tables, fields):
             conflicts.append(signal.field)
             continue
         live = matches[0]
         workflow_id = live.get("workflow_id")
-        if not isinstance(workflow_id, str) or not workflow_id:
+        if (not isinstance(workflow_id, str) or not workflow_id or workflow_id in seen
+                or live.get("status") not in {"enabled", "disabled"}):
             conflicts.append(signal.field)
             continue
-        ids[signal.signal_type] = workflow_id
-        if live.get("status") == "disabled":
-            actions.append(Action(command="+workflow-enable", table=signal.field,
-                                  target=workflow_id))
-        elif live.get("status") != "enabled":
-            conflicts.append(signal.field)
-    if len(set(ids.values())) != len(ids):
-        conflicts.append("duplicate_workflow_id")
-    return ids, actions, conflicts
+        seen.add(workflow_id)
+        if live.get("status") == "enabled":
+            active[workflow_id] = signal.field
+    return active, conflicts
 
 
 def _related_workflow(
@@ -336,38 +344,20 @@ def _related_workflow(
     )
 
 
-def _workflow_body(
-    signal: Signal, base_token: str, fields: dict[str, dict[str, str]],
-) -> dict[str, Any]:
-    trigger_id = "trigger_1"
-    payload = {
+def _legacy_trace_values(
+    signal: Signal, trigger_id: str, fields: dict[str, dict[str, str]],
+) -> dict[str, tuple[str, str]]:
+    return {
         "source_table": ("text", "岗位"), "source_record_id": ("ref", f"$.{trigger_id}.recordId"),
         "job_title": ("ref", f"$.{trigger_id}.{fields['岗位']['岗位名']}"),
         "field_name": ("text", signal.field), "field_id": ("text", fields["岗位"][signal.field]),
         "signal_type": ("text", signal.signal_type), "memory_domain": ("text", signal.domain),
         "learning_status": ("text", "pending_history_enrichment"),
     }
-    return {
-        "client_token": sha256(f"{base_token}:{signal.signal_type}".encode()).hexdigest()[:32],
-        "title": signal.title,
-        "steps": [
-            {"id": trigger_id, "type": "SetRecordTrigger", "title": signal.field,
-             "next": "signal_1",
-             "data": {
-                 "table_name": "岗位", "field_watch_info": [{"field_name": signal.field}],
-                 "trigger_control_list": ["pasteUpdate", "automationBatchUpdate", "appendImport"],
-             }},
-            {"id": "signal_1", "type": "AddRecordAction", "title": "Human Signals", "next": None,
-             "data": {"table_name": "Human Signals",
-                      "field_values": [{"field_name": field,
-                                        "value": [{"value_type": kind, "value": value}]}
-                                       for field, (kind, value) in payload.items()]}},
-        ],
-    }
 
 
-def _workflow_matches(
-    live: dict[str, Any], expected: dict[str, Any], tables: dict[str, str],
+def _legacy_workflow_matches(
+    live: dict[str, Any], signal: Signal, tables: dict[str, str],
     fields: dict[str, dict[str, str]],
 ) -> bool:
     steps = live.get("steps") or []
@@ -379,7 +369,7 @@ def _workflow_matches(
             or action.get("next") or trigger.get("condition_list")):
         return False
     source, destination = trigger.get("data") or {}, action.get("data") or {}
-    field = expected["steps"][0]["data"]["field_watch_info"][0]["field_name"]
+    field = signal.field
     watch = source.get("field_watch_info")
     if (source.get("table_name") not in {"岗位", tables["岗位"]}
             or destination.get("table_name") not in {"Human Signals", tables["Human Signals"]}
@@ -391,12 +381,9 @@ def _workflow_matches(
     live_values = {value["field_name"]: value["value"]
                    for value in destination.get("field_values") or []
                    if "field_name" in value and "value" in value}
-    for mapping in expected["steps"][1]["data"]["field_values"]:
-        name = mapping["field_name"]
-        value = mapping["value"][0]
-        if value["value_type"] == "ref":
-            ref = value["value"].replace("$.trigger_1.", f"$.{trigger['id']}.")
-            value = {**value, "value": ref}
-        if live_values.get(name, live_values.get(fields["Human Signals"][name])) != [value]:
+    for name, (kind, value) in _legacy_trace_values(signal, trigger["id"], fields).items():
+        if live_values.get(name, live_values.get(fields["Human Signals"][name])) != [
+            {"value_type": kind, "value": value}
+        ]:
             return False
     return True

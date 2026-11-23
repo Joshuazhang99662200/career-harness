@@ -1,5 +1,7 @@
 # 轻量 Skill 化架构：决定、实表映射与待定事项
 
+> 本文保留 2026-11-21 的设计和验收记录。当前角色顺序、材料建设与本人归因请以 [Initial Setup](../../skills/job-hunting/references/first-use.md)、[个人事实发现](../../skills/job-hunting/references/personal-fact-discovery.md) 和 [本人 Trace 契约](../../skills/job-hunting/references/human-signal-capture.md) 为准。
+
 **日期：** 2026-11-21　**基线：** PR #36 头部 `f3eb022`（本分支 `claude/lightweight-skill-refactor` 由它切出，未改动 PR #36 远端分支）
 
 本文记录本人已明确的架构方向、对本人 Base 的只读核对结果，以及开始删改代码前仍需本人裁定的事项。它是方案与差距记录，不证明任何能力已落地；能力状态仍以[能力目录](../../skills/job-hunting/references/capability-catalog.md)为准。文中不含任何 Base、表、字段或 Workflow 标识及业务记录内容。

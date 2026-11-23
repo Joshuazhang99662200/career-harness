@@ -83,7 +83,7 @@ def test_initial_setup_asks_only_for_platform_choices_and_keeps_numbers_private(
     assert "platform-capability-routing.md" in read("references/em-execution.md")
 
 
-def test_initial_setup_runs_shared_automatic_bootstrap_before_either_role() -> None:
+def test_initial_setup_selects_host_role_before_shared_automatic_bootstrap() -> None:
     entry = read("SKILL.md")
     setup = read("references/first-use.md")
     schema = read("references/feishu-schema-bootstrap.md")
@@ -92,16 +92,34 @@ def test_initial_setup_runs_shared_automatic_bootstrap_before_either_role() -> N
     assert start.index("references/first-use.md") < start.index("roles/GM.md")
     assert start.index("references/first-use.md") < start.index("roles/EM.md")
     assert "feishu-provisioning.md" in setup
-    assert "jobagent setup feishu-plan" in bootstrap and "+workflow-enable" in bootstrap
-    assert setup.index("## 1. 检查连接") < setup.index("## 5. 开始使用")
+    assert "jobagent setup feishu-plan" in bootstrap and "+workflow-disable" in bootstrap
+    assert "+workflow-enable" not in bootstrap
+    role = setup.index("## 1. 识别宿主并确认角色")
+    base = setup.index("## 2. 检查连接")
+    gm = setup.index("## 3. GM 准备材料")
+    em = setup.index("## 4. EM 初始化")
+    assert role < base < gm < em < setup.index("## 5. 开始使用")
+    assert "jobagent setup host-role" in setup[role:base]
     for table in ("岗位", "材料", "Human Signals", "搜索与匹配记忆", "招呼语表达记忆"):
         assert f"### {table}" in schema, table
     for material in ("简历模板", "技能栈", "事实整理"):
         assert material in setup and material in schema
     assert "Muse处理" in schema and "GPT处理" in schema
     assert "批准状态" in schema and "处理进度" in schema
-    assert "四个 Human Signals 自动化 Workflow" in schema
+    assert "四种 Human Signals 字段映射" in schema
     assert "已有符合条件的资源直接复用" in schema
+
+
+def test_gm_fact_discovery_is_reachable_on_setup_and_each_dependent_job():
+    setup = read("references/first-use.md")
+    gm = read("roles/GM.md")
+    facts = read("references/personal-fact-discovery.md")
+    assert "personal-fact-discovery.md" in setup
+    assert "personal-fact-discovery.md" in section(gm, "## 每份 JD")
+    for requirement in ("sufficient", "needs_clarification", "proceed_with_gaps",
+                        "本人已确认", "材料明确记载", "GM 归纳", "待核实", "一次优先问一个问题"):
+        assert requirement in facts
+    assert "personal-fact-discovery.md" not in read("roles/EM.md")
 
 
 def test_em_uses_only_table_approval_and_current_materials_for_external_send() -> None:

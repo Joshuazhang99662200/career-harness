@@ -4,7 +4,7 @@ CareerHarness 是一套轻量 Skill。宿主读取 `Joshuazhang99662200/career-h
 
 ## 复制给宿主的启动文本
 
-> 请通过已连接的 GitHub 插件读取 `Joshuazhang99662200/career-harness` 的 `skills/job-hunting/SKILL.md`，固定本次使用的 commit SHA，并按它的指引工作。先按 Initial Setup 验证飞书连接和我的私有 `settings.json`，在同一个工作区接入。复用已选平台并核验当前宿主入口。确认你在这个环境里承担 GM、EM 还是两者，再加载对应角色说明。只有我能在 `批准状态` 填“已批准”或“已拒绝”。我的资料、设置和表格标识只放我的私有区。
+> 请通过已连接的 GitHub 插件读取 `Joshuazhang99662200/career-harness` 的 `skills/job-hunting/SKILL.md`，固定本次使用的 commit SHA，并按它的指引工作。先恢复我为当前宿主确认的角色。首次使用时请说明你是谁，并让我从内容生成、岗位搜索与沟通、两者兼备中选择。之后接入同一飞书 Base 并按选定角色继续。只有我能在 `批准状态` 填“已批准”或“已拒绝”。我的资料、设置和表格标识只放我的私有区。
 
 仓库更新由本人显式选择版本，已运行的任务保持固定版本；同一轮不要混用不同分支的规则。GitHub 插件只需读权限。
 
@@ -16,6 +16,7 @@ CareerHarness 是一套轻量 Skill。宿主读取 `Joshuazhang99662200/career-h
 |---|---|---|
 | 飞书或钉钉 CLI | `lark-cli auth status` 成功，能读到本人 Base 的表结构 | 停止，请本人安装与授权 |
 | 私有持久文件 | 写入随机标记，新会话读回，再删除 | 只做当次会话，不宣称可定时恢复 |
+| 本人 Trace（供 GM 的 Dream 消费） | 已验证的原生事件入口能区分本人和 Bot。见 [本人 Trace 契约](../../skills/job-hunting/references/human-signal-capture.md) | 暂停学习，其他已满足条件的任务继续 |
 | 网页或 MCP（仅 EM） | 按本人选定的执行方式读到一条完整 JD | 哪个平台受阻就停该平台并说明 |
 | 定时（可选） | 宿主给出任务 ID、时区与下次运行时间 | 保留手动单轮 |
 

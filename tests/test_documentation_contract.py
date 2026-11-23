@@ -53,6 +53,21 @@ def test_agent_guide_routes_the_bitable_roles() -> None:
         assert retired not in text, retired
 
 
+@pytest.mark.parametrize("path", [
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "docs/README.md",
+    "hosts/personal-ai/tasks.md",
+    "skills/job-hunting/SKILL.md",
+    "skills/job-hunting/references/first-use.md",
+    "skills/job-hunting/roles/GM.md",
+    "skills/job-hunting/roles/EM.md",
+])
+def test_active_entry_points_link_to_the_owner_only_trace_contract(path: str) -> None:
+    source = (ROOT / path).read_text(encoding="utf-8-sig")
+    assert "human-signal-capture.md" in source
+
+
 def test_active_documentation_links_resolve() -> None:
     pending = [ROOT / name for name in (
         "README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/README.md",

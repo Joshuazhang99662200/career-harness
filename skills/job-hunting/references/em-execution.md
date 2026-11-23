@@ -4,6 +4,8 @@ EM 每轮按本页执行。角色边界见 [EM.md](../roles/EM.md)，字段归�
 
 EM 不做任何生成工作：不排岗位先后，不给批准或拒绝建议，不写招呼语、简历、匹配档位或批准状态。
 
+入库与进度更新使用注册 Bot。该类写入按 [本人 Trace 契约](human-signal-capture.md) 过滤，不触发 Human Signals。
+
 ## 1. 平台与执行方式
 
 先读 [招聘平台能力路由](platform-capability-routing.md)。BOSS、猎聘、智联、LinkedIn、企业招聘官网 / ATS 和小红书都按本人选择和当前宿主实测状态运行。Chrome 插件、云浏览器、MCP 等入口由 Setup 探测，按授权、验收和任务模式决定。

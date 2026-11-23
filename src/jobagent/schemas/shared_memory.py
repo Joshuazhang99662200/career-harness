@@ -1,4 +1,4 @@
-"""Shared memory contracts for Workflow-written Human Signals.
+"""Shared memory contracts for Human Signals.
 
 Table ids, workflow ids and field ids come from the host's private Feishu
 setup. This module names the semantic tables and columns. It does not create
@@ -22,10 +22,13 @@ LearningStatus = Literal[
     "pending_history_enrichment",
     "pending_dream",
     "learned",
+    "context_only",
     "unknown",
 ]
-SignalType = Literal["matching_correction", "greeting_revision", "workflow_outcome"]
-MemoryDomain = Literal["search_match", "greeting", "workflow_context"]
+SignalType = Literal[
+    "matching_correction", "greeting_revision", "workflow_outcome", "approval_decision",
+]
+MemoryDomain = Literal["search_match", "greeting", "workflow_context", "approval"]
 PublicationStatus = Literal["published", "retained"]
 HistoryReason = Literal[
     "matched_human",
@@ -60,6 +63,7 @@ HUMAN_SIGNAL_WRITTEN_FIELDS = (
 )
 HUMAN_SIGNAL_ENRICHMENT_FIELDS = (
     "signal_id",
+    "event_id",
     "source_context",
     "operator_id",
     "operator_name",
@@ -128,6 +132,7 @@ class DisabledWorkflowBinding(ContractModel):
             "matching_correction": "search_match",
             "greeting_revision": "greeting",
             "workflow_outcome": "workflow_context",
+            "approval_decision": "approval",
         }[self.signal_type]
         if self.memory_domain != expected:
             raise ValueError("Workflow memory domain does not match its signal type.")
@@ -139,9 +144,10 @@ class WorkflowSignal(ContractModel):
 
     signal_record_id: NonEmptyString
     signal_id: str | None = None
+    event_id: str | None = None
     source_table: NonEmptyString
     source_record_id: NonEmptyString
-    job_title: str
+    job_title: str = ""
     field_name: NonEmptyString
     field_id: NonEmptyString
     signal_type: SignalType

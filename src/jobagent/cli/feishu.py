@@ -9,13 +9,25 @@ import typer
 from jobagent.bridge.feishu_gateway import FeishuGateway, LarkCliTransport
 from jobagent.cli.private_io import fail, read_model
 from jobagent.errors import JobAgentError
+from jobagent.memory.human_trace import TraceRequest, plan_human_trace
 from jobagent.schemas.feishu import FeishuConfig, FeishuPatch, FeishuQuery
 from jobagent.schemas.shared_memory import RecordHistoryRequest
+from jobagent.setup.bootstrap import read_contract
 
 feishu_app = typer.Typer(help="Shared Feishu source via the installed official CLI.")
 ConfigOption = Annotated[Path, typer.Option("--config")]
 RequestOption = Annotated[Path, typer.Option("--request")]
 TableOption = Annotated[str, typer.Option("--table")]
+
+
+@feishu_app.command("human-trace-plan")
+def human_trace_plan(request: RequestOption, contract: Annotated[Path, typer.Option()]) -> None:
+    """Filter verified owner events and plan a write to Human Signals only."""
+    try:
+        trace = plan_human_trace(read_contract(contract), read_model(request, TraceRequest))
+        typer.echo(trace.model_dump_json())
+    except JobAgentError as error:
+        fail(error)
 
 
 def gateway(config: Path) -> FeishuGateway:

@@ -3,7 +3,7 @@ name: jd-greeting
 description: Draft, rewrite or review the first outreach message a job seeker sends to a recruiter or hiring manager about a specific job posting (JD) — greeting, intro note, InMail, opening chat line — for any profession, industry, language or channel. Use when the user shares a JD and asks for a greeting / first message / 招呼语 / 打招呼, wants one revised, or wants a batch drafted. Grounded only in candidate facts the host or user supplies. Does not store memory, scrape jobs or send messages.
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # JD Greeting

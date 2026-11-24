@@ -43,6 +43,10 @@ See [host-contract.md](references/host-contract.md) for the full input and outpu
 
 **3. Compose: write this message for this JD.** Choose the opening, the experience, the result, the vocabulary, the order and the close for this message. Do not fill fixed slots or reuse old sentences. Build one clear line of cause and effect around one experience or capability. Add supporting facts only if they serve that same line. Describe the candidate's work in the recipient's terms; drop source-industry detail and internal jargon that don't help the recipient see the transfer. Write *to* the recipient, never *about* "this role / this JD". Show concrete actions and relevant results instead of claiming to be a "strong match". Use technical detail, credentials and numbers only when they help and are supported. See [message-composition.md](references/message-composition.md).
 
+**Transfer Bridge（必查）。** 招呼语不能停在“我做过 X，JD 也写了 X”。先找候选人过去实际解决的**具体难题**：为什么难、有哪些异常或约束、候选人用了什么产品机制解决；再映射到 JD **明确写出的具体职责**。跨行业时优先解释底层任务结构的同构，例如高严谨度专家研究中的多来源冲突、异常分支、失败恢复、人工复核和结果追溯，可以迁移到复杂 Agent 的任务状态、失败恢复、人工接管与可控执行；双边撮合中的画像、过滤、召回、重排和解释，可以迁移到人岗匹配。正文应让读者看清“哪段经历 → 解决了什么难题 → 用了什么机制 → 对应 JD 哪项工作 → 为什么该机制仍有效”。只写“可迁移/可复用/比较接近”而没有中间逻辑，不通过。
+
+**Recruiter inference boundary（必查）。** 不替招聘方定义人才画像或下结论，不写“您需要的是……”“你们核心要找……”“这份岗位真正需要……”“我高度/直接匹配”等表述。只引用或概括 JD 已明确写出的职责，再说明候选人经历与这些职责之间的具体连接。不要把候选人自己的判断写成招聘方的判断。
+
 **First-contact restraint (required).** JD用于选择候选人的既有经历，不是要求替用人方设计产品。内部可以深入理解，正文不得输出对未知业务的诊断、路线图猜测，或把JD愿景换词当作个人洞察。首招可以完全没有未来产品方案。非必要观点应直接删除，不要求换一个洞察或补足篇幅；删后通读整篇，确保身份、真实经历、贡献和收尾属于一条连贯主线。局部句子各自优秀不等于整篇成立。详见[成稿](references/message-composition.md)和[复核](references/quality-review.md)。
 
 **事实深度（必查）。** 用真实用户任务、候选人的关键判断/行动及可核实产出证明贡献；技术机制只保留有解释增量的部分，不靠术语、职责或指标数量凑深度。Substance Check：暂去技术名词后，是否仍能理解实际任务和个人贡献？Causal Grounding Check：事实之间的因果、归属及成果连接在材料里是否也有依据？两端真实不证明连接真实，时间顺序不证明直接促成立项。缺连接就去除该断言、收窄范围或重选主线，不编动机。输入只有职责时说明缺口，不补造细节；L1 Claim、L2 Mechanism、L3 Validation仅作可选理解层次。见[fact-selection.md](references/fact-selection.md)及[复核](references/quality-review.md)。

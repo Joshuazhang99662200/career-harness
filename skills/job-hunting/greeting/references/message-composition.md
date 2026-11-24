@@ -52,6 +52,31 @@ Common ways messages fall apart:
 
 When revising, decide which judgement or line is changing before touching words. Synonym swaps are not a rewrite.
 
+## 2A. Transfer bridge: explain why old experience stays useful in the new domain
+
+A strong first-contact message does more than align nouns. It explains the **shared problem structure** between the candidate's past work and the JD's explicit responsibilities.
+
+Use this reasoning chain internally, then express only the useful parts in natural language:
+
+`past concrete task → why it was difficult → mechanism used → JD explicit task → why the mechanism transfers`
+
+Requirements:
+
+- Start from a real candidate problem, not a skill label. “Built Agent workflows” is weaker than “handled multi-source research tasks where missing data, conflicting evidence, failed intermediate steps and human review had to be controlled.”
+- Name the mechanism that made the past work transferable: task decomposition, exception branches, state recovery, human handoff, evidence traceability, hard-rule filtering, semantic recall, reranking, evaluation sets, etc.
+- Tie it to one or two responsibilities actually written in the JD. Do not invent the employer's hidden problem, hiring profile or success criteria.
+- Cross-domain transfer is strongest when the underlying task topology is the same. Examples: expert research → other high-rigor expert workflows; project-investor matching → person-job matching; model evaluation in finance → evaluation frameworks in another model/product domain.
+- Do not collapse the bridge into “这些经验可以迁移/复用”. If removing that phrase leaves no explanation of *why*, the bridge is not finished.
+- Do not claim target-domain delivery that never happened. Preserve the source domain while explaining what method transfers.
+
+**Bad:** “您需要的是一个懂复杂 Agent 的 PM，我很匹配。”
+
+**Bad:** “我做过多 Agent，这和岗位很接近。”
+
+**Better:** “此前处理尽调这类高严谨度专家任务时，需要同时处理多来源资料、异常分支、失败重试和人工复核；岗位描述里的任务状态、失败恢复和人工接管，与这套复杂任务可控执行机制属于同类问题。”
+
+**Recruiter inference boundary.** Never write “您需要的是…”, “你们核心要找…”, “这份岗位真正需要…”, or similar statements that tell the recruiter what they want. Refer only to responsibilities the JD explicitly states, and explain the candidate-side bridge.
+
 ## 3. Speak to the recipient, not about them
 
 Don't treat the recipient as a bystander. Avoid meta-analysis such as "this role", "this JD", "from a fit perspective" or "the profile for this position". You can refer to tasks they actually listed, but don't explain their hiring logic back to them or quote the JD at length.

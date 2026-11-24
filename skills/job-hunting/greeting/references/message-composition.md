@@ -75,6 +75,8 @@ Requirements:
 
 **Better:** “此前处理尽调这类高严谨度专家任务时，需要同时处理多来源资料、异常分支、失败重试和人工复核；岗位描述里的任务状态、失败恢复和人工接管，与这套复杂任务可控执行机制属于同类问题。”
 
+**No-overlap fallback.** A greeting does not need a candidate story in every case. If the supplied materials contain no credible bridge to the JD's core work, omit the self-experience paragraph instead of manufacturing a weak analogy. The message may simply refer to one or two explicit responsibilities from the JD and express a concise, genuine interest in discussing the role. Do not hide a zero-overlap case behind generic claims such as “底层逻辑一致”, “能力可迁移”, or “方法论可以复用”. Keep the low-fit judgement outside the message.
+
 **Recruiter inference boundary.** Never write “您需要的是…”, “你们核心要找…”, “这份岗位真正需要…”, or similar statements that tell the recruiter what they want. Refer only to responsibilities the JD explicitly states, and explain the candidate-side bridge.
 
 ## 3. Speak to the recipient, not about them

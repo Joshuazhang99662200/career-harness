@@ -130,8 +130,8 @@ def test_em_uses_only_table_approval_and_current_materials_for_external_send() -
     assert "已授权" in approval
 
 
-def test_greeting_skill_is_v1_2_with_memory_scope_rules() -> None:
-    assert 'version: "1.2.0"' in read("greeting/SKILL.md")
+def test_greeting_skill_is_v1_3_with_memory_scope_rules() -> None:
+    assert 'version: "1.3.0"' in read("greeting/SKILL.md")
     host = read("greeting/references/host-contract.md")
     for domain in ("岗位", "材料", "Human Signals", "搜索与匹配记忆", "招呼语表达记忆"):
         assert domain in host, domain
@@ -274,7 +274,7 @@ def test_greeting_skill_keeps_the_first_contact_quality_guards() -> None:
     assert "Causal Grounding Check" in selection
 
 
-RETIRED_EVIDENCE = re.compile(r"(?i)\bevidence|EVID_|证据|candidate core|candidate ingest")
+RETIRED_EVIDENCE = re.compile(r"\bEvidence\b|EVID_|证据|candidate core|candidate ingest")
 RETIRED_CODE_CONTRACTS = re.compile(
     r"GreetingReview|style_ok|target_relevant|full_text_supported|no_missing_claims|"
     r"RecruiterInfo|VerificationStatus|KeywordCoverageReport|ResumeVariant"

@@ -1,6 +1,6 @@
 ---
 name: performance-intervention
-description: CareerHarness 的 10 日谈：每满一个 10 工作日的闭合窗口，GM 用岗位表与原生修改历史做一次低成本漏斗检查；平时静默，只有两个不重叠窗口都持续偏低、混杂因素排查过且依据充分时，才向本人提出具体可批准的优化方案，批准后才执行并复核效果。Ten-workday funnel check for CareerHarness; silent by default, proposes only on sustained, well-supported decline. 不改文案、不发消息、不写 Memory。
+description: CareerHarness 的 10 日谈：GM 每轮发现窗口前的补证需要，满 10 工作日闭合窗口再正式检查；平时静默，只有两个不重叠窗口都持续偏低、EM 补证和混杂因素排查充分时，才向本人提出可批准方案。Ten-workday funnel check with early GM-to-EM fact gathering; silent until sustained, attributed decline. 不改文案、不向招聘方发消息、不写 Memory。
 ---
 
 # 10 日谈：持续异常才说话
@@ -9,7 +9,7 @@ description: CareerHarness 的 10 日谈：每满一个 10 工作日的闭合窗
 
 ## 什么时候运行
 
-每满一个 10 工作日的闭合窗口，在 GM 的既有例行轮里做一次检查。没到窗口末尾、或窗口还没闭合，就不算。
+GM 每轮先做轻量发现，消费已有补证回执并按 [指标](references/metrics.md) 检查窗口闭合前的提前补证条件；需要平台事实时加载 [补证](references/em-probe.md) 委托 EM。每满一个 10 工作日的闭合窗口，再做正式漏斗检查。没到窗口末尾、或窗口还没闭合，就不能判定持续下降或向本人提案。
 
 ## 默认静默
 
@@ -19,6 +19,7 @@ description: CareerHarness 的 10 日谈：每满一个 10 工作日的闭合窗
 - 只有一个窗口偏低（记为 `watching`）；
 - 样本没成熟、样本太少、没有可比的历史基准；
 - `unknown` 或 `unobservable` 占比过高，测量本身不可信。
+- 窗口闭合前的风险信号只用来提前补证，不向本人报告下降结论。
 
 ## 什么时候说话
 
@@ -38,4 +39,4 @@ description: CareerHarness 的 10 日谈：每满一个 10 工作日的闭合窗
 - 不写 Memory，不替 Dream 归纳本人偏好。
 - 不改招呼语、简历、档位或筛选条件，除非本人批准了具体方案；批准方案也不等于批准发送。
 - 不把低回复率直接归因于文案；不把超时、招聘方拒绝或岗位下线当作本人偏好。
-- 不发消息、不投递、不自动回滚。
+- 不向招聘方发消息、不投递、不自动回滚；向本人提出已归因的方案按本技能的提醒门槛执行。

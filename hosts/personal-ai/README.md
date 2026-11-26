@@ -23,3 +23,5 @@ CareerHarness 是一套轻量 Skill。宿主读取 `Joshuazhang99662200/career-h
 登录、验证码、风控、限流和外发结果不明都停在实际受阻的步骤，不自动重试，不换账号或浏览器绕行。
 
 定时任务怎么写见[任务协议](tasks.md)。
+
+安装时由用户选择承担 EM 的宿主。GM 的十日谈提前补证通过 Base 的 `Muse处理` / `GPT处理` 与该宿主通信；同一任务键的接单和结果须由所选 EM 宿主实际写入，并由 GM 读回。首次跨宿主验收按 [Initial Setup](../../skills/job-hunting/references/first-use.md) 的合成记录流程执行。

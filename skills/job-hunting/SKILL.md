@@ -37,7 +37,7 @@ description: >-
 | 写首条招呼 | [greeting/SKILL.md](greeting/SKILL.md)、[references/greeting-writing.md](references/greeting-writing.md)、[references/message-generation.md](references/message-generation.md) |
 | 写定向简历 | [optimizer/SKILL.md](optimizer/SKILL.md)；出 PDF 时加 [references/rendering-ats.md](references/rendering-ats.md) |
 | 凌晨 Dream | [references/memory-dream.md](references/memory-dream.md) |
-| 满 10 个工作日的漏斗检查（10 日谈） | [performance-intervention/SKILL.md](performance-intervention/SKILL.md)；平时只做检查，持续异常才加载其 references |
+| 每轮持续发现、提前补证与满 10 个工作日的漏斗检查（10 日谈） | [performance-intervention/SKILL.md](performance-intervention/SKILL.md)；窗口前只补证，持续异常且归因充分才提醒 |
 | 读写表格、字段白名单、记录历史 | [references/feishu-shared-source.md](references/feishu-shared-source.md) |
 
 ## EM 的任务

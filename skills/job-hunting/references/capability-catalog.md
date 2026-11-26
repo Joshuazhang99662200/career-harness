@@ -34,6 +34,6 @@
 | 各招聘平台取数与执行 | 委托外部技能 | [平台能力路由](platform-capability-routing.md) 按每个宿主的实测记录选择入口 |
 | 凌晨 Dream | 已落地 | GM 按 [memory-dream.md](memory-dream.md) 用 CLI 读写表格；调度由宿主承担 |
 | 超时收束与超时后补证 | 已落地 | [em-execution.md](em-execution.md) 第 6、6A 节：时钟取原生历史里最近一次 `处理进度` 变化或入库时间，交接字段写入不重置；每次超时派生一次 CH10D 补证，回执写 `GPT处理`；宿主实际运行未验收 |
-| 10 日谈 | 仅契约 | [performance-intervention](../performance-intervention/SKILL.md)：10 工作日闭合窗口、两窗持续偏低才提案、本人批准后执行与复核；GM 宿主的定时触发尚未配置与验收 |
+| 10 日谈 | 仅契约 | [performance-intervention](../performance-intervention/SKILL.md)：GM 每轮发现并提前补证，EM 接单及结果须由所选宿主真实写入、GM 读回；两窗持续偏低且归因后才提醒。宿主唤醒与跨宿主实际运行由安装环境分别验收 |
 | 本人信号捕获 | 已落地 | [原生事件与本人过滤](human-signal-capture.md) 已提供过滤与写入计划。每个宿主的订阅、写回和旧监听切换均需独立验收 |
 | 钉钉多维表格 | 未开始 | 钉钉 CLI 的表格读写尚未核验 |

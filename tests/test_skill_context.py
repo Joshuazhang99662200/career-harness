@@ -200,6 +200,45 @@ def test_intervention_needs_explicit_approval_and_never_auto_rolls_back() -> Non
         assert factor in attribution, factor
 
 
+def test_gm_discovers_early_probe_needs_on_each_round_without_early_conclusions() -> None:
+    gm = read("roles/GM.md")
+    skill = read("performance-intervention/SKILL.md")
+    metrics = read("performance-intervention/references/metrics.md")
+    assert "每轮" in gm and "performance-intervention/SKILL.md" in gm
+    assert "窗口闭合前" in skill and "em-probe.md" in skill
+    assert "成熟样本" in metrics and "0.8" in metrics
+    assert "至少经过 3 个工作日" not in metrics
+    assert "提前补证" in metrics and "不形成提案" in metrics
+
+
+def test_probe_handoff_has_ack_result_and_verified_receipt() -> None:
+    probe = read("performance-intervention/references/em-probe.md")
+    em = read("roles/EM.md")
+    contract = read("references/bitable-contract.md")
+    for item in ("request_id", "accepted", "completed", "blocked", "GPT处理", "读回"):
+        assert item in probe, item
+    assert "接单" in em and "CH10D" in em
+    assert "已写入" in contract and "已接单" in contract and "已完成" in contract
+    assert "不清空" in contract
+
+
+def test_host_contract_wakes_gm_and_notifies_only_on_attributed_decline() -> None:
+    host = (ROOT / "hosts" / "personal-ai" / "tasks.md").read_text(encoding="utf-8")
+    capability = read("references/capability-catalog.md")
+    approval = read("performance-intervention/references/intervention-approval.md")
+    assert "提前补证" in host and "宿主" in host and "回执" in host
+    assert "归因" in host and "提醒" in host
+    assert "接单" in capability and "实际运行" in capability
+    assert "不重复提醒" in approval
+
+
+def test_setup_checks_selected_em_host_handoff_in_both_directions() -> None:
+    setup = read("references/first-use.md")
+    assert "用户选择" in setup and "EM 宿主" in setup
+    assert "request_id" in setup and "status=accepted" in setup
+    assert "GM 读回" in setup and "未验收" in setup
+
+
 def test_lens_routing_links_every_lens_policy() -> None:
     text = read("references/optimizer/lens-routing.md")
     for lens in ("general", "headhunter", "internal-hr", "hiring-manager"):
